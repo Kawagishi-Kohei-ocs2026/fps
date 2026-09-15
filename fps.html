@@ -673,6 +673,13 @@ el('g_online').onclick = () => { CFG.mode = 'online'; applyCfg(); };
 el('connectBtn').onclick = connect;
 applyCfg();
 
+// サーバーから配信されている(file://ではなくhttp/httpsで開いている)場合は、
+// そのサーバー自身のアドレスを候補として自動入力しておく。
+if (location.protocol === 'http:' || location.protocol === 'https:'){
+  const wsProto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+  el('srv').value = wsProto + location.host;
+}
+
 /* ============ flow ============ */
 const veil = el('veil');
 function backToMenu(){

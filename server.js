@@ -3,14 +3,24 @@
 // そのまま転送するだけのプログラムです。
 
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { WebSocketServer } = require('ws');
 const PORT = process.env.PORT || 8080;
 
-// RenderやRailwayはヘルスチェックのため普通のHTTPアクセスをしてくるので、
-// それに200で答えるだけの最小サーバーにWebSocketをぶら下げる。
+// ブラウザでこのURLを開いたら、ゲーム本体(fps.html)をそのまま返す。
+// WebSocketの相手を探すときはリレー処理へ回る。
+const GAME_HTML = path.join(__dirname, 'fps.html');
 const httpServer = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end('SUBLEVEL 7 relay server is running.');
+  fs.readFile(GAME_HTML, (err, data) => {
+    if (err) {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('SUBLEVEL 7 relay server is running. (fps.html が見つかりません)');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(data);
+  });
 });
 const wss = new WebSocketServer({ server: httpServer });
 const rooms = new Map(); // room名 -> [ws, ws]
