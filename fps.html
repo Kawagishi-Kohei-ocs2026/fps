@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>SUBLEVEL 7</title>
+<style>
+  :root{ --void:#0a0e12; --steel:#1b242c; --dust:#c8cbc4;
+         --sodium:#f2b544; --rust:#c4462c; --acid:#7fb069; --teal:#4fa3a3; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--void);
+    font-family:"Bahnschrift","DIN Alternate","Helvetica Neue",Arial,sans-serif;
+    color:var(--dust);-webkit-user-select:none;user-select:none;touch-action:none}
+  #view{display:block;width:100vw;height:100vh;image-rendering:pixelated;cursor:none}
+
+  #hud{position:fixed;inset:0;pointer-events:none}
+  body.online #map{display:none}
+  .corner{position:absolute;bottom:18px;display:flex;align-items:flex-end;gap:14px}
+  #left{left:20px}
+  #right{right:20px;flex-direction:row-reverse;text-align:right}
+  .num{font-size:44px;line-height:.82;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .tag{font-size:11px;letter-spacing:.14em;color:#6d7880;margin-top:6px}
+  #hpnum{color:var(--sodium)} #hpnum.hurt{color:var(--rust)}
+  #ammonum.empty{color:var(--rust)}
+  #hpbar{width:7px;height:74px;background:#141b21;position:relative;overflow:hidden}
+  #hpfill{position:absolute;bottom:0;left:0;right:0;background:var(--sodium);transition:height .12s}
+  #top{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.28em;color:#5d6970}
+  #top b{color:var(--dust);font-weight:600}
+  #map{position:absolute;top:16px;right:20px;opacity:.75}
+  #hit{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(196,70,44,.55) 100%);opacity:0;transition:opacity .3s}
+  #gear{position:absolute;top:14px;left:18px;pointer-events:auto;background:none;border:1px solid #2b3740;
+    color:#7b858c;font:inherit;font-size:11px;letter-spacing:.18em;padding:7px 13px;cursor:pointer}
+  #gear:hover{color:var(--dust);border-color:#4a5860}
+
+  #veil{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:rgba(10,14,18,.94);text-align:center;padding:24px;overflow-y:auto}
+  #veil.gone{display:none}
+  #title{font-size:clamp(34px,8vw,74px);font-weight:700;letter-spacing:-.04em;line-height:.88}
+  #title span{display:block;font-size:.34em;letter-spacing:.42em;color:var(--rust);font-weight:600;margin-bottom:14px}
+  #blurb{margin-top:16px;font-size:13.5px;line-height:1.95;color:#7b858c;max-width:40ch}
+  kbd{background:#1b242c;color:var(--dust);padding:1px 6px;font:inherit;font-size:12px;border-bottom:2px solid #000}
+  #go{margin-top:24px;pointer-events:auto;border:0;background:var(--sodium);color:#0a0e12;
+    font:inherit;font-size:15px;font-weight:700;letter-spacing:.18em;padding:15px 40px;cursor:pointer}
+  #go:hover{background:#fff}
+  #go:disabled{background:#39454d;color:#6d7880;cursor:default}
+  #go:focus-visible,#gear:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
+  #score{margin-top:16px;font-size:13px;color:#5d6970;letter-spacing:.1em}
+
+  #cfg{margin-top:24px;width:min(380px,92vw);text-align:left;border-top:1px solid #222c34;padding-top:18px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;font-size:13px}
+  .row em{font-style:normal;color:#6d7880;font-size:12px;letter-spacing:.06em}
+  .row b{color:var(--sodium);font-weight:600;font-variant-numeric:tabular-nums}
+  .field{margin-bottom:18px}
+  .hint{font-size:11px;color:#59636a;line-height:1.75;margin-top:6px}
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:none;height:20px;cursor:pointer}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:#2b3740}
+  input[type=range]::-moz-range-track{height:2px;background:#2b3740}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--sodium);margin-top:-6px;border-radius:0}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;background:var(--sodium);border:0;border-radius:0}
+  .seg{display:flex;border:1px solid #2b3740}
+  .seg button{flex:1;background:none;border:0;color:#7b858c;font:inherit;font-size:12px;padding:11px 4px;cursor:pointer;letter-spacing:.08em}
+  .seg button[aria-pressed=true]{background:var(--steel);color:var(--dust)}
+  .seg button:not(:last-child){border-right:1px solid #2b3740}
+  input[type=text]{width:100%;background:#12181d;border:1px solid #2b3740;color:var(--dust);
+    font:inherit;font-size:13px;padding:10px 11px;margin-top:8px;letter-spacing:.02em}
+  input[type=text]:focus{outline:1px solid var(--acid)}
+  #netrow{display:flex;gap:8px;margin-top:8px}
+  #netrow button{flex:none;border:1px solid var(--sodium);background:none;color:var(--sodium);
+    font:inherit;font-size:12px;padding:0 16px;cursor:pointer;letter-spacing:.1em}
+  #netrow button:hover{background:var(--sodium);color:#0a0e12}
+  #netstatus{color:var(--teal);font-size:12px;margin-top:10px;letter-spacing:.04em}
+
+  #touch{position:fixed;inset:0;display:none;pointer-events:none}
+  body.touch #touch{display:block}
+  #stick{position:absolute;left:26px;bottom:26px;width:118px;height:118px;border:2px solid #2b3740;border-radius:50%;pointer-events:auto}
+  #knob{position:absolute;left:39px;top:39px;width:40px;height:40px;border-radius:50%;background:#2b3740}
+  #fire{position:absolute;right:26px;bottom:26px;width:96px;height:96px;border-radius:50%;
+    border:2px solid var(--rust);background:rgba(196,70,44,.18);pointer-events:auto}
+</style>
+</head>
+<body class="solo">
+<canvas id="view"></canvas>
+
+<div id="hud">
+  <div id="hit"></div>
+  <button id="gear">設定</button>
+  <div id="top">区画 <b id="wave">1</b> &nbsp;·&nbsp; 残り <b id="left_n">0</b> &nbsp;·&nbsp; <b id="pts">0</b></div>
+  <canvas id="map" width="132" height="132"></canvas>
+  <div class="corner" id="left">
+    <div id="hpbar"><div id="hpfill" style="height:100%"></div></div>
+    <div><div class="num" id="hpnum">100</div><div class="tag">体力</div></div>
+  </div>
+  <div class="corner" id="right">
+    <div><div class="num" id="ammonum">12</div><div class="tag">装弾 / <span id="reserve">∞</span></div></div>
+  </div>
+</div>
+
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <div id="fire"></div>
+</div>
+
+<div id="veil">
+  <h1 id="title"><span>地下七層</span>SUBLEVEL 7</h1>
+  <p id="blurb"></p>
+  <button id="go">進入する</button>
+  <div id="score"></div>
+
+  <div id="cfg">
+    <div class="field">
+      <div class="row"><em>モード</em></div>
+      <div class="seg">
+        <button id="g_solo" aria-pressed="true">ソロ掃討</button>
+        <button id="g_online" aria-pressed="false">対人（オンライン）</button>
+      </div>
+    </div>
+    <div class="field">
+      <div class="row"><em>感度</em><b id="v_sens">1.00</b></div>
+      <input type="range" id="s_sens" min="0.15" max="3" step="0.05" value="1">
+      <p class="hint">視点は常に画面中央固定。マウスの動きで振り向く。</p>
+    </div>
+    <div class="field" id="netfield" style="display:none">
+      <div class="row"><em>サーバー接続</em></div>
+      <input type="text" id="srv" placeholder="ws://192.168.1.5:8080" autocomplete="off">
+      <div id="netrow">
+        <input type="text" id="room" placeholder="ルームコード" autocomplete="off" style="margin-top:0">
+        <button id="connectBtn">接続</button>
+      </div>
+      <p class="hint">同じサーバーアドレスとルームコードを、対戦する2台の両方に入力する。2人がそろうと自動で対戦が始まる。</p>
+      <p id="netstatus">未接続</p>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const cv = document.getElementById('view'), ctx = cv.getContext('2d');
+const el = id => document.getElementById(id);
+const isTouch = matchMedia('(hover:none)').matches || 'ontouchstart' in window;
+if (isTouch) document.body.classList.add('touch');
+const SCALE = isTouch ? 0.45 : 0.62;
+let W = 0, H = 0;
+const CFG = { sens: 1, mode: 'solo', target: 5 };
+
+/* ============ seeded rng ============ */
+function mulberry32(seed){
+  let s = seed >>> 0;
+  return function(){
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ============ maze ============ */
+const N = 25;
+let grid = [];
+function buildMaze(rng){
+  rng = rng || Math.random;
+  grid = Array.from({length:N}, () => Array(N).fill(1));
+  const stack = [[1,1]]; grid[1][1] = 0;
+  while (stack.length){
+    const [x,y] = stack[stack.length-1];
+    const opts = [[2,0],[-2,0],[0,2],[0,-2]]
+      .map(([dx,dy]) => [x+dx, y+dy, x+dx/2, y+dy/2])
+      .filter(([nx,ny]) => nx>0 && ny>0 && nx<N-1 && ny<N-1 && grid[ny][nx]===1);
+    if (!opts.length){ stack.pop(); continue; }
+    const [nx,ny,mx,my] = opts[(rng()*opts.length)|0];
+    grid[my][mx] = 0; grid[ny][nx] = 0; stack.push([nx,ny]);
+  }
+  for (let y=2; y<N-2; y++) for (let x=2; x<N-2; x++)
+    if (grid[y][x]===1 && rng()<0.42) grid[y][x] = 0;
+  for (let y=0; y<N; y++) for (let x=0; x<N; x++)
+    if (grid[y][x]===1) grid[y][x] = (x===0||y===0||x===N-1||y===N-1) ? 1 : (rng()<0.22 ? 3 : (rng()<0.3 ? 2 : 1));
+  grid[1][1] = 0; grid[1][2] = 0; grid[2][1] = 0;
+}
+const solid = (x,y) => x<0||y<0||x>=N||y>=N || grid[y|0][x|0] > 0;
+const WALLC = {1:[92,101,108], 2:[118,84,64], 3:[74,96,92]};
+function freeSpot(rng, minFrom){
+  rng = rng || Math.random;
+  let x, y, t = 0;
+  do {
+    x = 1 + rng()*(N-2); y = 1 + rng()*(N-2); t++;
+  } while (t < 600 && (solid(x,y) || (minFrom && minFrom.some(p => Math.hypot(x-p.x, y-p.y) < 7))));
+  return {x, y};
+}
+
+/* ============ sprites ============ */
+function makeSprite(body, head, eye){
+  const s = document.createElement('canvas'); s.width = s.height = 64;
+  const c = s.getContext('2d');
+  c.fillStyle = body; c.fillRect(24,18,16,30);
+  c.fillRect(18,22,6,20); c.fillRect(40,22,6,20);
+  c.fillRect(25,48,5,14); c.fillRect(34,48,5,14);
+  c.fillStyle = head; c.fillRect(22,4,20,16);
+  c.fillStyle = eye; c.fillRect(26,10,4,4); c.fillRect(34,10,4,4);
+  c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(24,18,5,30); c.fillRect(25,48,5,14);
+  return s;
+}
+const SPR = {
+  a:  makeSprite('#5b6b4e','#2a3238','#f2b544'),
+  b:  makeSprite('#7a4a3a','#2a3238','#f2b544'),
+  p2: makeSprite('#3f8a8a','#1e3030','#d6f3f3')
+};
+const SPR_HIT = {}, MASK = {};
+for (const k in SPR){
+  const s = document.createElement('canvas'); s.width = s.height = 64;
+  const c = s.getContext('2d');
+  c.drawImage(SPR[k],0,0); c.globalCompositeOperation = 'source-in';
+  c.fillStyle = '#ffe9e2'; c.fillRect(0,0,64,64);
+  SPR_HIT[k] = s;
+  const d = SPR[k].getContext('2d').getImageData(0,0,64,64).data;
+  const m = new Uint8Array(64*64);
+  for (let i=0; i<64*64; i++) m[i] = d[i*4+3] > 40 ? 1 : 0;
+  MASK[k] = m;
+}
+
+/* ============ audio ============ */
+let actx = null;
+function beep(freq, dur, type, vol){
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, actx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*0.35), actx.currentTime+dur);
+  g.gain.setValueAtTime(vol, actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
+  o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
+}
+
+/* ============ state ============ */
+const P = { x:1.5, y:1.5, dx:1, dy:0, px:0, py:0.66, hp:100, ammo:12, mag:12, reload:0,
+            bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null };
+const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2' };
+let foes = [], wave = 1, pts = 0, alive = false, best = 0, hovered = null;
+const zbuf = new Float32Array(8192);
+
+function resize(){
+  W = Math.max(160, Math.floor(innerWidth * SCALE));
+  H = Math.max(120, Math.floor(innerHeight * SCALE));
+  cv.width = W; cv.height = H;
+  ctx.imageSmoothingEnabled = false;
+  P.aim.x = W/2; P.aim.y = H/2;
+}
+resize();
+addEventListener('resize', resize);
+
+/* ============ solo flow ============ */
+function spawnWave(){
+  const n = 3 + wave * 2;
+  foes = [];
+  for (let i=0; i<n; i++){
+    const s = freeSpot(Math.random, [P]);
+    const tough = wave > 2 && Math.random() < 0.3;
+    foes.push({ x:s.x, y:s.y, hp: tough?5:3, max: tough?5:3, kind: tough?'b':'a',
+                spd: (tough?0.95:1.25) + wave*0.05, flash:0, atk:0 });
+  }
+}
+function placePlayer(spot){
+  P.x = spot.x; P.y = spot.y;
+  const a = Math.random()*6.283;
+  P.dx = Math.cos(a); P.dy = Math.sin(a);
+  P.px = -P.dy*0.66; P.py = P.dx*0.66;
+  P.hp = 100; P.ammo = P.mag; P.reload = 0;
+}
+function resetSolo(){
+  buildMaze(Math.random);
+  placePlayer({x:1.5, y:1.5});
+  wave = 1; pts = 0; P.kills = 0; spawnWave();
+  alive = true;
+}
+
+/* ============ online flow ============ */
+let socket = null, netState = 'idle', mySlot = 0, room = '';
+function send(obj){ if (socket && socket.readyState === 1) socket.send(JSON.stringify(obj)); }
+function netStatus(t){ el('netstatus').textContent = t; }
+function connect(){
+  const addr = el('srv').value.trim();
+  room = el('room').value.trim();
+  if (!addr || !room){ netStatus('サーバーアドレスとルームコードを入力する'); return; }
+  if (socket){ try{ socket.close(); }catch(e){} }
+  netState = 'connecting'; netStatus('接続中…');
+  try { socket = new WebSocket(addr); } catch(e){ netState='idle'; netStatus('接続できません'); return; }
+  socket.onopen = () => send({type:'join', room});
+  socket.onclose = () => { if (netState !== 'idle' && netState !== 'playing'){ netState='idle'; netStatus('切断されました'); } };
+  socket.onerror = () => netStatus('接続エラー：アドレスを確認する');
+  socket.onmessage = ev => { let m; try{ m = JSON.parse(ev.data); }catch(e){ return; } handleNet(m); };
+}
+function handleNet(m){
+  if (m.type === 'joined'){ mySlot = m.slot; netState = 'waiting'; netStatus('相手を待っています…（ルーム「'+room+'」）'); return; }
+  if (m.type === 'full'){ netState = 'idle'; netStatus('このルームは満員です'); return; }
+  if (m.type === 'ready'){
+    netState = 'ready'; netStatus('対戦相手が接続しました。開始します…');
+    if (mySlot === 1) hostBeginMatch(); else netStatus('対戦相手の準備を待っています…');
+    return;
+  }
+  if (m.type === 'init'){
+    const rng = mulberry32(m.seed);
+    buildMaze(rng);
+    const mySpot = mySlot === 1 ? m.spot1 : m.spot2;
+    const theirSpot = mySlot === 1 ? m.spot2 : m.spot1;
+    beginOnlineMatch(mySpot, theirSpot);
+    return;
+  }
+  if (m.type === 'state'){
+    REMOTE.x = m.x; REMOTE.y = m.y; REMOTE.hp = m.hp; REMOTE.ammo = m.ammo;
+    REMOTE.dead = m.dead; REMOTE.kills = m.kills;
+    return;
+  }
+  if (m.type === 'shoot'){ REMOTE.flash = 0.06; return; }
+  if (m.type === 'hit'){
+    if (!alive || P.hurt === undefined) return;
+    P.hp -= m.dmg; P.hurt = 1; beep(90,.2,'sawtooth',.1);
+    if (P.hp <= 0){
+      P.hp = 0; respawnSelf(); send({type:'died'});
+    }
+    updHUD();
+    return;
+  }
+  if (m.type === 'died'){
+    P.kills++; pts += 100; beep(120,.35,'sawtooth',.09); updHUD();
+    if (P.kills >= CFG.target) finishOnline(true);
+    return;
+  }
+  if (m.type === 'peer_left'){
+    if (netState === 'playing'){
+      alive = false; document.exitPointerLock?.();
+      over('接続切れ', 'DISCONNECTED', '対戦相手が切断した。', 'メニューへ', `あなた ${P.kills} — ${REMOTE.kills} 相手`, backToMenu);
+    } else {
+      netState = 'waiting'; netStatus('相手が切断しました。待っています…');
+    }
+    return;
+  }
+}
+function hostBeginMatch(){
+  const seed = (Math.random()*1e9) | 0;
+  buildMaze(mulberry32(seed));
+  const spot1 = freeSpot(Math.random, null);
+  const spot2 = freeSpot(Math.random, [spot1]);
+  send({ type:'init', seed, spot1, spot2 });
+  beginOnlineMatch(spot1, spot2);
+}
+function beginOnlineMatch(mySpot, theirSpot){
+  placePlayer(mySpot);
+  REMOTE.x = theirSpot.x; REMOTE.y = theirSpot.y; REMOTE.hp = 100; REMOTE.ammo = 12;
+  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0;
+  P.kills = 0; pts = 0;
+  netState = 'playing';
+  alive = true;
+  veil.classList.add('gone');
+  if (!isTouch) cv.requestPointerLock?.();
+}
+function respawnSelf(){
+  const spot = freeSpot(Math.random, [REMOTE]);
+  placePlayer(spot);
+}
+let netTick = 0;
+function netLoop(dt){
+  if (CFG.mode !== 'online' || netState !== 'playing') return;
+  netTick += dt;
+  if (netTick > 0.06){
+    netTick = 0;
+    send({ type:'state', x:P.x, y:P.y, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills });
+  }
+}
+
+/* ============ input ============ */
+const keys = {};
+addEventListener('keydown', e => {
+  if (!e.repeat){
+    if (e.code === 'Space') shoot();
+    if (e.code === 'KeyR') doReload();
+  }
+  keys[e.code] = true;
+  if (e.code === 'Escape' && alive) pause();
+  if (['Space','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', e => keys[e.code] = false);
+
+function rotate(a){
+  const c = Math.cos(a), s = Math.sin(a);
+  const dx = P.dx*c - P.dy*s; P.dy = P.dx*s + P.dy*c; P.dx = dx;
+  const px = P.px*c - P.py*s; P.py = P.px*s + P.py*c; P.px = px;
+}
+addEventListener('mousemove', e => {
+  if (document.pointerLockElement === cv) rotate(e.movementX * 0.0022 * CFG.sens);
+});
+cv.addEventListener('mousedown', e => { if (e.button === 0) shoot(); });
+document.addEventListener('pointerlockchange', () => {
+  if (alive && !isTouch && document.pointerLockElement !== cv) pause();
+});
+
+// touch
+let move = {x:0, y:0}, lookId = null, stickId = null, firing = false;
+const stick = el('stick'), knob = el('knob');
+stick.addEventListener('touchstart', e => { stickId = e.changedTouches[0].identifier; e.preventDefault(); }, {passive:false});
+el('fire').addEventListener('touchstart', e => { firing = true; shoot(); e.preventDefault(); }, {passive:false});
+el('fire').addEventListener('touchend', () => firing = false);
+addEventListener('touchmove', e => {
+  for (const t of e.changedTouches){
+    if (t.identifier === stickId){
+      const r = stick.getBoundingClientRect();
+      const dx = t.clientX - (r.left + r.width/2), dy = t.clientY - (r.top + r.height/2);
+      const d = Math.hypot(dx,dy) || 1, m = Math.min(1, d/52);
+      move.x = dx/d*m; move.y = -dy/d*m;
+      knob.style.transform = `translate(${dx/d*m*38}px,${dy/d*m*38}px)`;
+    } else if (t.identifier === lookId){
+      rotate((t.clientX - t._px) * 0.006 * CFG.sens); t._px = t.clientX;
+    }
+  }
+  e.preventDefault();
+}, {passive:false});
+addEventListener('touchstart', e => {
+  for (const t of e.changedTouches)
+    if (lookId === null && stickId !== t.identifier && t.clientX > innerWidth*0.35){ lookId = t.identifier; t._px = t.clientX; }
+}, {passive:true});
+addEventListener('touchend', e => {
+  for (const t of e.changedTouches){
+    if (t.identifier === stickId){ stickId = null; move.x = move.y = 0; knob.style.transform = ''; }
+    if (t.identifier === lookId) lookId = null;
+  }
+});
+
+/* ============ aiming / targets ============ */
+function targetsFor(){ return CFG.mode === 'online' ? (REMOTE.dead ? [] : [REMOTE]) : foes; }
+function project(f){
+  const inv = 1 / (P.px*P.dy - P.dx*P.py);
+  const rx = f.x - P.x, ry = f.y - P.y;
+  const tx = inv * (P.dy*rx - P.dx*ry);
+  const ty = inv * (-P.py*rx + P.px*ry);
+  if (ty <= 0.2) return null;
+  const h = Math.abs(H/ty) * 0.92, w = h * 0.6;
+  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: (H - h)/2 + h*0.04 };
+}
+function pickTarget(){
+  let hit = null, bestD = 1e9;
+  for (const f of targetsFor()){
+    const s = project(f); if (!s) continue;
+    const u = ((P.aim.x - s.x0) * 64 / s.w) | 0;
+    const v = ((P.aim.y - s.y0) * 64 / s.h) | 0;
+    if (u < 0 || u > 63 || v < 0 || v > 63) continue;
+    if (!MASK[f.kind][v*64 + u]) continue;
+    const col = Math.max(0, Math.min(W-1, P.aim.x|0));
+    if (s.ty > zbuf[col]) continue;
+    if (s.ty < bestD){ bestD = s.ty; hit = f; }
+  }
+  return hit;
+}
+
+/* ============ actions ============ */
+function doReload(){
+  if (!alive || P.reload > 0 || P.ammo === P.mag) return;
+  P.reload = 1.0; beep(160, .12, 'square', .05);
+}
+function shoot(){
+  if (!alive || P.reload > 0) return;
+  if (P.ammo <= 0){ doReload(); return; }
+  P.ammo--; P.flash = 0.06; P.kick = 1;
+  P.tracer = { x: P.aim.x, y: P.aim.y, t: 0.09 };
+  beep(320, .16, 'square', .11);
+  if (CFG.mode === 'online') send({type:'shoot'});
+
+  const t = pickTarget();
+  if (t){
+    if (CFG.mode === 'online'){
+      t.flash = 0.12; beep(520, .07, 'triangle', .07);
+      send({ type:'hit', dmg:26 });
+    } else {
+      t.hp--; t.flash = 0.12;
+      beep(520, .07, 'triangle', .07);
+      if (t.hp <= 0){
+        foes.splice(foes.indexOf(t), 1);
+        pts += t.max * 25; beep(120, .3, 'sawtooth', .09);
+        if (!foes.length){
+          wave++; P.hp = Math.min(100, P.hp + 25); pts += 150;
+          setTimeout(() => { if (alive) spawnWave(); }, 900);
+        }
+      }
+    }
+  }
+  updHUD();
+  if (P.ammo === 0) doReload();
+}
+
+/* ============ update ============ */
+function step(dt){
+  if (!alive) return;
+  if (firing && P.flash <= 0 && P.ammo > 0 && P.reload <= 0) shoot();
+
+  if (P.reload > 0){
+    P.reload -= dt;
+    if (P.reload <= 0){ P.reload = 0; P.ammo = P.mag; beep(280,.09,'square',.05); updHUD(); }
+  }
+
+  let fwd = 0, str = 0;
+  if (keys.KeyW || keys.ArrowUp) fwd += 1;
+  if (keys.KeyS || keys.ArrowDown) fwd -= 1;
+  if (keys.KeyD) str += 1;
+  if (keys.KeyA) str -= 1;
+  if (keys.ArrowLeft) rotate(-1.9*dt*CFG.sens);
+  if (keys.ArrowRight) rotate(1.9*dt*CFG.sens);
+  fwd += move.y; str += move.x;
+  const run = (keys.ShiftLeft || keys.ShiftRight) ? 1.7 : 1;
+  const sp = 2.7 * run * dt;
+  const nx = P.x + (P.dx*fwd + P.px*str) * sp;
+  const ny = P.y + (P.dy*fwd + P.py*str) * sp;
+  const r = 0.26;
+  if (!solid(nx + Math.sign(nx-P.x)*r, P.y)) P.x = nx;
+  if (!solid(P.x, ny + Math.sign(ny-P.y)*r)) P.y = ny;
+  if (fwd || str) P.bob += dt * 9 * run;
+
+  if (CFG.mode === 'solo'){
+    for (const f of foes){
+      if (f.flash > 0) f.flash -= dt;
+      const dx = P.x - f.x, dy = P.y - f.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d > 0.85){
+        const s = f.spd * dt, ux = dx/d*s, uy = dy/d*s;
+        if (!solid(f.x + ux*3, f.y)) f.x += ux;
+        if (!solid(f.x, f.y + uy*3)) f.y += uy;
+      } else {
+        f.atk -= dt;
+        if (f.atk <= 0){
+          f.atk = 0.8; P.hp -= 7 + wave; P.hurt = 1;
+          beep(90, .2, 'sawtooth', .1); updHUD();
+          if (P.hp <= 0){ P.hp = 0; die(); }
+        }
+      }
+    }
+  } else {
+    if (REMOTE.flash > 0) REMOTE.flash -= dt;
+    netLoop(dt);
+  }
+  if (P.hurt > 0){ P.hurt -= dt*2.2; el('hit').style.opacity = Math.max(0, P.hurt)*0.9; }
+  if (P.flash > 0) P.flash -= dt;
+  if (P.kick > 0) P.kick -= dt*5;
+  if (P.tracer){ P.tracer.t -= dt; if (P.tracer.t <= 0) P.tracer = null; }
+}
+
+/* ============ render ============ */
+function render(){
+  const g = ctx.createLinearGradient(0,0,0,H/2);
+  g.addColorStop(0,'#05080b'); g.addColorStop(1,'#151d24');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H/2);
+  const g2 = ctx.createLinearGradient(0,H/2,0,H);
+  g2.addColorStop(0,'#1a1713'); g2.addColorStop(1,'#08090a');
+  ctx.fillStyle = g2; ctx.fillRect(0,H/2,W,H/2);
+
+  for (let x=0; x<W; x++){
+    const cx = 2*x/W - 1;
+    const rdx = P.dx + P.px*cx, rdy = P.dy + P.py*cx;
+    let mx = P.x|0, my = P.y|0;
+    const ddx = Math.abs(1/rdx), ddy = Math.abs(1/rdy);
+    let sx, sy, sdx, sdy, side = 0;
+    if (rdx < 0){ sx = -1; sdx = (P.x - mx) * ddx; } else { sx = 1; sdx = (mx + 1 - P.x) * ddx; }
+    if (rdy < 0){ sy = -1; sdy = (P.y - my) * ddy; } else { sy = 1; sdy = (my + 1 - P.y) * ddy; }
+    let tile = 0, guard = 0;
+    while (guard++ < 200){
+      if (sdx < sdy){ sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
+      if (mx<0||my<0||mx>=N||my>=N){ tile = 1; break; }
+      if (grid[my][mx] > 0){ tile = grid[my][mx]; break; }
+    }
+    const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
+    zbuf[x] = Math.max(0.01, dist);
+    const h = Math.min(H*6, H / dist);
+    const y0 = (H - h) / 2;
+    const c = WALLC[tile] || WALLC[1];
+    let sh = Math.min(1, 1.35 / (1 + dist*0.32));
+    if (side === 1) sh *= 0.68;
+    ctx.fillStyle = `rgb(${c[0]*sh|0},${c[1]*sh|0},${c[2]*sh|0})`;
+    ctx.fillRect(x, y0, 1, h);
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(.5, dist*0.055)})`;
+    ctx.fillRect(x, y0, 1, h);
+  }
+
+  const list = targetsFor().map(f => ({f, d:(f.x-P.x)**2 + (f.y-P.y)**2})).sort((a,b) => b.d - a.d);
+  for (const {f} of list){
+    const s = project(f); if (!s) continue;
+    const img = f.flash > 0 ? SPR_HIT[f.kind] : SPR[f.kind];
+    const start = Math.max(0, Math.floor(s.x0)), end = Math.min(W, Math.ceil(s.x0 + s.w));
+    for (let x=start; x<end; x++){
+      if (s.ty >= zbuf[x]) continue;
+      const u = ((x - s.x0) * 64 / s.w) | 0;
+      if (u < 0 || u > 63) continue;
+      ctx.drawImage(img, u, 0, 1, 64, x, s.y0, 1, s.h);
+    }
+  }
+
+  drawGun();
+  drawCross();
+}
+
+function gunPos(){
+  const bob = Math.sin(P.bob)*4*SCALE, bob2 = Math.abs(Math.cos(P.bob))*3*SCALE;
+  const k = Math.max(0, P.kick) * 9 * SCALE;
+  return { gx: W*0.56 + bob, gy: H - 2 + bob2 + k, u: H * 0.055 };
+}
+function drawGun(){
+  const { gx, gy, u } = gunPos();
+  if (P.tracer){
+    ctx.strokeStyle = `rgba(242,181,68,${P.tracer.t/0.09*0.7})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(gx, gy - u*4.9); ctx.lineTo(P.tracer.x, P.tracer.y); ctx.stroke();
+  }
+  ctx.fillStyle = '#20282e'; ctx.fillRect(gx - u*0.9, gy - u*2.6, u*1.8, u*2.8);
+  ctx.fillStyle = '#39454d'; ctx.fillRect(gx - u*0.45, gy - u*4.6, u*0.9, u*2.2);
+  ctx.fillStyle = '#161c21'; ctx.fillRect(gx - u*0.2, gy - u*4.8, u*0.4, u*0.5);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(gx - u*0.9, gy - u*2.6, u*0.5, u*2.8);
+  if (P.flash > 0){
+    ctx.fillStyle = 'rgba(242,181,68,.92)';
+    ctx.beginPath(); ctx.arc(gx, gy - u*4.9, u*(1.1 + Math.random()*0.5), 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(0,0,W,H);
+  }
+}
+function drawCross(){
+  const cx = P.aim.x, cy = P.aim.y, s = Math.max(3, H*0.012), g = s*0.8;
+  ctx.fillStyle = P.reload > 0 ? 'rgba(196,70,44,.9)'
+                : hovered ? 'rgba(127,176,105,.95)' : 'rgba(200,203,196,.85)';
+  ctx.fillRect(cx-1, cy-g-s, 2, s); ctx.fillRect(cx-1, cy+g, 2, s);
+  ctx.fillRect(cx-g-s, cy-1, s, 2); ctx.fillRect(cx+g, cy-1, s, 2);
+  if (hovered) ctx.fillRect(cx-1, cy-1, 2, 2);
+}
+
+/* minimap: own position only, never shows enemies/opponent */
+const mm = el('map'), mc = mm.getContext('2d');
+function drawMap(){
+  const t = 132 / N;
+  mc.clearRect(0,0,132,132);
+  mc.fillStyle = 'rgba(10,14,18,.55)'; mc.fillRect(0,0,132,132);
+  mc.fillStyle = '#39454d';
+  for (let y=0; y<N; y++) for (let x=0; x<N; x++)
+    if (grid[y][x] > 0) mc.fillRect(x*t, y*t, t, t);
+  mc.fillStyle = '#f2b544';
+  mc.beginPath(); mc.arc(P.x*t, P.y*t, 2.6, 0, 7); mc.fill();
+  mc.strokeStyle = '#f2b544'; mc.lineWidth = 1.4; mc.beginPath();
+  mc.moveTo(P.x*t, P.y*t); mc.lineTo((P.x+P.dx*1.6)*t, (P.y+P.dy*1.6)*t); mc.stroke();
+}
+
+/* ============ HUD ============ */
+function updHUD(){
+  el('hpnum').textContent = Math.max(0, Math.round(P.hp));
+  el('hpnum').classList.toggle('hurt', P.hp <= 30);
+  el('hpfill').style.height = Math.max(0, P.hp) + '%';
+  el('hpfill').style.background = P.hp <= 30 ? '#c4462c' : '#f2b544';
+  el('ammonum').textContent = P.reload > 0 ? '—' : P.ammo;
+  el('ammonum').classList.toggle('empty', P.ammo === 0);
+  if (CFG.mode === 'online'){
+    el('top').innerHTML = `あなた <b>${P.kills}</b> &nbsp;—&nbsp; <b>${REMOTE.kills}</b> 相手 &nbsp;·&nbsp; ${CFG.target}キル先取`;
+  } else {
+    el('top').innerHTML = `区画 <b>${wave}</b> &nbsp;·&nbsp; 残り <b>${foes.length}</b> &nbsp;·&nbsp; <b>${pts}</b>`;
+  }
+}
+
+/* ============ settings ============ */
+const sSens = el('s_sens');
+function applyCfg(){
+  CFG.sens = parseFloat(sSens.value);
+  el('v_sens').textContent = CFG.sens.toFixed(2);
+  el('g_solo').setAttribute('aria-pressed', CFG.mode === 'solo');
+  el('g_online').setAttribute('aria-pressed', CFG.mode === 'online');
+  el('netfield').style.display = CFG.mode === 'online' ? '' : 'none';
+  el('go').style.display = CFG.mode === 'online' ? 'none' : '';
+  document.body.classList.toggle('online', CFG.mode === 'online');
+  document.body.classList.toggle('solo', CFG.mode === 'solo');
+  el('blurb').innerHTML = CFG.mode === 'online'
+    ? 'サーバーに接続し、相手と同じルームコードに入ると自動で対戦が始まる。'
+    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
+  cv.style.cursor = 'none';
+}
+sSens.oninput = applyCfg;
+el('g_solo').onclick = () => { CFG.mode = 'solo'; applyCfg(); };
+el('g_online').onclick = () => { CFG.mode = 'online'; applyCfg(); };
+el('connectBtn').onclick = connect;
+applyCfg();
+
+/* ============ flow ============ */
+const veil = el('veil');
+function backToMenu(){
+  veil.classList.remove('gone');
+  el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
+  el('score').textContent = '';
+  applyCfg();
+  netState = 'idle';
+  if (socket){ try{ socket.close(); }catch(e){} socket = null; }
+}
+function resume(){ alive = true; veil.classList.add('gone'); if (!isTouch) cv.requestPointerLock?.(); }
+function start(){
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+  resetSolo(); updHUD();
+  veil.classList.add('gone');
+  if (!isTouch) cv.requestPointerLock?.();
+}
+function over(titleJa, titleEn, text, btn, sub, next){
+  alive = false;
+  document.exitPointerLock?.();
+  el('title').innerHTML = `<span>${titleJa}</span>${titleEn}`;
+  el('blurb').innerHTML = text;
+  el('go').textContent = btn; el('go').style.display = '';
+  el('score').textContent = sub;
+  veil.classList.remove('gone');
+  el('go').onclick = next;
+  el('hit').style.opacity = 0;
+}
+function pause(){
+  if (!alive) return;
+  if (CFG.mode === 'online'){
+    alive = false; document.exitPointerLock?.();
+    over('中断', 'PAUSED', '対戦中は切断して抜けるだけできる。', 'メニューへ',
+         `あなた ${P.kills} — ${REMOTE.kills} 相手`, backToMenu);
+    return;
+  }
+  over('一時停止', 'PAUSED', '手を止めた。設定はここで変えられる。', '続ける', `区画 ${wave} ／ ${pts} 点`, resume);
+}
+function die(){
+  foes = [];
+  best = Math.max(best, pts);
+  over('信号途絶', 'GAME OVER', `区画 ${wave} で倒れた。`, 'もう一度', `${pts} 点 ／ 最高 ${best} 点`, start);
+}
+function finishOnline(iwon){
+  alive = false; document.exitPointerLock?.();
+  if (iwon) over('決着', 'YOU WIN', `${CFG.target} キル先取した。`, 'メニューへ', `あなた ${P.kills} — ${REMOTE.kills} 相手`, backToMenu);
+  else over('決着', 'YOU LOSE', `相手に ${CFG.target} キル先取された。`, 'メニューへ', `あなた ${P.kills} — ${REMOTE.kills} 相手`, backToMenu);
+}
+el('go').onclick = start;
+el('gear').onclick = () => { if (alive) pause(); };
+
+/* ============ loop ============ */
+let last = performance.now(), mapT = 0;
+function frame(now){
+  const dt = Math.min(0.05, (now - last)/1000); last = now;
+  step(dt);
+  render();
+  hovered = alive ? pickTarget() : null;
+  mapT += dt;
+  if (mapT > 0.08){ mapT = 0; if (CFG.mode === 'solo') drawMap(); if (alive) updHUD(); }
+  requestAnimationFrame(frame);
+}
+buildMaze(Math.random); drawMap();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

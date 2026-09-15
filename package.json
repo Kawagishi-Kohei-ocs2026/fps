@@ -1,0 +1,12 @@
+{
+  "name": "sublevel7-relay",
+  "version": "1.0.0",
+  "description": "SUBLEVEL 7 の対戦用リレーサーバー",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
