@@ -230,8 +230,11 @@ function beep(freq, dur, type, vol){
 /* ============ state ============ */
 const P = { x:1.5, y:1.5, dx:1, dy:0, px:0, py:0.66, hp:100, ammo:12, mag:12, reload:0,
             bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null,
-            jumpZ:0, jumpVel:0, onGround:true };
-const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0 };
+            jumpZ:0, jumpVel:0, onGround:true,
+            crouch:false, crouchZ:0, sliding:false, slideT:0, slideDx:1, slideDy:0 };
+const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0 };
+// Net vertical eye-offset from normal standing height: up while jumping, down while crouched/sliding.
+function eyeZ(o){ return (o.jumpZ || 0) - (o.crouchZ || 0); }
 let pitch = 0;
 let foes = [], wave = 1, pts = 0, alive = false, best = 0, hovered = null;
 const zbuf = new Float32Array(8192);
@@ -266,6 +269,7 @@ function placePlayer(spot){
   P.px = -P.dy*0.66; P.py = P.dx*0.66;
   P.hp = 100; P.ammo = P.mag; P.reload = 0;
   P.jumpZ = 0; P.jumpVel = 0; P.onGround = true;
+  P.crouch = false; P.crouchZ = 0; P.sliding = false; P.slideT = 0;
   pitch = 0;
 }
 function resetSolo(){
@@ -309,7 +313,7 @@ function handleNet(m){
   }
   if (m.type === 'state'){
     REMOTE.x = m.x; REMOTE.y = m.y; REMOTE.hp = m.hp; REMOTE.ammo = m.ammo;
-    REMOTE.dead = m.dead; REMOTE.kills = m.kills; REMOTE.jumpZ = m.jumpZ || 0;
+    REMOTE.dead = m.dead; REMOTE.kills = m.kills; REMOTE.jumpZ = m.jumpZ || 0; REMOTE.crouchZ = m.crouchZ || 0;
     return;
   }
   if (m.type === 'shoot'){ REMOTE.flash = 0.06; return; }
@@ -348,7 +352,7 @@ function hostBeginMatch(){
 function beginOnlineMatch(mySpot, theirSpot){
   placePlayer(mySpot);
   REMOTE.x = theirSpot.x; REMOTE.y = theirSpot.y; REMOTE.hp = 100; REMOTE.ammo = 12;
-  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.jumpZ = 0;
+  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.jumpZ = 0; REMOTE.crouchZ = 0;
   P.kills = 0; pts = 0;
   netState = 'playing';
   alive = true;
@@ -365,7 +369,7 @@ function netLoop(dt){
   netTick += dt;
   if (netTick > 0.06){
     netTick = 0;
-    send({ type:'state', x:P.x, y:P.y, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills, jumpZ:P.jumpZ });
+    send({ type:'state', x:P.x, y:P.y, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills, jumpZ:P.jumpZ, crouchZ:P.crouchZ });
   }
 }
 
@@ -375,6 +379,7 @@ addEventListener('keydown', e => {
   if (!e.repeat){
     if (e.code === 'Space') doJump();
     if (e.code === 'KeyR') doReload();
+    if (e.code === 'ControlLeft' || e.code === 'KeyC') toggleCrouch();
   }
   keys[e.code] = true;
   if (e.code === 'Escape' && alive) pause();
@@ -444,9 +449,10 @@ function project(f){
   const ty = inv * (-P.py*rx + P.px*ry);
   if (ty <= 0.2) return null;
   const h = Math.abs(H/ty) * 0.92, w = h * 0.6;
-  // My own jump sinks nearby things (scaled by distance); the target's own
-  // jump lifts its sprite — and its hit-mask — by the same amount.
-  const jShift = (P.jumpZ - (f.jumpZ || 0)) * h * JUMP_SHIFT;
+  // My own height (jump up / crouch down) sinks or lifts nearby things
+  // (scaled by distance); the target's own height does the same to its
+  // sprite — and its hit-mask — relative to me.
+  const jShift = (eyeZ(P) - eyeZ(f)) * h * JUMP_SHIFT;
   return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: (H - h)/2 + h*0.04 + pitch + jShift };
 }
 const HEAD_V0 = 4, HEAD_V1 = 20; // rows of the 64px sprite texture occupied by the head (see makeSprite)
@@ -468,11 +474,42 @@ function pickTarget(){ return pickTargetDetail().target; }
 
 /* ============ actions ============ */
 const JUMP_V = 9.75, GRAVITY = 27.87, JUMP_SHIFT = 0.2;
+const CROUCH_SPEED_MULT = 0.5, CROUCH_DUCK = 0.6, CROUCH_EASE = 10;
+const SLIDE_SPEED = 6.5, SLIDE_DURATION = 0.5;
 function doJump(){
   if (!alive || !P.onGround) return;
   P.jumpVel = JUMP_V;
   P.onGround = false;
+  P.crouch = false;    // jumping while crouched stands you back up
+  P.sliding = false;   // ...and cuts a slide short
   beep(200, .08, 'square', .04);
+}
+function isRunningNow(){
+  const shift = keys.ShiftLeft || keys.ShiftRight;
+  const moving = keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD ||
+                 keys.ArrowUp || keys.ArrowDown || move.x || move.y;
+  return !!(shift && moving);
+}
+function toggleCrouch(){
+  if (!alive || P.sliding) return;
+  if (P.crouch){ P.crouch = false; return; } // press again to stand back up
+  if (isRunningNow()) startSlide(); else P.crouch = true;
+}
+function startSlide(){
+  P.crouch = false; // sliding is a separate temporary state, not the held crouch
+  P.sliding = true;
+  P.slideT = SLIDE_DURATION;
+  let fwd = 0, str = 0;
+  if (keys.KeyW || keys.ArrowUp) fwd += 1;
+  if (keys.KeyS || keys.ArrowDown) fwd -= 1;
+  if (keys.KeyD) str += 1;
+  if (keys.KeyA) str -= 1;
+  fwd += move.y; str += move.x;
+  let dx = P.dx*fwd + P.px*str, dy = P.dy*fwd + P.py*str;
+  const len = Math.hypot(dx, dy);
+  if (len < 0.001){ dx = P.dx; dy = P.dy; } else { dx /= len; dy /= len; }
+  P.slideDx = dx; P.slideDy = dy;
+  beep(150, .18, 'sawtooth', .06);
 }
 function doReload(){
   if (!alive || P.reload > 0 || P.ammo === P.mag) return;
@@ -528,13 +565,32 @@ function step(dt){
   if (keys.ArrowRight) rotate(1.9*dt*CFG.sens);
   fwd += move.y; str += move.x;
   const run = (keys.ShiftLeft || keys.ShiftRight) ? 1.7 : 1;
-  const sp = 2.7 * run * dt;
-  const nx = P.x + (P.dx*fwd + P.px*str) * sp;
-  const ny = P.y + (P.dy*fwd + P.py*str) * sp;
+
+  let vx, vy, bobRate;
+  if (P.sliding){
+    P.slideT -= dt;
+    const k = Math.max(0, P.slideT / SLIDE_DURATION);
+    const spd = SLIDE_SPEED * k;
+    vx = P.slideDx * spd; vy = P.slideDy * spd;
+    bobRate = 14;
+    if (P.slideT <= 0) P.sliding = false;
+  } else {
+    const spdMul = P.crouch ? CROUCH_SPEED_MULT : run;
+    const sp = 2.7 * spdMul;
+    vx = (P.dx*fwd + P.px*str) * sp;
+    vy = (P.dy*fwd + P.py*str) * sp;
+    bobRate = 9 * (P.crouch ? 0.6 : run);
+  }
+  const nx = P.x + vx*dt;
+  const ny = P.y + vy*dt;
   const r = 0.26;
   if (!solid(nx + Math.sign(nx-P.x)*r, P.y)) P.x = nx;
   if (!solid(P.x, ny + Math.sign(ny-P.y)*r)) P.y = ny;
-  if (fwd || str) P.bob += dt * 9 * run;
+  if (fwd || str || P.sliding) P.bob += dt * bobRate;
+
+  // ease the visible crouch/slide height toward its target each frame
+  const duckTarget = (P.crouch || P.sliding) ? CROUCH_DUCK : 0;
+  P.crouchZ += (duckTarget - P.crouchZ) * Math.min(1, dt * CROUCH_EASE);
 
   // jump arc — visual only, walls stay just as solid mid-air
   P.jumpZ += P.jumpVel * dt;
@@ -596,7 +652,7 @@ function render(){
     const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
     zbuf[x] = Math.max(0.01, dist);
     const h = Math.min(H*6, H / dist);
-    const y0 = (H - h) / 2 + pitch + P.jumpZ * h * JUMP_SHIFT;
+    const y0 = (H - h) / 2 + pitch + eyeZ(P) * h * JUMP_SHIFT;
     const c = WALLC[tile] || WALLC[1];
     let sh = Math.min(1, 1.35 / (1 + dist*0.32));
     if (side === 1) sh *= 0.68;
@@ -626,7 +682,7 @@ function render(){
 function gunPos(){
   const bob = Math.sin(P.bob)*4*SCALE, bob2 = Math.abs(Math.cos(P.bob))*3*SCALE;
   const k = Math.max(0, P.kick) * 9 * SCALE;
-  const j = P.jumpZ * 10 * SCALE;
+  const j = eyeZ(P) * 10 * SCALE;
   return { gx: W*0.56 + bob, gy: H - 2 + bob2 + k - j, u: H * 0.055 };
 }
 function drawGun(){
@@ -698,7 +754,7 @@ function applyCfg(){
   document.body.classList.toggle('solo', CFG.mode === 'solo');
   el('blurb').innerHTML = CFG.mode === 'online'
     ? 'サーバーに接続し、相手と同じルームコードに入ると自動で対戦が始まる。'
-    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
+    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
   cv.style.cursor = 'none';
 }
 sSens.oninput = applyCfg;
