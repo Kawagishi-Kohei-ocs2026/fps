@@ -477,11 +477,10 @@ const JUMP_V = 9.75, GRAVITY = 27.87, JUMP_SHIFT = 0.2;
 const CROUCH_SPEED_MULT = 0.5, CROUCH_DUCK = 0.6, CROUCH_EASE = 10;
 const SLIDE_SPEED = 6.5, SLIDE_DURATION = 0.5;
 function doJump(){
-  if (!alive || !P.onGround) return;
+  if (!alive || !P.onGround || P.sliding) return;
   P.jumpVel = JUMP_V;
   P.onGround = false;
   P.crouch = false;    // jumping while crouched stands you back up
-  P.sliding = false;   // ...and cuts a slide short
   beep(200, .08, 'square', .04);
 }
 function isRunningNow(){
