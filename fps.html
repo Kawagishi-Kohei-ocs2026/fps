@@ -449,8 +449,9 @@ function project(f){
   const jShift = (P.jumpZ - (f.jumpZ || 0)) * h * JUMP_SHIFT;
   return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: (H - h)/2 + h*0.04 + pitch + jShift };
 }
-function pickTarget(){
-  let hit = null, bestD = 1e9;
+const HEAD_V0 = 4, HEAD_V1 = 20; // rows of the 64px sprite texture occupied by the head (see makeSprite)
+function pickTargetDetail(){
+  let hit = null, headshot = false, bestD = 1e9;
   for (const f of targetsFor()){
     const s = project(f); if (!s) continue;
     const u = ((P.aim.x - s.x0) * 64 / s.w) | 0;
@@ -459,10 +460,11 @@ function pickTarget(){
     if (!MASK[f.kind][v*64 + u]) continue;
     const col = Math.max(0, Math.min(W-1, P.aim.x|0));
     if (s.ty > zbuf[col]) continue;
-    if (s.ty < bestD){ bestD = s.ty; hit = f; }
+    if (s.ty < bestD){ bestD = s.ty; hit = f; headshot = v >= HEAD_V0 && v < HEAD_V1; }
   }
-  return hit;
+  return { target: hit, headshot };
 }
+function pickTarget(){ return pickTargetDetail().target; }
 
 /* ============ actions ============ */
 const JUMP_V = 9.75, GRAVITY = 27.87, JUMP_SHIFT = 0.2;
@@ -484,14 +486,15 @@ function shoot(){
   beep(320, .16, 'square', .11);
   if (CFG.mode === 'online') send({type:'shoot'});
 
-  const t = pickTarget();
+  const { target: t, headshot } = pickTargetDetail();
   if (t){
+    const mult = headshot ? 1.5 : 1;
     if (CFG.mode === 'online'){
-      t.flash = 0.12; beep(520, .07, 'triangle', .07);
-      send({ type:'hit', dmg:26 });
+      t.flash = 0.12; beep(headshot ? 700 : 520, .07, 'triangle', .07);
+      send({ type:'hit', dmg: Math.round(26 * mult) });
     } else {
-      t.hp--; t.flash = 0.12;
-      beep(520, .07, 'triangle', .07);
+      t.hp -= mult; t.flash = 0.12;
+      beep(headshot ? 700 : 520, .07, 'triangle', .07);
       if (t.hp <= 0){
         foes.splice(foes.indexOf(t), 1);
         pts += t.max * 25; beep(120, .3, 'sawtooth', .09);
