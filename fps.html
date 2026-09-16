@@ -241,7 +241,17 @@ const P = { x:1.5, y:1.5, dx:1, dy:0, px:0, py:0.66, hp:100, ammo:12, mag:12, re
             bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null,
             jumpZ:0, jumpVel:0, onGround:true,
             crouch:false, crouchZ:0, sliding:false, slideT:0, slideDx:1, slideDy:0 };
-const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0, mmT:0 };
+const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0, mmT:0,
+  _p0x:5, _p0y:5, _p1x:5, _p1y:5, _p0jz:0, _p1jz:0, _p0cz:0, _p1cz:0, _t0:0, _dur:60, _lastMsgT:0 };
+function updateRemoteInterp(){
+  if (CFG.mode !== 'online') return;
+  const now = performance.now();
+  const t = REMOTE._dur > 0 ? Math.min(1, (now - REMOTE._t0) / REMOTE._dur) : 1;
+  REMOTE.x = REMOTE._p0x + (REMOTE._p1x - REMOTE._p0x) * t;
+  REMOTE.y = REMOTE._p0y + (REMOTE._p1y - REMOTE._p0y) * t;
+  REMOTE.jumpZ = REMOTE._p0jz + (REMOTE._p1jz - REMOTE._p0jz) * t;
+  REMOTE.crouchZ = REMOTE._p0cz + (REMOTE._p1cz - REMOTE._p0cz) * t;
+}
 // Net vertical eye-offset from normal standing height: up while jumping, down while crouched/sliding.
 function eyeZ(o){ return (o.jumpZ || 0) - (o.crouchZ || 0); }
 let pitch = 0;
@@ -321,8 +331,15 @@ function handleNet(m){
     return;
   }
   if (m.type === 'state'){
-    REMOTE.x = m.x; REMOTE.y = m.y; REMOTE.hp = m.hp; REMOTE.ammo = m.ammo;
-    REMOTE.dead = m.dead; REMOTE.kills = m.kills; REMOTE.jumpZ = m.jumpZ || 0; REMOTE.crouchZ = m.crouchZ || 0;
+    const now = performance.now();
+    REMOTE._p0x = REMOTE.x; REMOTE._p0y = REMOTE.y;
+    REMOTE._p0jz = REMOTE.jumpZ; REMOTE._p0cz = REMOTE.crouchZ;
+    REMOTE._p1x = m.x; REMOTE._p1y = m.y;
+    REMOTE._p1jz = m.jumpZ || 0; REMOTE._p1cz = m.crouchZ || 0;
+    REMOTE._dur = REMOTE._lastMsgT ? Math.min(220, Math.max(30, now - REMOTE._lastMsgT)) : 60;
+    REMOTE._lastMsgT = now; REMOTE._t0 = now;
+    REMOTE.hp = m.hp; REMOTE.ammo = m.ammo;
+    REMOTE.dead = m.dead; REMOTE.kills = m.kills;
     return;
   }
   if (m.type === 'shoot'){ REMOTE.flash = 0.06; REMOTE.mmT = 3; return; }
@@ -362,6 +379,9 @@ function beginOnlineMatch(mySpot, theirSpot){
   placePlayer(mySpot);
   REMOTE.x = theirSpot.x; REMOTE.y = theirSpot.y; REMOTE.hp = 100; REMOTE.ammo = 12;
   REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.mmT = 0; REMOTE.jumpZ = 0; REMOTE.crouchZ = 0;
+  REMOTE._p0x = REMOTE._p1x = theirSpot.x; REMOTE._p0y = REMOTE._p1y = theirSpot.y;
+  REMOTE._p0jz = REMOTE._p1jz = 0; REMOTE._p0cz = REMOTE._p1cz = 0;
+  REMOTE._t0 = performance.now(); REMOTE._dur = 60; REMOTE._lastMsgT = 0;
   P.kills = 0; pts = 0;
   netState = 'playing';
   alive = true;
@@ -647,6 +667,7 @@ function step(dt){
 
 /* ============ render ============ */
 function render(){
+  updateRemoteInterp();
   const horizon = H/2 + pitch;
   const g = ctx.createLinearGradient(0,0,0,horizon);
   g.addColorStop(0,'#05080b'); g.addColorStop(1,'#151d24');
@@ -847,7 +868,7 @@ function pause(){
     el('modefield').style.display = 'none';
     el('netfield').style.display = 'none';
     el('sensfield').style.display = '';
-    el('go').textContent = '継続する';
+    el('go').textContent = '続ける';
     el('go').style.display = '';
     el('go').onclick = resumeOnline;
     el('quit').style.display = '';
