@@ -14,7 +14,6 @@
   #view{display:block;width:100vw;height:100vh;image-rendering:pixelated;cursor:none}
 
   #hud{position:fixed;inset:0;pointer-events:none}
-  body.online #map{display:none}
   .corner{position:absolute;bottom:18px;display:flex;align-items:flex-end;gap:14px}
   #left{left:20px}
   #right{right:20px;flex-direction:row-reverse;text-align:right}
@@ -230,8 +229,9 @@ function beep(freq, dur, type, vol){
 
 /* ============ state ============ */
 const P = { x:1.5, y:1.5, dx:1, dy:0, px:0, py:0.66, hp:100, ammo:12, mag:12, reload:0,
-            bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null };
-const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2' };
+            bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null,
+            jumpZ:0, jumpVel:0, onGround:true };
+const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0 };
 let pitch = 0;
 let foes = [], wave = 1, pts = 0, alive = false, best = 0, hovered = null;
 const zbuf = new Float32Array(8192);
@@ -265,6 +265,7 @@ function placePlayer(spot){
   P.dx = Math.cos(a); P.dy = Math.sin(a);
   P.px = -P.dy*0.66; P.py = P.dx*0.66;
   P.hp = 100; P.ammo = P.mag; P.reload = 0;
+  P.jumpZ = 0; P.jumpVel = 0; P.onGround = true;
   pitch = 0;
 }
 function resetSolo(){
@@ -308,7 +309,7 @@ function handleNet(m){
   }
   if (m.type === 'state'){
     REMOTE.x = m.x; REMOTE.y = m.y; REMOTE.hp = m.hp; REMOTE.ammo = m.ammo;
-    REMOTE.dead = m.dead; REMOTE.kills = m.kills;
+    REMOTE.dead = m.dead; REMOTE.kills = m.kills; REMOTE.jumpZ = m.jumpZ || 0;
     return;
   }
   if (m.type === 'shoot'){ REMOTE.flash = 0.06; return; }
@@ -347,7 +348,7 @@ function hostBeginMatch(){
 function beginOnlineMatch(mySpot, theirSpot){
   placePlayer(mySpot);
   REMOTE.x = theirSpot.x; REMOTE.y = theirSpot.y; REMOTE.hp = 100; REMOTE.ammo = 12;
-  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0;
+  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.jumpZ = 0;
   P.kills = 0; pts = 0;
   netState = 'playing';
   alive = true;
@@ -364,7 +365,7 @@ function netLoop(dt){
   netTick += dt;
   if (netTick > 0.06){
     netTick = 0;
-    send({ type:'state', x:P.x, y:P.y, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills });
+    send({ type:'state', x:P.x, y:P.y, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills, jumpZ:P.jumpZ });
   }
 }
 
@@ -372,7 +373,7 @@ function netLoop(dt){
 const keys = {};
 addEventListener('keydown', e => {
   if (!e.repeat){
-    if (e.code === 'Space') shoot();
+    if (e.code === 'Space') doJump();
     if (e.code === 'KeyR') doReload();
   }
   keys[e.code] = true;
@@ -390,6 +391,9 @@ function addPitch(dy){
   const maxP = H * 0.5;
   pitch = Math.max(-maxP, Math.min(maxP, pitch - dy));
 }
+// This raycaster has no real height axis, so a jump is faked by nudging the
+// camera's vertical offset — the whole view rises and settles back down.
+function camPitch(){ return pitch - P.jumpZ * H * 0.22; }
 addEventListener('mousemove', e => {
   if (document.pointerLockElement === cv){
     rotate(e.movementX * 0.0022 * CFG.sens);
@@ -443,7 +447,8 @@ function project(f){
   const ty = inv * (-P.py*rx + P.px*ry);
   if (ty <= 0.2) return null;
   const h = Math.abs(H/ty) * 0.92, w = h * 0.6;
-  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: (H - h)/2 + h*0.04 + pitch };
+  const zOff = (f.jumpZ || 0) * h * 0.22; // target's own jump lifts its sprite/hitbox
+  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: (H - h)/2 + h*0.04 + camPitch() - zOff };
 }
 function pickTarget(){
   let hit = null, bestD = 1e9;
@@ -461,6 +466,13 @@ function pickTarget(){
 }
 
 /* ============ actions ============ */
+const JUMP_V = 4.6, GRAVITY = 13.5;
+function doJump(){
+  if (!alive || !P.onGround) return;
+  P.jumpVel = JUMP_V;
+  P.onGround = false;
+  beep(200, .08, 'square', .04);
+}
 function doReload(){
   if (!alive || P.reload > 0 || P.ammo === P.mag) return;
   P.reload = 1.0; beep(160, .12, 'square', .05);
@@ -522,6 +534,11 @@ function step(dt){
   if (!solid(P.x, ny + Math.sign(ny-P.y)*r)) P.y = ny;
   if (fwd || str) P.bob += dt * 9 * run;
 
+  // jump arc — visual only, walls stay just as solid mid-air
+  P.jumpZ += P.jumpVel * dt;
+  P.jumpVel -= GRAVITY * dt;
+  if (P.jumpZ <= 0){ P.jumpZ = 0; P.jumpVel = 0; P.onGround = true; }
+
   if (CFG.mode === 'solo'){
     for (const f of foes){
       if (f.flash > 0) f.flash -= dt;
@@ -552,7 +569,7 @@ function step(dt){
 
 /* ============ render ============ */
 function render(){
-  const horizon = H/2 + pitch;
+  const horizon = H/2 + camPitch();
   const g = ctx.createLinearGradient(0,0,0,horizon);
   g.addColorStop(0,'#05080b'); g.addColorStop(1,'#151d24');
   ctx.fillStyle = g; ctx.fillRect(0,0,W,Math.max(0,horizon));
@@ -577,7 +594,7 @@ function render(){
     const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
     zbuf[x] = Math.max(0.01, dist);
     const h = Math.min(H*6, H / dist);
-    const y0 = (H - h) / 2 + pitch;
+    const y0 = (H - h) / 2 + camPitch();
     const c = WALLC[tile] || WALLC[1];
     let sh = Math.min(1, 1.35 / (1 + dist*0.32));
     if (side === 1) sh *= 0.68;
@@ -607,7 +624,8 @@ function render(){
 function gunPos(){
   const bob = Math.sin(P.bob)*4*SCALE, bob2 = Math.abs(Math.cos(P.bob))*3*SCALE;
   const k = Math.max(0, P.kick) * 9 * SCALE;
-  return { gx: W*0.56 + bob, gy: H - 2 + bob2 + k, u: H * 0.055 };
+  const j = P.jumpZ * 10 * SCALE;
+  return { gx: W*0.56 + bob, gy: H - 2 + bob2 + k - j, u: H * 0.055 };
 }
 function drawGun(){
   const { gx, gy, u } = gunPos();
@@ -678,7 +696,7 @@ function applyCfg(){
   document.body.classList.toggle('solo', CFG.mode === 'solo');
   el('blurb').innerHTML = CFG.mode === 'online'
     ? 'サーバーに接続し、相手と同じルームコードに入ると自動で対戦が始まる。'
-    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
+    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
   cv.style.cursor = 'none';
 }
 sSens.oninput = applyCfg;
@@ -753,7 +771,7 @@ function frame(now){
   render();
   hovered = alive ? pickTarget() : null;
   mapT += dt;
-  if (mapT > 0.08){ mapT = 0; if (CFG.mode === 'solo') drawMap(); if (alive) updHUD(); }
+  if (mapT > 0.08){ mapT = 0; drawMap(); if (alive) updHUD(); }
   requestAnimationFrame(frame);
 }
 buildMaze(Math.random); drawMap();
