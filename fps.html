@@ -391,9 +391,6 @@ function addPitch(dy){
   const maxP = H * 0.5;
   pitch = Math.max(-maxP, Math.min(maxP, pitch - dy));
 }
-// This raycaster has no real height axis, so a jump is faked by nudging the
-// camera's vertical offset — the whole view rises and settles back down.
-function camPitch(){ return pitch + P.jumpZ * H * 0.22; }
 addEventListener('mousemove', e => {
   if (document.pointerLockElement === cv){
     rotate(e.movementX * 0.0022 * CFG.sens);
@@ -447,8 +444,10 @@ function project(f){
   const ty = inv * (-P.py*rx + P.px*ry);
   if (ty <= 0.2) return null;
   const h = Math.abs(H/ty) * 0.92, w = h * 0.6;
-  const zOff = (f.jumpZ || 0) * h * 0.22; // target's own jump lifts its sprite/hitbox
-  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: (H - h)/2 + h*0.04 + camPitch() - zOff };
+  // My own jump sinks nearby things (scaled by distance); the target's own
+  // jump lifts its sprite — and its hit-mask — by the same amount.
+  const jShift = (P.jumpZ - (f.jumpZ || 0)) * h * JUMP_SHIFT;
+  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: (H - h)/2 + h*0.04 + pitch + jShift };
 }
 function pickTarget(){
   let hit = null, bestD = 1e9;
@@ -466,7 +465,7 @@ function pickTarget(){
 }
 
 /* ============ actions ============ */
-const JUMP_V = 4.6, GRAVITY = 13.5;
+const JUMP_V = 6.4, GRAVITY = 12, JUMP_SHIFT = 0.2;
 function doJump(){
   if (!alive || !P.onGround) return;
   P.jumpVel = JUMP_V;
@@ -569,7 +568,7 @@ function step(dt){
 
 /* ============ render ============ */
 function render(){
-  const horizon = H/2 + camPitch();
+  const horizon = H/2 + pitch;
   const g = ctx.createLinearGradient(0,0,0,horizon);
   g.addColorStop(0,'#05080b'); g.addColorStop(1,'#151d24');
   ctx.fillStyle = g; ctx.fillRect(0,0,W,Math.max(0,horizon));
@@ -594,7 +593,7 @@ function render(){
     const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
     zbuf[x] = Math.max(0.01, dist);
     const h = Math.min(H*6, H / dist);
-    const y0 = (H - h) / 2 + camPitch();
+    const y0 = (H - h) / 2 + pitch + P.jumpZ * h * JUMP_SHIFT;
     const c = WALLC[tile] || WALLC[1];
     let sh = Math.min(1, 1.35 / (1 + dist*0.32));
     if (side === 1) sh *= 0.68;
