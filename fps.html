@@ -232,7 +232,7 @@ const P = { x:1.5, y:1.5, dx:1, dy:0, px:0, py:0.66, hp:100, ammo:12, mag:12, re
             bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null,
             jumpZ:0, jumpVel:0, onGround:true,
             crouch:false, crouchZ:0, sliding:false, slideT:0, slideDx:1, slideDy:0 };
-const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0 };
+const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0, mmT:0 };
 // Net vertical eye-offset from normal standing height: up while jumping, down while crouched/sliding.
 function eyeZ(o){ return (o.jumpZ || 0) - (o.crouchZ || 0); }
 let pitch = 0;
@@ -316,7 +316,7 @@ function handleNet(m){
     REMOTE.dead = m.dead; REMOTE.kills = m.kills; REMOTE.jumpZ = m.jumpZ || 0; REMOTE.crouchZ = m.crouchZ || 0;
     return;
   }
-  if (m.type === 'shoot'){ REMOTE.flash = 0.06; return; }
+  if (m.type === 'shoot'){ REMOTE.flash = 0.06; REMOTE.mmT = 3; return; }
   if (m.type === 'hit'){
     if (!alive || P.hurt === undefined) return;
     P.hp -= m.dmg; P.hurt = 1; beep(90,.2,'sawtooth',.1);
@@ -352,7 +352,7 @@ function hostBeginMatch(){
 function beginOnlineMatch(mySpot, theirSpot){
   placePlayer(mySpot);
   REMOTE.x = theirSpot.x; REMOTE.y = theirSpot.y; REMOTE.hp = 100; REMOTE.ammo = 12;
-  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.jumpZ = 0; REMOTE.crouchZ = 0;
+  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.mmT = 0; REMOTE.jumpZ = 0; REMOTE.crouchZ = 0;
   P.kills = 0; pts = 0;
   netState = 'playing';
   alive = true;
@@ -362,6 +362,7 @@ function beginOnlineMatch(mySpot, theirSpot){
 function respawnSelf(){
   const spot = freeSpot(Math.random, [REMOTE]);
   placePlayer(spot);
+  REMOTE.mmT = 0;
 }
 let netTick = 0;
 function netLoop(dt){
@@ -563,7 +564,7 @@ function step(dt){
   if (keys.ArrowLeft) rotate(-1.9*dt*CFG.sens);
   if (keys.ArrowRight) rotate(1.9*dt*CFG.sens);
   fwd += move.y; str += move.x;
-  const run = (keys.ShiftLeft || keys.ShiftRight) ? 1.5 : 1;
+  const run = (keys.ShiftLeft || keys.ShiftRight) ? 1.3 : 1;
 
   let vx, vy, bobRate;
   if (P.sliding){
@@ -575,7 +576,7 @@ function step(dt){
     if (P.slideT <= 0) P.sliding = false;
   } else {
     const spdMul = P.crouch ? CROUCH_SPEED_MULT : run;
-    const sp = 2.4 * spdMul;
+    const sp = 2.7 * spdMul;
     vx = (P.dx*fwd + P.px*str) * sp;
     vy = (P.dy*fwd + P.py*str) * sp;
     bobRate = 9 * (P.crouch ? 0.6 : run);
@@ -616,6 +617,7 @@ function step(dt){
     }
   } else {
     if (REMOTE.flash > 0) REMOTE.flash -= dt;
+    if (REMOTE.mmT > 0) REMOTE.mmT -= dt;
     netLoop(dt);
   }
   if (P.hurt > 0){ P.hurt -= dt*2.2; el('hit').style.opacity = Math.max(0, P.hurt)*0.9; }
@@ -710,7 +712,7 @@ function drawCross(){
   if (hovered) ctx.fillRect(cx-1, cy-1, 2, 2);
 }
 
-/* minimap: own position only, never shows enemies/opponent */
+/* minimap: own position always; opponent only flashes in briefly after they fire (online mode) */
 const mm = el('map'), mc = mm.getContext('2d');
 function drawMap(){
   const t = 132 / N;
@@ -719,6 +721,10 @@ function drawMap(){
   mc.fillStyle = '#39454d';
   for (let y=0; y<N; y++) for (let x=0; x<N; x++)
     if (grid[y][x] > 0) mc.fillRect(x*t, y*t, t, t);
+  if (CFG.mode === 'online' && REMOTE.mmT > 0 && !REMOTE.dead){
+    mc.fillStyle = 'rgba(196,70,44,' + Math.min(1, REMOTE.mmT) + ')';
+    mc.beginPath(); mc.arc(REMOTE.x*t, REMOTE.y*t, 2.6, 0, 7); mc.fill();
+  }
   mc.fillStyle = '#f2b544';
   mc.beginPath(); mc.arc(P.x*t, P.y*t, 2.6, 0, 7); mc.fill();
   mc.strokeStyle = '#f2b544'; mc.lineWidth = 1.4; mc.beginPath();
