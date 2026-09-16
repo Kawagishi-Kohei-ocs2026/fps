@@ -195,34 +195,55 @@ function freeSpot(rng, minFrom){
 }
 
 /* ============ sprites ============ */
-function makeSprite(body, head, eye){
+function makeSprite(body, head, eye, crouch){
   const s = document.createElement('canvas'); s.width = s.height = 64;
   const c = s.getContext('2d');
-  c.fillStyle = body; c.fillRect(24,18,16,30);
-  c.fillRect(18,22,6,20); c.fillRect(40,22,6,20);
-  c.fillRect(25,48,5,14); c.fillRect(34,48,5,14);
-  c.fillStyle = head; c.fillRect(22,4,20,16);
-  c.fillStyle = eye; c.fillRect(26,10,4,4); c.fillRect(34,10,4,4);
-  c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(24,18,5,30); c.fillRect(25,48,5,14);
+  if (!crouch){
+    c.fillStyle = body; c.fillRect(24,18,16,30);
+    c.fillRect(18,22,6,20); c.fillRect(40,22,6,20);
+    c.fillRect(25,48,5,14); c.fillRect(34,48,5,14);
+    c.fillStyle = head; c.fillRect(22,4,20,16);
+    c.fillStyle = eye; c.fillRect(26,10,4,4); c.fillRect(34,10,4,4);
+    c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(24,18,5,30); c.fillRect(25,48,5,14);
+  } else {
+    // compressed, wide-legged crouching pose — head dips low, knees bend outward
+    c.fillStyle = body;
+    c.fillRect(22,28,20,20);                      // squat torso, lower & shorter
+    c.fillRect(14,32,7,15); c.fillRect(43,32,7,15); // arms, bent down at sides
+    c.fillRect(19,47,9,8);  c.fillRect(36,47,9,8);  // thighs, splayed outward (knee bend)
+    c.fillRect(16,54,8,8);  c.fillRect(40,54,8,8);  // shins, tucked back under the thighs
+    c.fillStyle = head; c.fillRect(21,15,22,15);
+    c.fillStyle = eye; c.fillRect(25,21,4,4); c.fillRect(35,21,4,4);
+    c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(22,28,5,20); c.fillRect(16,54,4,8);
+  }
   return s;
 }
+const CROUCH_VIS_SCALE = 0.72; // how short a crouching sprite is drawn vs standing
 const SPR = {
   a:  makeSprite('#5b6b4e','#2a3238','#f2b544'),
   b:  makeSprite('#7a4a3a','#2a3238','#f2b544'),
   p2: makeSprite('#3f8a8a','#1e3030','#d6f3f3')
 };
-const SPR_HIT = {}, MASK = {};
-for (const k in SPR){
+const SPR_CROUCH = {
+  a:  makeSprite('#5b6b4e','#2a3238','#f2b544', true),
+  b:  makeSprite('#7a4a3a','#2a3238','#f2b544', true),
+  p2: makeSprite('#3f8a8a','#1e3030','#d6f3f3', true)
+};
+const SPR_HIT = {}, MASK = {}, SPR_HIT_CROUCH = {}, MASK_CROUCH = {};
+function buildHitAndMask(src, hitOut, maskOut, kind){
   const s = document.createElement('canvas'); s.width = s.height = 64;
   const c = s.getContext('2d');
-  c.drawImage(SPR[k],0,0); c.globalCompositeOperation = 'source-in';
+  c.drawImage(src[kind],0,0); c.globalCompositeOperation = 'source-in';
   c.fillStyle = '#ffe9e2'; c.fillRect(0,0,64,64);
-  SPR_HIT[k] = s;
-  const d = SPR[k].getContext('2d').getImageData(0,0,64,64).data;
+  hitOut[kind] = s;
+  const d = src[kind].getContext('2d').getImageData(0,0,64,64).data;
   const m = new Uint8Array(64*64);
   for (let i=0; i<64*64; i++) m[i] = d[i*4+3] > 40 ? 1 : 0;
-  MASK[k] = m;
+  maskOut[kind] = m;
 }
+for (const k in SPR) buildHitAndMask(SPR, SPR_HIT, MASK, k);
+for (const k in SPR_CROUCH) buildHitAndMask(SPR_CROUCH, SPR_HIT_CROUCH, MASK_CROUCH, k);
+function isCrouching(f){ return !!f.crouch; }
 
 /* ============ audio ============ */
 let actx = null;
@@ -241,7 +262,7 @@ const P = { x:1.5, y:1.5, dx:1, dy:0, px:0, py:0.66, hp:100, ammo:12, mag:12, re
             bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null,
             jumpZ:0, jumpVel:0, onGround:true,
             crouch:false, crouchZ:0, sliding:false, slideT:0, slideDx:1, slideDy:0 };
-const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0, mmT:0,
+const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0, crouch:false, mmT:0,
   _p0x:5, _p0y:5, _p1x:5, _p1y:5, _p0jz:0, _p1jz:0, _p0cz:0, _p1cz:0, _t0:0, _dur:60, _lastMsgT:0 };
 function updateRemoteInterp(){
   if (CFG.mode !== 'online') return;
@@ -339,7 +360,7 @@ function handleNet(m){
     REMOTE._dur = REMOTE._lastMsgT ? Math.min(220, Math.max(30, now - REMOTE._lastMsgT)) : 60;
     REMOTE._lastMsgT = now; REMOTE._t0 = now;
     REMOTE.hp = m.hp; REMOTE.ammo = m.ammo;
-    REMOTE.dead = m.dead; REMOTE.kills = m.kills;
+    REMOTE.dead = m.dead; REMOTE.kills = m.kills; REMOTE.crouch = !!m.crouch;
     return;
   }
   if (m.type === 'shoot'){ REMOTE.flash = 0.06; REMOTE.mmT = 3; return; }
@@ -378,7 +399,7 @@ function hostBeginMatch(){
 function beginOnlineMatch(mySpot, theirSpot){
   placePlayer(mySpot);
   REMOTE.x = theirSpot.x; REMOTE.y = theirSpot.y; REMOTE.hp = 100; REMOTE.ammo = 12;
-  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.mmT = 0; REMOTE.jumpZ = 0; REMOTE.crouchZ = 0;
+  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.mmT = 0; REMOTE.jumpZ = 0; REMOTE.crouchZ = 0; REMOTE.crouch = false;
   REMOTE._p0x = REMOTE._p1x = theirSpot.x; REMOTE._p0y = REMOTE._p1y = theirSpot.y;
   REMOTE._p0jz = REMOTE._p1jz = 0; REMOTE._p0cz = REMOTE._p1cz = 0;
   REMOTE._t0 = performance.now(); REMOTE._dur = 60; REMOTE._lastMsgT = 0;
@@ -399,7 +420,7 @@ function netLoop(dt){
   netTick += dt;
   if (netTick > 0.06){
     netTick = 0;
-    send({ type:'state', x:P.x, y:P.y, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills, jumpZ:P.jumpZ, crouchZ:P.crouchZ });
+    send({ type:'state', x:P.x, y:P.y, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills, jumpZ:P.jumpZ, crouchZ:P.crouchZ, crouch:P.crouch });
   }
 }
 
@@ -478,14 +499,18 @@ function project(f){
   const tx = inv * (P.dy*rx - P.dx*ry);
   const ty = inv * (-P.py*rx + P.px*ry);
   if (ty <= 0.2) return null;
-  const h = Math.abs(H/ty) * 0.92, w = h * 0.6;
-  // My own height (jump up / crouch down) sinks or lifts nearby things
-  // (scaled by distance); the target's own height does the same to its
-  // sprite — and its hit-mask — relative to me.
-  const jShift = (eyeZ(P) - eyeZ(f)) * h * JUMP_SHIFT;
-  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: (H - h)/2 + h*0.04 + pitch + jShift };
+  const hFull = Math.abs(H/ty) * 0.92, w = hFull * 0.6;
+  const crouch = isCrouching(f);
+  const h = crouch ? hFull * CROUCH_VIS_SCALE : hFull;
+  // Jumping actually lifts the whole body off the ground, so it still shifts the sprite
+  // (mine and theirs). Crouching does NOT move anyone's feet — it only shrinks how tall
+  // the target is drawn (below), with the bottom (feet) anchored to the same ground line.
+  const jShift = (eyeZ(P) - (f.jumpZ || 0)) * hFull * JUMP_SHIFT;
+  const yBottom = (H - hFull)/2 + hFull + hFull*0.04 + pitch + jShift;
+  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: yBottom - h, crouch };
 }
-const HEAD_V0 = 4, HEAD_V1 = 20; // rows of the 64px sprite texture occupied by the head (see makeSprite)
+const HEAD_V0 = 4, HEAD_V1 = 20;         // head rows in the standing sprite texture
+const HEAD_V0_C = 15, HEAD_V1_C = 30;    // head rows in the crouching sprite texture
 function pickTargetDetail(){
   let hit = null, headshot = false, bestD = 1e9;
   for (const f of targetsFor()){
@@ -493,10 +518,14 @@ function pickTargetDetail(){
     const u = ((P.aim.x - s.x0) * 64 / s.w) | 0;
     const v = ((P.aim.y - s.y0) * 64 / s.h) | 0;
     if (u < 0 || u > 63 || v < 0 || v > 63) continue;
-    if (!MASK[f.kind][v*64 + u]) continue;
+    const mask = s.crouch ? MASK_CROUCH[f.kind] : MASK[f.kind];
+    if (!mask[v*64 + u]) continue;
     const col = Math.max(0, Math.min(W-1, P.aim.x|0));
     if (s.ty > zbuf[col]) continue;
-    if (s.ty < bestD){ bestD = s.ty; hit = f; headshot = v >= HEAD_V0 && v < HEAD_V1; }
+    if (s.ty < bestD){
+      bestD = s.ty; hit = f;
+      headshot = s.crouch ? (v >= HEAD_V0_C && v < HEAD_V1_C) : (v >= HEAD_V0 && v < HEAD_V1);
+    }
   }
   return { target: hit, headshot };
 }
@@ -706,7 +735,8 @@ function render(){
   const list = targetsFor().map(f => ({f, d:(f.x-P.x)**2 + (f.y-P.y)**2})).sort((a,b) => b.d - a.d);
   for (const {f} of list){
     const s = project(f); if (!s) continue;
-    const img = f.flash > 0 ? SPR_HIT[f.kind] : SPR[f.kind];
+    const hitSet = s.crouch ? SPR_HIT_CROUCH : SPR_HIT, normSet = s.crouch ? SPR_CROUCH : SPR;
+    const img = f.flash > 0 ? hitSet[f.kind] : normSet[f.kind];
     const start = Math.max(0, Math.floor(s.x0)), end = Math.min(W, Math.ceil(s.x0 + s.w));
     for (let x=start; x<end; x++){
       if (s.ty >= zbuf[x]) continue;
