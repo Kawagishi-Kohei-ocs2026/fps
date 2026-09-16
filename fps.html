@@ -27,6 +27,9 @@
   #top b{color:var(--dust);font-weight:600}
   #map{position:absolute;top:16px;right:20px;opacity:.75}
   #hit{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(196,70,44,.55) 100%);opacity:0;transition:opacity .3s}
+  #hitdir{position:absolute;inset:0;opacity:0;transition:opacity .12s linear;transform-origin:50% 50%}
+  #hitdirGlow{position:absolute;top:-15vmax;left:50%;width:95vmax;height:62vmax;transform:translateX(-50%);
+    background:radial-gradient(ellipse 55% 100% at 50% 100%,rgba(196,70,44,.85) 0%,rgba(196,70,44,0) 72%)}
   #gear{position:absolute;top:14px;left:18px;pointer-events:auto;background:none;border:1px solid #2b3740;
     color:#7b858c;font:inherit;font-size:11px;letter-spacing:.18em;padding:7px 13px;cursor:pointer}
   #gear:hover{color:var(--dust);border-color:#4a5860}
@@ -82,6 +85,7 @@
 
 <div id="hud">
   <div id="hit"></div>
+  <div id="hitdir"><div id="hitdirGlow"></div></div>
   <button id="gear">設定</button>
   <div id="top">区画 <b id="wave">1</b> &nbsp;·&nbsp; 残り <b id="left_n">0</b> &nbsp;·&nbsp; <b id="pts">0</b></div>
   <canvas id="map" width="132" height="132"></canvas>
@@ -319,7 +323,7 @@ function handleNet(m){
   if (m.type === 'shoot'){ REMOTE.flash = 0.06; REMOTE.mmT = 3; return; }
   if (m.type === 'hit'){
     if (!alive || P.hurt === undefined) return;
-    P.hp -= m.dmg; P.hurt = 1; beep(90,.2,'sawtooth',.1);
+    P.hp -= m.dmg; P.hurt = 1; P.hurtAngle = hitDirFrom(REMOTE.x, REMOTE.y); beep(90,.2,'sawtooth',.1);
     if (P.hp <= 0){
       P.hp = 0; respawnSelf(); send({type:'died'});
     }
@@ -477,6 +481,11 @@ function pickTarget(){ return pickTargetDetail().target; }
 const JUMP_V = 9.75, GRAVITY = 27.87, JUMP_SHIFT = 0.2;
 const CROUCH_SPEED_MULT = 0.5, CROUCH_DUCK = 0.9, CROUCH_EASE = 10;
 const SLIDE_SPEED = 6.5, SLIDE_DURATION = 0.5;
+function hitDirFrom(sx, sy){
+  const rx = sx - P.x, ry = sy - P.y;
+  const rel = Math.atan2(ry, rx), fwd = Math.atan2(P.dy, P.dx);
+  return (rel - fwd) * 180 / Math.PI;
+}
 function doJump(){
   if (!alive || !P.onGround || P.sliding) return;
   P.jumpVel = JUMP_V;
@@ -609,7 +618,7 @@ function step(dt){
       } else {
         f.atk -= dt;
         if (f.atk <= 0){
-          f.atk = 0.8; P.hp -= 7 + wave; P.hurt = 1;
+          f.atk = 0.8; P.hp -= 7 + wave; P.hurt = 1; P.hurtAngle = hitDirFrom(f.x, f.y);
           beep(90, .2, 'sawtooth', .1); updHUD();
           if (P.hp <= 0){ P.hp = 0; die(); }
         }
@@ -620,7 +629,12 @@ function step(dt){
     if (REMOTE.mmT > 0) REMOTE.mmT -= dt;
     netLoop(dt);
   }
-  if (P.hurt > 0){ P.hurt -= dt*2.2; el('hit').style.opacity = Math.max(0, P.hurt)*0.9; }
+  if (P.hurt > 0){
+    P.hurt -= dt*2.2;
+    el('hit').style.opacity = Math.max(0, P.hurt)*0.9;
+    el('hitdir').style.opacity = Math.max(0, P.hurt)*0.95;
+    el('hitdir').style.transform = `rotate(${P.hurtAngle||0}deg)`;
+  }
   if (P.flash > 0) P.flash -= dt;
   if (P.kick > 0) P.kick -= dt*5;
   if (P.tracer){ P.tracer.t -= dt; if (P.tracer.t <= 0) P.tracer = null; }
@@ -722,7 +736,7 @@ function drawMap(){
   for (let y=0; y<N; y++) for (let x=0; x<N; x++)
     if (grid[y][x] > 0) mc.fillRect(x*t, y*t, t, t);
   if (CFG.mode === 'online' && REMOTE.mmT > 0 && !REMOTE.dead){
-    mc.fillStyle = 'rgba(196,70,44,' + Math.min(1, REMOTE.mmT) + ')';
+    mc.fillStyle = '#c4462c';
     mc.beginPath(); mc.arc(REMOTE.x*t, REMOTE.y*t, 2.6, 0, 7); mc.fill();
   }
   mc.fillStyle = '#f2b544';
@@ -802,6 +816,7 @@ function over(titleJa, titleEn, text, btn, sub, next){
   veil.classList.remove('gone');
   el('go').onclick = next;
   el('hit').style.opacity = 0;
+  el('hitdir').style.opacity = 0;
 }
 function pause(){
   if (!alive) return;
