@@ -393,7 +393,7 @@ function addPitch(dy){
 }
 // This raycaster has no real height axis, so a jump is faked by nudging the
 // camera's vertical offset — the whole view rises and settles back down.
-function camPitch(){ return pitch - P.jumpZ * H * 0.22; }
+function camPitch(){ return pitch + P.jumpZ * H * 0.22; }
 addEventListener('mousemove', e => {
   if (document.pointerLockElement === cv){
     rotate(e.movementX * 0.0022 * CFG.sens);
