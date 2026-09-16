@@ -46,6 +46,10 @@
   #go:hover{background:#fff}
   #go:disabled{background:#39454d;color:#6d7880;cursor:default}
   #go:focus-visible,#gear:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
+  #quit{margin-top:12px;pointer-events:auto;border:1px solid var(--rust);background:none;color:var(--rust);
+    font:inherit;font-size:13px;font-weight:600;letter-spacing:.16em;padding:12px 34px;cursor:pointer}
+  #quit:hover{background:var(--rust);color:#0a0e12}
+  #quit:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
   #score{margin-top:16px;font-size:13px;color:#5d6970;letter-spacing:.1em}
 
   #cfg{margin-top:24px;width:min(380px,92vw);text-align:left;border-top:1px solid #222c34;padding-top:18px}
@@ -107,17 +111,18 @@
   <h1 id="title"><span>地下七層</span>SUBLEVEL 7</h1>
   <p id="blurb"></p>
   <button id="go">進入する</button>
+  <button id="quit" style="display:none">切断する</button>
   <div id="score"></div>
 
   <div id="cfg">
-    <div class="field">
+    <div class="field" id="modefield">
       <div class="row"><em>モード</em></div>
       <div class="seg">
         <button id="g_solo" aria-pressed="true">ソロ掃討</button>
         <button id="g_online" aria-pressed="false">対人（オンライン）</button>
       </div>
     </div>
-    <div class="field">
+    <div class="field" id="sensfield">
       <div class="row"><em>感度</em><b id="v_sens">1.00</b></div>
       <input type="range" id="s_sens" min="0.15" max="3" step="0.05" value="1">
       <p class="hint">視点は常に画面中央固定。マウスの動きで振り向く。</p>
@@ -762,13 +767,20 @@ function updHUD(){
 
 /* ============ settings ============ */
 const sSens = el('s_sens');
-function applyCfg(){
+function applySens(){
   CFG.sens = parseFloat(sSens.value);
   el('v_sens').textContent = CFG.sens.toFixed(2);
+}
+function applyCfg(){
+  applySens();
   el('g_solo').setAttribute('aria-pressed', CFG.mode === 'solo');
   el('g_online').setAttribute('aria-pressed', CFG.mode === 'online');
+  el('modefield').style.display = '';
+  el('sensfield').style.display = '';
   el('netfield').style.display = CFG.mode === 'online' ? '' : 'none';
   el('go').style.display = CFG.mode === 'online' ? 'none' : '';
+  el('go').textContent = '進入する'; el('go').onclick = start;
+  el('quit').style.display = 'none';
   document.body.classList.toggle('online', CFG.mode === 'online');
   document.body.classList.toggle('solo', CFG.mode === 'solo');
   el('blurb').innerHTML = CFG.mode === 'online'
@@ -776,7 +788,7 @@ function applyCfg(){
     : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
   cv.style.cursor = 'none';
 }
-sSens.oninput = applyCfg;
+sSens.oninput = applySens;
 el('g_solo').onclick = () => { CFG.mode = 'solo'; applyCfg(); };
 el('g_online').onclick = () => { CFG.mode = 'online'; applyCfg(); };
 el('connectBtn').onclick = connect;
@@ -800,6 +812,12 @@ function backToMenu(){
   if (socket){ try{ socket.close(); }catch(e){} socket = null; }
 }
 function resume(){ alive = true; veil.classList.add('gone'); if (!isTouch) cv.requestPointerLock?.(); }
+function resumeOnline(){
+  alive = true;
+  veil.classList.add('gone');
+  el('quit').style.display = 'none';
+  if (!isTouch) cv.requestPointerLock?.();
+}
 function start(){
   if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
   resetSolo(); updHUD();
@@ -821,9 +839,22 @@ function over(titleJa, titleEn, text, btn, sub, next){
 function pause(){
   if (!alive) return;
   if (CFG.mode === 'online'){
-    alive = false; document.exitPointerLock?.();
-    over('中断', 'PAUSED', '対戦中は切断して抜けるだけできる。', 'メニューへ',
-         `あなた ${P.kills} — ${REMOTE.kills} 相手`, backToMenu);
+    alive = false;
+    document.exitPointerLock?.();
+    el('title').innerHTML = '<span>一時停止</span>PAUSED';
+    el('blurb').innerHTML = '対戦を一時停止した。感度はここで調整できる。';
+    el('score').textContent = `あなた ${P.kills} — ${REMOTE.kills} 相手`;
+    el('modefield').style.display = 'none';
+    el('netfield').style.display = 'none';
+    el('sensfield').style.display = '';
+    el('go').textContent = '継続する';
+    el('go').style.display = '';
+    el('go').onclick = resumeOnline;
+    el('quit').style.display = '';
+    el('quit').onclick = () => { backToMenu(); };
+    veil.classList.remove('gone');
+    el('hit').style.opacity = 0;
+    el('hitdir').style.opacity = 0;
     return;
   }
   over('一時停止', 'PAUSED', '手を止めた。設定はここで変えられる。', '続ける', `区画 ${wave} ／ ${pts} 点`, resume);
