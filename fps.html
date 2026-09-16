@@ -568,7 +568,7 @@ function step(dt){
   let vx, vy, bobRate;
   if (P.sliding){
     P.slideT -= dt;
-    const k = Math.max(0, P.slideT / SLIDE_DURATION);
+    const k = Math.sqrt(Math.max(0, P.slideT / SLIDE_DURATION));
     const spd = SLIDE_SPEED * k;
     vx = P.slideDx * spd; vy = P.slideDy * spd;
     bobRate = 14;
