@@ -195,17 +195,17 @@ function freeSpot(rng, minFrom){
 }
 
 /* ============ sprites ============ */
-function makeSprite(body, head, eye, crouch){
+function makeSprite(body, head, eye, pose){
   const s = document.createElement('canvas'); s.width = s.height = 64;
   const c = s.getContext('2d');
-  if (!crouch){
+  if (!pose){
     c.fillStyle = body; c.fillRect(24,18,16,30);
     c.fillRect(18,22,6,20); c.fillRect(40,22,6,20);
     c.fillRect(25,48,5,14); c.fillRect(34,48,5,14);
     c.fillStyle = head; c.fillRect(22,4,20,16);
     c.fillStyle = eye; c.fillRect(26,10,4,4); c.fillRect(34,10,4,4);
     c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(24,18,5,30); c.fillRect(25,48,5,14);
-  } else {
+  } else if (pose === 'crouch'){
     // compressed, wide-legged crouching pose — head dips low, knees bend outward
     c.fillStyle = body;
     c.fillRect(22,28,20,20);                      // squat torso, lower & shorter
@@ -215,21 +215,55 @@ function makeSprite(body, head, eye, crouch){
     c.fillStyle = head; c.fillRect(21,15,22,15);
     c.fillStyle = eye; c.fillRect(25,21,4,4); c.fillRect(35,21,4,4);
     c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(22,28,5,20); c.fillRect(16,54,4,8);
+  } else if (pose === 'slide'){
+    // classic baseball-style slide: body laid low & leaning back, lead leg kicked
+    // out flat to one side, trailing leg tucked underneath, one arm braced back
+    // against the ground, the other thrown up for balance, with a low dust
+    // kick-up trailing the sliding foot.
+    c.fillStyle = 'rgba(214,196,158,.55)';
+    c.beginPath(); c.ellipse(8,58,7,3.5,0,0,Math.PI*2); c.fill();
+    c.beginPath(); c.ellipse(2,55,5,3,0,0,Math.PI*2); c.fill();
+    c.beginPath(); c.ellipse(15,60,6,3,0,0,Math.PI*2); c.fill();
+
+    c.fillStyle = body;
+    c.fillRect(4,46,26,8);    // lead leg, kicked out straight and low
+    c.fillRect(2,50,8,8);     // lead foot, out in front
+    c.fillRect(26,40,18,8);   // hips
+    c.fillRect(34,46,12,8);   // trailing thigh, tucked under the hips
+    c.fillRect(28,52,12,8);   // trailing shin, folded back behind
+    c.fillRect(30,24,20,18);  // torso, reclined low and leaning back
+    c.fillRect(40,20,10,8);   // neck / shoulders
+    c.fillRect(48,24,8,26);   // rear arm, braced back against the ground
+    c.fillRect(46,10,8,14);   // lead forearm, thrown up for balance
+    c.fillRect(46,5,8,8);     // raised fist
+
+    c.fillStyle = head; c.fillRect(44,8,16,14);
+    c.fillStyle = eye; c.fillRect(50,14,4,4);
+
+    c.fillStyle = 'rgba(0,0,0,.28)';
+    c.fillRect(2,50,5,8); c.fillRect(34,46,5,8);
   }
   return s;
 }
 const CROUCH_VIS_SCALE = 0.72; // how short a crouching sprite is drawn vs standing
+const SLIDE_VIS_SCALE = 0.44;  // how short a sliding sprite is drawn vs standing
+const SLIDE_WIDTH_MULT = 0.95; // sliding is laid out low & wide rather than tall
 const SPR = {
   a:  makeSprite('#5b6b4e','#2a3238','#f2b544'),
   b:  makeSprite('#7a4a3a','#2a3238','#f2b544'),
   p2: makeSprite('#3f8a8a','#1e3030','#d6f3f3')
 };
 const SPR_CROUCH = {
-  a:  makeSprite('#5b6b4e','#2a3238','#f2b544', true),
-  b:  makeSprite('#7a4a3a','#2a3238','#f2b544', true),
-  p2: makeSprite('#3f8a8a','#1e3030','#d6f3f3', true)
+  a:  makeSprite('#5b6b4e','#2a3238','#f2b544', 'crouch'),
+  b:  makeSprite('#7a4a3a','#2a3238','#f2b544', 'crouch'),
+  p2: makeSprite('#3f8a8a','#1e3030','#d6f3f3', 'crouch')
 };
-const SPR_HIT = {}, MASK = {}, SPR_HIT_CROUCH = {}, MASK_CROUCH = {};
+const SPR_SLIDE = {
+  a:  makeSprite('#5b6b4e','#2a3238','#f2b544', 'slide'),
+  b:  makeSprite('#7a4a3a','#2a3238','#f2b544', 'slide'),
+  p2: makeSprite('#3f8a8a','#1e3030','#d6f3f3', 'slide')
+};
+const SPR_HIT = {}, MASK = {}, SPR_HIT_CROUCH = {}, MASK_CROUCH = {}, SPR_HIT_SLIDE = {}, MASK_SLIDE = {};
 function buildHitAndMask(src, hitOut, maskOut, kind){
   const s = document.createElement('canvas'); s.width = s.height = 64;
   const c = s.getContext('2d');
@@ -243,7 +277,8 @@ function buildHitAndMask(src, hitOut, maskOut, kind){
 }
 for (const k in SPR) buildHitAndMask(SPR, SPR_HIT, MASK, k);
 for (const k in SPR_CROUCH) buildHitAndMask(SPR_CROUCH, SPR_HIT_CROUCH, MASK_CROUCH, k);
-function isCrouching(f){ return !!f.crouch; }
+for (const k in SPR_SLIDE) buildHitAndMask(SPR_SLIDE, SPR_HIT_SLIDE, MASK_SLIDE, k);
+function getPose(f){ return f.sliding ? 'slide' : (f.crouch ? 'crouch' : 'stand'); }
 
 /* ============ audio ============ */
 let actx = null;
@@ -262,7 +297,7 @@ const P = { x:1.5, y:1.5, dx:1, dy:0, px:0, py:0.66, hp:100, ammo:12, mag:12, re
             bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null,
             jumpZ:0, jumpVel:0, onGround:true,
             crouch:false, crouchZ:0, sliding:false, slideT:0, slideDx:1, slideDy:0 };
-const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0, crouch:false, mmT:0,
+const REMOTE = { x:5, y:5, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0, crouch:false, sliding:false, mmT:0,
   _p0x:5, _p0y:5, _p1x:5, _p1y:5, _p0jz:0, _p1jz:0, _p0cz:0, _p1cz:0, _t0:0, _dur:60, _lastMsgT:0 };
 function updateRemoteInterp(){
   if (CFG.mode !== 'online') return;
@@ -360,7 +395,7 @@ function handleNet(m){
     REMOTE._dur = REMOTE._lastMsgT ? Math.min(220, Math.max(30, now - REMOTE._lastMsgT)) : 60;
     REMOTE._lastMsgT = now; REMOTE._t0 = now;
     REMOTE.hp = m.hp; REMOTE.ammo = m.ammo;
-    REMOTE.dead = m.dead; REMOTE.kills = m.kills; REMOTE.crouch = !!m.crouch;
+    REMOTE.dead = m.dead; REMOTE.kills = m.kills; REMOTE.crouch = !!m.crouch; REMOTE.sliding = !!m.sliding;
     return;
   }
   if (m.type === 'shoot'){ REMOTE.flash = 0.06; REMOTE.mmT = 3; return; }
@@ -399,7 +434,7 @@ function hostBeginMatch(){
 function beginOnlineMatch(mySpot, theirSpot){
   placePlayer(mySpot);
   REMOTE.x = theirSpot.x; REMOTE.y = theirSpot.y; REMOTE.hp = 100; REMOTE.ammo = 12;
-  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.mmT = 0; REMOTE.jumpZ = 0; REMOTE.crouchZ = 0; REMOTE.crouch = false;
+  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.mmT = 0; REMOTE.jumpZ = 0; REMOTE.crouchZ = 0; REMOTE.crouch = false; REMOTE.sliding = false;
   REMOTE._p0x = REMOTE._p1x = theirSpot.x; REMOTE._p0y = REMOTE._p1y = theirSpot.y;
   REMOTE._p0jz = REMOTE._p1jz = 0; REMOTE._p0cz = REMOTE._p1cz = 0;
   REMOTE._t0 = performance.now(); REMOTE._dur = 60; REMOTE._lastMsgT = 0;
@@ -420,7 +455,7 @@ function netLoop(dt){
   netTick += dt;
   if (netTick > 0.06){
     netTick = 0;
-    send({ type:'state', x:P.x, y:P.y, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills, jumpZ:P.jumpZ, crouchZ:P.crouchZ, crouch:P.crouch });
+    send({ type:'state', x:P.x, y:P.y, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills, jumpZ:P.jumpZ, crouchZ:P.crouchZ, crouch:P.crouch, sliding:P.sliding });
   }
 }
 
@@ -499,18 +534,20 @@ function project(f){
   const tx = inv * (P.dy*rx - P.dx*ry);
   const ty = inv * (-P.py*rx + P.px*ry);
   if (ty <= 0.2) return null;
-  const hFull = Math.abs(H/ty) * 0.92, w = hFull * 0.6;
-  const crouch = isCrouching(f);
-  const h = crouch ? hFull * CROUCH_VIS_SCALE : hFull;
+  const hFull = Math.abs(H/ty) * 0.92;
+  const pose = getPose(f);
+  const w = hFull * (pose === 'slide' ? SLIDE_WIDTH_MULT : 0.6);
+  const h = pose === 'slide' ? hFull * SLIDE_VIS_SCALE : pose === 'crouch' ? hFull * CROUCH_VIS_SCALE : hFull;
   // Jumping actually lifts the whole body off the ground, so it still shifts the sprite
-  // (mine and theirs). Crouching does NOT move anyone's feet — it only shrinks how tall
-  // the target is drawn (below), with the bottom (feet) anchored to the same ground line.
+  // (mine and theirs). Crouching/sliding do NOT move anyone's feet — they only shrink how
+  // tall the target is drawn (below), with the bottom (feet) anchored to the same ground line.
   const jShift = (eyeZ(P) - (f.jumpZ || 0)) * hFull * JUMP_SHIFT;
   const yBottom = (H - hFull)/2 + hFull + hFull*0.04 + pitch + jShift;
-  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: yBottom - h, crouch };
+  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: yBottom - h, pose };
 }
 const HEAD_V0 = 4, HEAD_V1 = 20;         // head rows in the standing sprite texture
 const HEAD_V0_C = 15, HEAD_V1_C = 30;    // head rows in the crouching sprite texture
+const HEAD_V0_S = 8, HEAD_V1_S = 22;     // head rows in the sliding sprite texture
 function pickTargetDetail(){
   let hit = null, headshot = false, bestD = 1e9;
   for (const f of targetsFor()){
@@ -518,13 +555,15 @@ function pickTargetDetail(){
     const u = ((P.aim.x - s.x0) * 64 / s.w) | 0;
     const v = ((P.aim.y - s.y0) * 64 / s.h) | 0;
     if (u < 0 || u > 63 || v < 0 || v > 63) continue;
-    const mask = s.crouch ? MASK_CROUCH[f.kind] : MASK[f.kind];
+    const mask = s.pose === 'slide' ? MASK_SLIDE[f.kind] : s.pose === 'crouch' ? MASK_CROUCH[f.kind] : MASK[f.kind];
     if (!mask[v*64 + u]) continue;
     const col = Math.max(0, Math.min(W-1, P.aim.x|0));
     if (s.ty > zbuf[col]) continue;
     if (s.ty < bestD){
       bestD = s.ty; hit = f;
-      headshot = s.crouch ? (v >= HEAD_V0_C && v < HEAD_V1_C) : (v >= HEAD_V0 && v < HEAD_V1);
+      headshot = s.pose === 'slide' ? (v >= HEAD_V0_S && v < HEAD_V1_S)
+        : s.pose === 'crouch' ? (v >= HEAD_V0_C && v < HEAD_V1_C)
+        : (v >= HEAD_V0 && v < HEAD_V1);
     }
   }
   return { target: hit, headshot };
@@ -735,7 +774,8 @@ function render(){
   const list = targetsFor().map(f => ({f, d:(f.x-P.x)**2 + (f.y-P.y)**2})).sort((a,b) => b.d - a.d);
   for (const {f} of list){
     const s = project(f); if (!s) continue;
-    const hitSet = s.crouch ? SPR_HIT_CROUCH : SPR_HIT, normSet = s.crouch ? SPR_CROUCH : SPR;
+    const hitSet = s.pose === 'slide' ? SPR_HIT_SLIDE : s.pose === 'crouch' ? SPR_HIT_CROUCH : SPR_HIT;
+    const normSet = s.pose === 'slide' ? SPR_SLIDE : s.pose === 'crouch' ? SPR_CROUCH : SPR;
     const img = f.flash > 0 ? hitSet[f.kind] : normSet[f.kind];
     const start = Math.max(0, Math.floor(s.x0)), end = Math.min(W, Math.ceil(s.x0 + s.w));
     for (let x=start; x<end; x++){
