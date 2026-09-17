@@ -185,13 +185,13 @@ function buildMaze(rng){
     grid[my][mx] = 0; grid[ny][nx] = 0; stack.push([nx,ny]);
   }
   for (let y=2; y<N-2; y++) for (let x=2; x<N-2; x++)
-    if (grid[y][x]===1 && rng()<0.42) grid[y][x] = 0;
+    if (grid[y][x]===1 && rng()<0.52) grid[y][x] = 0; // a bit more open than before — fewer walls overall
   for (let y=0; y<N; y++) for (let x=0; x<N; x++)
     if (grid[y][x]===1){
       if (x===0||y===0||x===N-1||y===N-1){ grid[y][x] = 1; }
       else {
-        // 1 gray = regular full wall, 2 dirt = low cover, 3 teal = regular full wall,
-        // 4 green = tall thin cover (see WALL_HEIGHT for the sight rules on 2 & 4).
+        // Purely cosmetic color variety now — every tile is the same full height and always
+        // blocks sight (see WALL_HEIGHT below, kept empty on purpose).
         const r = rng();
         grid[y][x] = r < 0.18 ? 3 : r < 0.40 ? 2 : r < 0.58 ? 4 : 1;
       }
@@ -518,13 +518,10 @@ const EYE_RATIO = 0.82;
 let pitch = 0;
 let foes = [], wave = 1, pts = 0, alive = false, best = 0, hovered = null;
 const zbuf = new Float32Array(8192);
-// Some wall tiles are only partial cover instead of floor-to-ceiling. Value = how tall the
-// wall is, on the same 0..1 scale as EYE_HEIGHT below. Tiles with no entry here are always
-// full height and always block sight, no matter how tall you stand.
-const WALL_HEIGHT = {
-  2: 0.46, // dirt wall — low cover: a standing head clears it, crouching/sliding stays hidden
-  4: 0.82, // green wall — tall, thin cover: blocks a standing view, a jump clears the top
-};
+// Some wall tiles could be partial cover instead of floor-to-ceiling (value = how tall the
+// wall is, 0..1, on the same scale as EYE_HEIGHT below). Left empty on purpose: every wall is
+// now the same full height and always blocks sight — even jumping never reveals what's behind.
+const WALL_HEIGHT = {};
 // How "tall" the local player's own viewpoint is right now, on that same scale, used only to
 // decide whether the ray can see past a partial wall (WALL_HEIGHT above).
 const EYE_HEIGHT = { crouch: 0.30, stand: 0.60, jump: 0.95 };
