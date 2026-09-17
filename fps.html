@@ -546,6 +546,10 @@ function eyeZ(o){ return (o.jumpZ || 0) - (o.crouchZ || 0); }
 // eye up near the head, so a wall stretches much further below the horizon than above it, matching
 // where a person's eyes actually are, instead of splitting the wall evenly top/bottom.
 const EYE_RATIO = 0.82;
+// 壁の高さ（ワールド単位）。1 が今までのデフォルト。
+// 大きくすると壁が高くなり、ジャンプしても頂上が見えにくくなる。
+// 小さくすると壁が低くなり、ジャンプで簡単に上が見えるようになる。
+const WALL_HEIGHT = 2.0;
 let pitch = 0;
 let foes = [], wave = 1, pts = 0, alive = false, best = 0, hovered = null;
 const zbuf = new Float32Array(8192);
@@ -827,14 +831,16 @@ function project(f){
   const tx = inv * (P.dy*rx - P.dx*ry);
   const ty = inv * (-P.py*rx + P.px*ry);
   if (ty <= 0.2) return null;
-  const hFull = Math.abs(H/ty) * 0.92;
+  const scale = Math.abs(H/ty);
+  const hFull = scale * 0.92 * WALL_HEIGHT;
   const pose = getPose(f);
   const w = hFull * (pose === 'slide' ? SLIDE_WIDTH_MULT : 0.6);
   const h = pose === 'slide' ? hFull * SLIDE_VIS_SCALE : pose === 'crouch' ? hFull * CROUCH_VIS_SCALE : hFull;
   // Jumping actually lifts the whole body off the ground, so it still shifts the sprite
   // (mine and theirs). Crouching/sliding do NOT move anyone's feet — they only shrink how
   // tall the target is drawn (below), with the bottom (feet) anchored to the same ground line.
-  const jShift = (eyeZ(P) - (f.jumpZ || 0)) * hFull * JUMP_SHIFT;
+  // scale (WALL_HEIGHT抜き)を使うことで、壁を高くしてもジャンプの見た目の移動量自体は変わらない。
+  const jShift = (eyeZ(P) - (f.jumpZ || 0)) * scale * JUMP_SHIFT;
   const yBottom = H/2 + pitch + hFull*EYE_RATIO + hFull*0.04 + jShift;
   const { view, mirror } = facingView(f);
   return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: yBottom - h, pose, view, mirror };
@@ -1060,8 +1066,14 @@ function render(){
     }
     const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
     zbuf[x] = Math.max(0.01, dist);
-    const h = Math.min(H*6, H / dist);
-    const y0 = H/2 + pitch - h * (1 - EYE_RATIO) + eyeZ(P) * h * JUMP_SHIFT;
+    // scale = 距離だけで決まる純粋な投影スケール（壁の高さには依存しない）。
+    // ジャンプによる視点のずれは物理的な移動量なので scale を使い、
+    // 壁の見た目の高さ(h)には WALL_HEIGHT を掛ける。こうすることで
+    // WALL_HEIGHT を上げるほど「壁の高さに対するずれの割合」が小さくなり、
+    // 高い壁ほどジャンプしても上が見えにくくなる。
+    const scale = H / dist;
+    const h = Math.min(H*6, WALL_HEIGHT * scale);
+    const y0 = H/2 + pitch - h * (1 - EYE_RATIO) + eyeZ(P) * scale * JUMP_SHIFT;
     const c = WALLC[tile] || WALLC[1];
     let sh = Math.min(1, 1.7 / (1 + dist*0.22));
     if (side === 1) sh *= 0.8;
