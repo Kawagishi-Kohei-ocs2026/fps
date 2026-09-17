@@ -766,7 +766,7 @@ function project(f){
   // Jumping actually lifts the whole body off the ground, so it still shifts the sprite
   // (mine and theirs). Crouching/sliding do NOT move anyone's feet — they only shrink how
   // tall the target is drawn (below), with the bottom (feet) anchored to the same ground line.
-  const jShift = (eyeZ(P) - (f.jumpZ || 0)) * jumpBobH(hFull) * JUMP_SHIFT;
+  const jShift = (eyeZ(P) - (f.jumpZ || 0)) * hFull * JUMP_SHIFT;
   const yBottom = H/2 + pitch + hFull*EYE_RATIO + hFull*0.04 + jShift;
   const { view, mirror } = facingView(f);
   return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: yBottom - h, pose, view, mirror };
@@ -799,12 +799,7 @@ function pickTargetDetail(){
 function pickTarget(){ return pickTargetDetail().target; }
 
 /* ============ actions ============ */
-const JUMP_V = 9.75, GRAVITY = 27.87, JUMP_SHIFT = 0.05;
-// Up close, a wall's/body's projected height (h) balloons far past the screen size, so
-// multiplying the jump bob by the raw h could shove it almost entirely off-screen — making a
-// wall right in front of you look like it vanished when you jump. Cap the height used for that
-// multiplication so the bob stays a small, subtle hop no matter how close you are to something.
-function jumpBobH(h){ return Math.min(h, H * 1.4); }
+const JUMP_V = 9.75, GRAVITY = 27.87, JUMP_SHIFT = 0.2;
 const CROUCH_SPEED_MULT = 0.5, CROUCH_DUCK = 0.9, CROUCH_EASE = 10;
 const SLIDE_SPEED = 6.5, SLIDE_DURATION = 0.5;
 function hitDirFrom(sx, sy){
@@ -1007,7 +1002,7 @@ function render(){
     const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
     zbuf[x] = Math.max(0.01, dist);
     const h = Math.min(H*6, H / dist);
-    const y0 = H/2 + pitch - h * (1 - EYE_RATIO) + eyeZ(P) * jumpBobH(h) * JUMP_SHIFT;
+    const y0 = H/2 + pitch - h * (1 - EYE_RATIO) + eyeZ(P) * h * JUMP_SHIFT;
     const c = WALLC[tile] || WALLC[1];
     let sh = Math.min(1, 1.35 / (1 + dist*0.32));
     if (side === 1) sh *= 0.68;
@@ -1020,7 +1015,7 @@ function render(){
       lowDist[x] = lowD;
       const h2 = Math.min(H*6, H / lowD);
       const wf = WALL_HEIGHT[lowTile];
-      const topY = H/2 + pitch + h2*(EYE_RATIO - wf) + eyeZ(P) * jumpBobH(h2) * JUMP_SHIFT;
+      const topY = H/2 + pitch + h2*(EYE_RATIO - wf) + eyeZ(P) * h2 * JUMP_SHIFT;
       lowTopY[x] = topY;
       const c2 = WALLC[lowTile] || WALLC[1];
       let sh2 = Math.min(1, 1.35 / (1 + lowD*0.32));
