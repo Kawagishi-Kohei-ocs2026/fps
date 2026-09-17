@@ -187,11 +187,19 @@ function buildMaze(rng){
   for (let y=2; y<N-2; y++) for (let x=2; x<N-2; x++)
     if (grid[y][x]===1 && rng()<0.42) grid[y][x] = 0;
   for (let y=0; y<N; y++) for (let x=0; x<N; x++)
-    if (grid[y][x]===1) grid[y][x] = (x===0||y===0||x===N-1||y===N-1) ? 1 : (rng()<0.22 ? 3 : (rng()<0.3 ? 2 : 1));
+    if (grid[y][x]===1){
+      if (x===0||y===0||x===N-1||y===N-1){ grid[y][x] = 1; }
+      else {
+        // 1 gray = regular full wall, 2 dirt = low cover, 3 teal = regular full wall,
+        // 4 green = tall thin cover (see WALL_HEIGHT for the sight rules on 2 & 4).
+        const r = rng();
+        grid[y][x] = r < 0.18 ? 3 : r < 0.40 ? 2 : r < 0.58 ? 4 : 1;
+      }
+    }
   grid[1][1] = 0; grid[1][2] = 0; grid[2][1] = 0;
 }
 const solid = (x,y) => x<0||y<0||x>=N||y>=N || grid[y|0][x|0] > 0;
-const WALLC = {1:[92,101,108], 2:[118,84,64], 3:[74,96,92]};
+const WALLC = {1:[92,101,108], 2:[118,84,64], 3:[74,96,92], 4:[94,138,80]};
 function freeSpot(rng, minFrom){
   rng = rng || Math.random;
   let x, y, t = 0;
@@ -510,6 +518,25 @@ const EYE_RATIO = 0.82;
 let pitch = 0;
 let foes = [], wave = 1, pts = 0, alive = false, best = 0, hovered = null;
 const zbuf = new Float32Array(8192);
+// Some wall tiles are only partial cover instead of floor-to-ceiling. Value = how tall the
+// wall is, on the same 0..1 scale as EYE_HEIGHT below. Tiles with no entry here are always
+// full height and always block sight, no matter how tall you stand.
+const WALL_HEIGHT = {
+  2: 0.46, // dirt wall — low cover: a standing head clears it, crouching/sliding stays hidden
+  4: 0.82, // green wall — tall, thin cover: blocks a standing view, a jump clears the top
+};
+// How "tall" the local player's own viewpoint is right now, on that same scale, used only to
+// decide whether the ray can see past a partial wall (WALL_HEIGHT above).
+const EYE_HEIGHT = { crouch: 0.30, stand: 0.60, jump: 0.95 };
+function eyeHeightNow(o){
+  if (o.sliding || o.crouch) return EYE_HEIGHT.crouch;
+  if ((o.jumpZ || 0) > 0.02) return EYE_HEIGHT.jump;
+  return EYE_HEIGHT.stand;
+}
+// Per-column record of the nearest partial (see-over) wall the ray passed through, if any —
+// used to draw its foreground silhouette and to clip enemy sprites peeking above it.
+const lowDist = new Float32Array(8192);
+const lowTopY = new Float32Array(8192);
 
 function resize(){
   W = Math.max(160, Math.floor(innerWidth * SCALE));
@@ -761,6 +788,8 @@ function pickTargetDetail(){
     if (!mask[v*64 + u]) continue;
     const col = Math.max(0, Math.min(W-1, P.aim.x|0));
     if (s.ty > zbuf[col]) continue;
+    // aiming at the part of them tucked behind a nearer low wall — no shot through cover
+    if (lowDist[col] < s.ty && P.aim.y >= lowTopY[col]) continue;
     if (s.ty < bestD){
       bestD = s.ty; hit = f;
       headshot = s.pose === 'slide' ? (v >= HEAD_V0_S && v < HEAD_V1_S)
@@ -950,6 +979,7 @@ function render(){
   g2.addColorStop(0,'#1a1713'); g2.addColorStop(1,'#08090a');
   ctx.fillStyle = g2; ctx.fillRect(0,Math.max(0,horizon),W,H-Math.max(0,horizon));
 
+  const eyeH = eyeHeightNow(P);
   for (let x=0; x<W; x++){
     const cx = 2*x/W - 1;
     const rdx = P.dx + P.px*cx, rdy = P.dy + P.py*cx;
@@ -958,11 +988,19 @@ function render(){
     let sx, sy, sdx, sdy, side = 0;
     if (rdx < 0){ sx = -1; sdx = (P.x - mx) * ddx; } else { sx = 1; sdx = (mx + 1 - P.x) * ddx; }
     if (rdy < 0){ sy = -1; sdy = (P.y - my) * ddy; } else { sy = 1; sdy = (my + 1 - P.y) * ddy; }
-    let tile = 0, guard = 0;
+    let tile = 0, guard = 0, lowTile = 0, lowSide = 0, lowD = 0, hasLow = false;
     while (guard++ < 200){
       if (sdx < sdy){ sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
       if (mx<0||my<0||mx>=N||my>=N){ tile = 1; break; }
-      if (grid[my][mx] > 0){ tile = grid[my][mx]; break; }
+      const t = grid[my][mx];
+      if (t > 0){
+        const wh = WALL_HEIGHT[t];
+        if (wh === undefined || eyeH < wh){ tile = t; break; } // tall enough (for us) to block sight
+        if (!hasLow){ // short enough to see over — note it, but keep marching for what's behind it
+          hasLow = true; lowTile = t; lowSide = side;
+          lowD = side === 0 ? (sdx - ddx) : (sdy - ddy);
+        }
+      }
     }
     const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
     zbuf[x] = Math.max(0.01, dist);
@@ -975,6 +1013,23 @@ function render(){
     ctx.fillRect(x, y0, 1, h);
     ctx.fillStyle = `rgba(0,0,0,${Math.min(.5, dist*0.055)})`;
     ctx.fillRect(x, y0, 1, h);
+
+    if (hasLow){
+      lowDist[x] = lowD;
+      const h2 = Math.min(H*6, H / lowD);
+      const wf = WALL_HEIGHT[lowTile];
+      const topY = H/2 + pitch + h2*(EYE_RATIO - wf) + eyeZ(P) * h2 * JUMP_SHIFT;
+      lowTopY[x] = topY;
+      const c2 = WALLC[lowTile] || WALLC[1];
+      let sh2 = Math.min(1, 1.35 / (1 + lowD*0.32));
+      if (lowSide === 1) sh2 *= 0.68;
+      ctx.fillStyle = `rgb(${c2[0]*sh2|0},${c2[1]*sh2|0},${c2[2]*sh2|0})`;
+      ctx.fillRect(x, topY, 1, h2*wf);
+      ctx.fillStyle = `rgba(0,0,0,${Math.min(.5, lowD*0.055)})`;
+      ctx.fillRect(x, topY, 1, h2*wf);
+    } else {
+      lowDist[x] = Infinity;
+    }
   }
 
   const list = targetsFor().map(f => ({f, d:(f.x-P.x)**2 + (f.y-P.y)**2})).sort((a,b) => b.d - a.d);
@@ -987,7 +1042,18 @@ function render(){
       let u = ((x - s.x0) * 64 / s.w) | 0;
       if (u < 0 || u > 63) continue;
       if (s.mirror) u = 63 - u;
-      ctx.drawImage(img, u, 0, 1, 64, x, s.y0, 1, s.h);
+      // If a shorter wall stands between us and them, only the part of their body above
+      // its rim is visible — like peeking over cover. A crouching target sinks entirely
+      // below that line and disappears; a standing one shows head/shoulders above it.
+      let bottom = s.y0 + s.h;
+      if (lowDist[x] < s.ty) bottom = Math.min(bottom, lowTopY[x]);
+      const visibleH = bottom - s.y0;
+      if (visibleH <= 0) continue;
+      if (visibleH < s.h){
+        ctx.drawImage(img, u, 0, 1, 64 * (visibleH / s.h), x, s.y0, 1, visibleH);
+      } else {
+        ctx.drawImage(img, u, 0, 1, 64, x, s.y0, 1, s.h);
+      }
     }
   }
 
@@ -1033,9 +1099,15 @@ function drawMap(){
   const t = 132 / N;
   mc.clearRect(0,0,132,132);
   mc.fillStyle = 'rgba(10,14,18,.55)'; mc.fillRect(0,0,132,132);
-  mc.fillStyle = '#39454d';
-  for (let y=0; y<N; y++) for (let x=0; x<N; x++)
-    if (grid[y][x] > 0) mc.fillRect(x*t, y*t, t, t);
+  for (let y=0; y<N; y++) for (let x=0; x<N; x++){
+    const tl = grid[y][x];
+    if (tl <= 0) continue;
+    // tint low/thin cover tiles a bit dimmer on the map so their cover type reads at a glance
+    const c = WALLC[tl] || WALLC[1];
+    const dim = WALL_HEIGHT[tl] !== undefined ? 0.8 : 1;
+    mc.fillStyle = `rgb(${c[0]*dim|0},${c[1]*dim|0},${c[2]*dim|0})`;
+    mc.fillRect(x*t, y*t, t, t);
+  }
   if (CFG.mode === 'online' && REMOTE.mmT > 0 && !REMOTE.dead){
     mc.fillStyle = '#c4462c';
     mc.beginPath(); mc.arc(REMOTE.x*t, REMOTE.y*t, 2.6, 0, 7); mc.fill();
