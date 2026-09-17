@@ -502,6 +502,11 @@ function updateRemoteInterp(){
 }
 // Net vertical eye-offset from normal standing height: up while jumping, down while crouched/sliding.
 function eyeZ(o){ return (o.jumpZ || 0) - (o.crouchZ || 0); }
+// How high up a wall/body the camera sits, as a fraction of its on-screen height (0 = feet, 1 = top).
+// 0.5 (the old value) puts the camera at dead-centre — chest height. Raising this toward 1 moves the
+// eye up near the head, so a wall stretches much further below the horizon than above it, matching
+// where a person's eyes actually are, instead of splitting the wall evenly top/bottom.
+const EYE_RATIO = 0.82;
 let pitch = 0;
 let foes = [], wave = 1, pts = 0, alive = false, best = 0, hovered = null;
 const zbuf = new Float32Array(8192);
@@ -738,7 +743,7 @@ function project(f){
   // (mine and theirs). Crouching/sliding do NOT move anyone's feet — they only shrink how
   // tall the target is drawn (below), with the bottom (feet) anchored to the same ground line.
   const jShift = (eyeZ(P) - (f.jumpZ || 0)) * hFull * JUMP_SHIFT;
-  const yBottom = (H - hFull)/2 + hFull + hFull*0.04 + pitch + jShift;
+  const yBottom = H/2 + pitch + hFull*EYE_RATIO + hFull*0.04 + jShift;
   const { view, mirror } = facingView(f);
   return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: yBottom - h, pose, view, mirror };
 }
@@ -962,7 +967,7 @@ function render(){
     const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
     zbuf[x] = Math.max(0.01, dist);
     const h = Math.min(H*6, H / dist);
-    const y0 = (H - h) / 2 + pitch + eyeZ(P) * h * JUMP_SHIFT;
+    const y0 = H/2 + pitch - h * (1 - EYE_RATIO) + eyeZ(P) * h * JUMP_SHIFT;
     const c = WALLC[tile] || WALLC[1];
     let sh = Math.min(1, 1.35 / (1 + dist*0.32));
     if (side === 1) sh *= 0.68;
