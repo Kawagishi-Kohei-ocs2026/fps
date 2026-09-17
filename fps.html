@@ -184,32 +184,14 @@ function buildMaze(rng){
     const [nx,ny,mx,my] = opts[(rng()*opts.length)|0];
     grid[my][mx] = 0; grid[ny][nx] = 0; stack.push([nx,ny]);
   }
-  // 開ける割合を上げて壁の総数を減らし、見通しを良くする
   for (let y=2; y<N-2; y++) for (let x=2; x<N-2; x++)
-    if (grid[y][x]===1 && rng()<0.58) grid[y][x] = 0;
-  // 残った壁の種別：低い遮蔽物(2)を主体にし、跳躍越し用の高い壁(3)は控えめに、
-  // 完全に視界を遮る壁(1)は最小限にする
+    if (grid[y][x]===1 && rng()<0.42) grid[y][x] = 0;
   for (let y=0; y<N; y++) for (let x=0; x<N; x++)
-    if (grid[y][x]===1){
-      if (x===0||y===0||x===N-1||y===N-1) continue; // 外周は常にフル高さの壁
-      const r = rng();
-      grid[y][x] = r < 0.15 ? 3 : (r < 0.62 ? 2 : 1);
-    }
+    if (grid[y][x]===1) grid[y][x] = (x===0||y===0||x===N-1||y===N-1) ? 1 : (rng()<0.22 ? 3 : (rng()<0.3 ? 2 : 1));
   grid[1][1] = 0; grid[1][2] = 0; grid[2][1] = 0;
 }
 const solid = (x,y) => x<0||y<0||x>=N||y>=N || grid[y|0][x|0] > 0;
 const WALLC = {1:[92,101,108], 2:[118,84,64], 3:[74,96,92]};
-// 壁種別ごとの高さ（1=床から天井まで）。
-//  1: 通常の壁 — 常にフル高さ、視界も射線も完全に遮る
-//  2: 低い遮蔽物 — 立っていれば上から撃てる／撃たれる。しゃがめば完全に隠れる
-//  3: 高い壁 — 通常はフル高さで遮るが、ジャンプの頂点付近だけ一時的に低くなり、越えて撃てる
-const LOW_FRAC = 0.62;
-const JUMP_SEE_THRESHOLD = 1.0; // この高さ(P.jumpZ)を超えている間だけ種別3の壁を越えて見える
-function wallFrac(tile){
-  if (tile === 2) return LOW_FRAC;
-  if (tile === 3) return (P.jumpZ > JUMP_SEE_THRESHOLD) ? 0.5 : 1;
-  return 1;
-}
 function freeSpot(rng, minFrom){
   rng = rng || Math.random;
   let x, y, t = 0;
@@ -394,7 +376,7 @@ function makeSprite(body, head, eye, pose, facing){
   }
   return s;
 }
-const CROUCH_VIS_SCALE = 0.56; // how short a crouching sprite is drawn vs standing (kept below LOW_FRAC so crouching behind low cover fully hides)
+const CROUCH_VIS_SCALE = 0.72; // how short a crouching sprite is drawn vs standing
 const SLIDE_VIS_SCALE = 0.44;  // how short a sliding sprite is drawn vs standing
 const SLIDE_WIDTH_MULT = 0.95; // sliding is laid out low & wide rather than tall
 const KIND_COLORS = {
@@ -522,15 +504,7 @@ function updateRemoteInterp(){
 function eyeZ(o){ return (o.jumpZ || 0) - (o.crouchZ || 0); }
 let pitch = 0;
 let foes = [], wave = 1, pts = 0, alive = false, best = 0, hovered = null;
-const zbuf = new Float32Array(8192);       // distance of the far (fully-blocking) wall in each screen column
-const NEAR_TOP = new Float32Array(8192);   // screen-y of the top edge of a low/tall wall in this column (-1 = none)
-const NEAR_BOT = new Float32Array(8192);   // screen-y of its bottom edge (floor line)
-const NEAR_DIST = new Float32Array(8192);  // its distance, for occlusion tests below NEAR_TOP
-function isOccludedAt(x, y, ty){
-  const nt = NEAR_TOP[x];
-  if (nt >= 0 && y >= nt && y < NEAR_BOT[x]) return ty > NEAR_DIST[x];
-  return ty > zbuf[x];
-}
+const zbuf = new Float32Array(8192);
 
 function resize(){
   W = Math.max(160, Math.floor(innerWidth * SCALE));
@@ -781,7 +755,7 @@ function pickTargetDetail(){
     const mask = s.pose === 'slide' ? MASK_SLIDE[f.kind] : s.pose === 'crouch' ? MASK_CROUCH[f.kind] : MASK[f.kind];
     if (!mask[v*64 + u]) continue;
     const col = Math.max(0, Math.min(W-1, P.aim.x|0));
-    if (isOccludedAt(col, P.aim.y, s.ty)) continue;
+    if (s.ty > zbuf[col]) continue;
     if (s.ty < bestD){
       bestD = s.ty; hit = f;
       headshot = s.pose === 'slide' ? (v >= HEAD_V0_S && v < HEAD_V1_S)
@@ -971,15 +945,6 @@ function render(){
   g2.addColorStop(0,'#1a1713'); g2.addColorStop(1,'#08090a');
   ctx.fillStyle = g2; ctx.fillRect(0,Math.max(0,horizon),W,H-Math.max(0,horizon));
 
-  function drawWallSlice(x, y0, h, dist, tile, side){
-    const c = WALLC[tile] || WALLC[1];
-    let sh = Math.min(1, 1.35 / (1 + dist*0.32));
-    if (side === 1) sh *= 0.68;
-    ctx.fillStyle = `rgb(${c[0]*sh|0},${c[1]*sh|0},${c[2]*sh|0})`;
-    ctx.fillRect(x, y0, 1, h);
-    ctx.fillStyle = `rgba(0,0,0,${Math.min(.5, dist*0.055)})`;
-    ctx.fillRect(x, y0, 1, h);
-  }
   for (let x=0; x<W; x++){
     const cx = 2*x/W - 1;
     const rdx = P.dx + P.px*cx, rdy = P.dy + P.py*cx;
@@ -988,74 +953,36 @@ function render(){
     let sx, sy, sdx, sdy, side = 0;
     if (rdx < 0){ sx = -1; sdx = (P.x - mx) * ddx; } else { sx = 1; sdx = (mx + 1 - P.x) * ddx; }
     if (rdy < 0){ sy = -1; sdy = (P.y - my) * ddy; } else { sy = 1; sdy = (my + 1 - P.y) * ddy; }
-    // near: the first low/tall (partial-height) wall the ray passes through, if any.
-    // far: the wall that actually terminates the ray (always full height — the map
-    // boundary guarantees this, so the loop always finds one before guard runs out).
-    let near = null, far = null, guard = 0;
+    let tile = 0, guard = 0;
     while (guard++ < 200){
       if (sdx < sdy){ sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
-      const dist = Math.max(0.01, side === 0 ? (sdx - ddx) : (sdy - ddy));
-      const tile = (mx<0||my<0||mx>=N||my>=N) ? 1 : grid[my][mx];
-      if (tile > 0){
-        const frac = wallFrac(tile);
-        if (frac >= 0.999){ far = { dist, tile, side }; break; }
-        if (!near) near = { dist, tile, side, frac };
-      }
+      if (mx<0||my<0||mx>=N||my>=N){ tile = 1; break; }
+      if (grid[my][mx] > 0){ tile = grid[my][mx]; break; }
     }
-    if (!far) far = { dist: 20, tile: 1, side: 0 };
-
-    const farH = Math.min(H*6, H / far.dist);
-    const farY0 = (H - farH) / 2 + pitch + eyeZ(P) * farH * JUMP_SHIFT;
-    drawWallSlice(x, farY0, farH, far.dist, far.tile, far.side);
-    zbuf[x] = far.dist;
-
-    if (near){
-      const nearH = Math.min(H*6, H / near.dist);
-      const nearFullY0 = (H - nearH) / 2 + pitch + eyeZ(P) * nearH * JUMP_SHIFT;
-      const nearBottom = nearFullY0 + nearH;
-      const nearBoxH = nearH * near.frac;
-      const nearTop = nearBottom - nearBoxH;
-      drawWallSlice(x, nearTop, nearBoxH, near.dist, near.tile, near.side);
-      NEAR_TOP[x] = nearTop; NEAR_BOT[x] = nearBottom; NEAR_DIST[x] = near.dist;
-    } else {
-      NEAR_TOP[x] = -1;
-    }
+    const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
+    zbuf[x] = Math.max(0.01, dist);
+    const h = Math.min(H*6, H / dist);
+    const y0 = (H - h) / 2 + pitch + eyeZ(P) * h * JUMP_SHIFT;
+    const c = WALLC[tile] || WALLC[1];
+    let sh = Math.min(1, 1.35 / (1 + dist*0.32));
+    if (side === 1) sh *= 0.68;
+    ctx.fillStyle = `rgb(${c[0]*sh|0},${c[1]*sh|0},${c[2]*sh|0})`;
+    ctx.fillRect(x, y0, 1, h);
+    ctx.fillStyle = `rgba(0,0,0,${Math.min(.5, dist*0.055)})`;
+    ctx.fillRect(x, y0, 1, h);
   }
 
-  function drawSpriteCol(x, u, s, img){
-    const top = s.y0, bottom = s.y0 + s.h;
-    const nt = NEAR_TOP[x];
-    if (nt < 0){
-      if (s.ty >= zbuf[x]) return;
-      ctx.drawImage(img, u, 0, 1, 64, x, top, 1, s.h);
-      return;
-    }
-    // split at the near wall's top edge: the part of the body above it is only
-    // hidden by whatever is farther back (zbuf), the part at/below it is hidden
-    // as soon as it's behind the near wall (crouching behind cover, etc.)
-    const splitTop = Math.max(top, Math.min(bottom, nt));
-    if (splitTop > top && s.ty < zbuf[x]){
-      const segH = splitTop - top;
-      const srcH = 64 * segH / s.h;
-      ctx.drawImage(img, u, 0, 1, srcH, x, top, 1, segH);
-    }
-    if (bottom > splitTop && s.ty < NEAR_DIST[x]){
-      const segH = bottom - splitTop;
-      const srcY = 64 * (splitTop - top) / s.h;
-      const srcH = 64 * segH / s.h;
-      ctx.drawImage(img, u, srcY, 1, srcH, x, splitTop, 1, segH);
-    }
-  }
   const list = targetsFor().map(f => ({f, d:(f.x-P.x)**2 + (f.y-P.y)**2})).sort((a,b) => b.d - a.d);
   for (const {f} of list){
     const s = project(f); if (!s) continue;
     const img = spriteSet(s.pose, s.view, f.flash > 0)[f.kind];
     const start = Math.max(0, Math.floor(s.x0)), end = Math.min(W, Math.ceil(s.x0 + s.w));
     for (let x=start; x<end; x++){
+      if (s.ty >= zbuf[x]) continue;
       let u = ((x - s.x0) * 64 / s.w) | 0;
       if (u < 0 || u > 63) continue;
       if (s.mirror) u = 63 - u;
-      drawSpriteCol(x, u, s, img);
+      ctx.drawImage(img, u, 0, 1, 64, x, s.y0, 1, s.h);
     }
   }
 
