@@ -26,6 +26,9 @@
   #top{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.28em;color:#5d6970}
   #top b{color:var(--dust);font-weight:600}
   #map{position:absolute;top:16px;right:20px;opacity:.75}
+  #scoreboard{position:absolute;top:154px;right:20px;text-align:right;font-size:11px;line-height:1.7;
+    color:#8b959c;letter-spacing:.04em;opacity:.9}
+  #scoreboard .me{color:var(--sodium);font-weight:700}
   #hit{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(196,70,44,.55) 100%);opacity:0;transition:opacity .3s}
   #hitdir{position:absolute;inset:0;opacity:0;transition:opacity .15s ease-out;transform-origin:50% 50%}
   #hitdirArrow{position:absolute;top:9vmin;left:50%;width:9vmin;height:9vmin;--pop:1;
@@ -82,6 +85,11 @@
     font:inherit;font-size:12px;padding:0 16px;cursor:pointer;letter-spacing:.1em}
   #netrow button:hover{background:var(--sodium);color:#0a0e12}
   #netstatus{color:var(--teal);font-size:12px;margin-top:10px;letter-spacing:.04em}
+  #playercount{margin-top:2px}
+  #startBtn{margin-top:10px;border:0;background:var(--sodium);color:#0a0e12;font:inherit;font-size:13px;
+    font-weight:700;letter-spacing:.14em;padding:11px 26px;cursor:pointer}
+  #startBtn:hover{background:#fff}
+  #startBtn:disabled{background:#39454d;color:#6d7880;cursor:default}
 
   #touch{position:fixed;inset:0;display:none;pointer-events:none}
   body.touch #touch{display:block}
@@ -100,6 +108,7 @@
   <button id="gear">設定</button>
   <div id="top">区画 <b id="wave">1</b> &nbsp;·&nbsp; 残り <b id="left_n">0</b> &nbsp;·&nbsp; <b id="pts">0</b></div>
   <canvas id="map" width="132" height="132"></canvas>
+  <div id="scoreboard"></div>
   <div class="corner" id="left">
     <div id="hpbar"><div id="hpfill" style="height:100%"></div></div>
     <div><div class="num" id="hpnum">100</div><div class="tag">体力</div></div>
@@ -141,8 +150,16 @@
         <input type="text" id="room" placeholder="ルームコード" autocomplete="off" style="margin-top:0">
         <button id="connectBtn">接続</button>
       </div>
-      <p class="hint">同じサーバーアドレスとルームコードを、対戦する2台の両方に入力する。2人がそろうと自動で対戦が始まる。</p>
+      <div class="row" style="margin-top:8px">
+        <em>最大人数（部屋を作る側のみ有効）</em>
+        <input type="number" id="maxp" min="2" max="8" value="8" style="width:52px;background:#12181d;border:1px solid #2b3740;color:var(--dust);font:inherit;font-size:13px;padding:4px 6px">
+      </div>
+      <p class="hint">同じサーバーアドレスとルームコードを、対戦する全員（最大8人）に入力する。最初に入室した人がホストとなり、人数がそろったら「対戦開始」を押す。</p>
       <p id="netstatus">未接続</p>
+      <div id="lobby" style="display:none">
+        <p id="playercount" class="hint"></p>
+        <button id="startBtn" style="display:none">対戦開始</button>
+      </div>
     </div>
   </div>
 </div>
@@ -382,8 +399,23 @@ const SLIDE_WIDTH_MULT = 0.95; // sliding is laid out low & wide rather than tal
 const KIND_COLORS = {
   a:  ['#5b6b4e','#2a3238','#f2b544'],
   b:  ['#7a4a3a','#2a3238','#f2b544'],
-  p2: ['#3f8a8a','#1e3030','#d6f3f3']
+  p2: ['#3f8a8a','#1e3030','#d6f3f3'],
+  p3: ['#8a3f6e','#301e2a','#f3d6ea'],
+  p4: ['#8a6e3f','#302a1e','#f3ecd6'],
+  p5: ['#5b3f8a','#241e30','#e0d6f3'],
+  p6: ['#3f8a5b','#1e3024','#d6f3e0'],
+  p7: ['#8a3f3f','#301e1e','#f3d6d6'],
+  p8: ['#3f5b8a','#1e2430','#d6e0f3']
 };
+// リモートプレイヤーのid(文字列)から見た目の色(kind)を決める。
+// 全クライアントで同じidなら同じ色になるよう、ハッシュで決定的に割り当てる。
+const REMOTE_KINDS = ['p2','p3','p4','p5','p6','p7','p8'];
+function idToKind(id){
+  let h = 0;
+  for (let i=0; i<id.length; i++) h = (h*31 + id.charCodeAt(i)) >>> 0;
+  return REMOTE_KINDS[h % REMOTE_KINDS.length];
+}
+function callsign(id){ return id ? ('P-' + id.slice(0,4).toUpperCase()) : '？'; }
 function buildSet(pose, facing){
   const out = {};
   for (const k in KIND_COLORS) out[k] = makeSprite(...KIND_COLORS[k], pose, facing);
@@ -485,20 +517,27 @@ const P = { x:1.5, y:1.5, dx:1, dy:0, px:0, py:0.66, hp:100, ammo:12, mag:12, re
             bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null,
             jumpZ:0, jumpVel:0, onGround:true,
             crouch:false, crouchZ:0, sliding:false, slideT:0, slideDx:1, slideDy:0 };
-const REMOTE = { x:5, y:5, dx:1, dy:0, hp:100, ammo:12, dead:false, kills:0, flash:0, kind:'p2', jumpZ:0, crouchZ:0, crouch:false, sliding:false, mmT:0,
-  _p0x:5, _p0y:5, _p1x:5, _p1y:5, _p0jz:0, _p1jz:0, _p0cz:0, _p1cz:0, _p0dx:1, _p0dy:0, _p1dx:1, _p1dy:0, _t0:0, _dur:60, _lastMsgT:0 };
-function updateRemoteInterp(){
+// 複数の対戦相手を id -> state で管理する
+const REMOTES = new Map();
+function createRemote(id){
+  return { id, x:5, y:5, dx:1, dy:0, hp:100, ammo:12, dead:false, kills:0, flash:0, kind: idToKind(id),
+    jumpZ:0, crouchZ:0, crouch:false, sliding:false, mmT:0,
+    _p0x:5, _p0y:5, _p1x:5, _p1y:5, _p0jz:0, _p1jz:0, _p0cz:0, _p1cz:0, _p0dx:1, _p0dy:0, _p1dx:1, _p1dy:0, _t0:0, _dur:60, _lastMsgT:0 };
+}
+function updateAllRemoteInterp(){
   if (CFG.mode !== 'online') return;
   const now = performance.now();
-  const t = REMOTE._dur > 0 ? Math.min(1, (now - REMOTE._t0) / REMOTE._dur) : 1;
-  REMOTE.x = REMOTE._p0x + (REMOTE._p1x - REMOTE._p0x) * t;
-  REMOTE.y = REMOTE._p0y + (REMOTE._p1y - REMOTE._p0y) * t;
-  REMOTE.jumpZ = REMOTE._p0jz + (REMOTE._p1jz - REMOTE._p0jz) * t;
-  REMOTE.crouchZ = REMOTE._p0cz + (REMOTE._p1cz - REMOTE._p0cz) * t;
-  const dx = REMOTE._p0dx + (REMOTE._p1dx - REMOTE._p0dx) * t;
-  const dy = REMOTE._p0dy + (REMOTE._p1dy - REMOTE._p0dy) * t;
-  const dlen = Math.hypot(dx, dy) || 1;
-  REMOTE.dx = dx / dlen; REMOTE.dy = dy / dlen;
+  for (const r of REMOTES.values()){
+    const t = r._dur > 0 ? Math.min(1, (now - r._t0) / r._dur) : 1;
+    r.x = r._p0x + (r._p1x - r._p0x) * t;
+    r.y = r._p0y + (r._p1y - r._p0y) * t;
+    r.jumpZ = r._p0jz + (r._p1jz - r._p0jz) * t;
+    r.crouchZ = r._p0cz + (r._p1cz - r._p0cz) * t;
+    const dx = r._p0dx + (r._p1dx - r._p0dx) * t;
+    const dy = r._p0dy + (r._p1dy - r._p0dy) * t;
+    const dlen = Math.hypot(dx, dy) || 1;
+    r.dx = dx / dlen; r.dy = dy / dlen;
+  }
 }
 // Net vertical eye-offset from normal standing height: up while jumping, down while crouched/sliding.
 function eyeZ(o){ return (o.jumpZ || 0) - (o.crouchZ || 0); }
@@ -552,93 +591,147 @@ function resetSolo(){
 }
 
 /* ============ online flow ============ */
-let socket = null, netState = 'idle', mySlot = 0, room = '';
+let socket = null, netState = 'idle', myId = null, hostId = null, isHost = false, roomMax = 8, room = '';
 function send(obj){ if (socket && socket.readyState === 1) socket.send(JSON.stringify(obj)); }
 function netStatus(t){ el('netstatus').textContent = t; }
+function updateLobbyUI(){
+  el('lobby').style.display = (netState === 'waiting') ? '' : 'none';
+  if (netState !== 'waiting') return;
+  const n = REMOTES.size + 1;
+  el('playercount').textContent = `参加人数：${n} / ${roomMax}（ルーム「${room}」）`;
+  const btn = el('startBtn');
+  if (isHost){
+    btn.style.display = '';
+    btn.disabled = n < 2;
+    btn.textContent = n < 2 ? '対戦開始（あと1人以上必要）' : '対戦開始';
+  } else {
+    btn.style.display = 'none';
+    netStatus('ホストの開始を待っています…');
+  }
+}
 function connect(){
   const addr = el('srv').value.trim();
   room = el('room').value.trim();
+  const max = Math.max(2, Math.min(8, parseInt(el('maxp').value, 10) || 8));
   if (!addr || !room){ netStatus('サーバーアドレスとルームコードを入力する'); return; }
   if (socket){ try{ socket.close(); }catch(e){} }
+  REMOTES.clear(); myId = null; hostId = null; isHost = false;
   netState = 'connecting'; netStatus('接続中…');
+  el('lobby').style.display = 'none';
   try { socket = new WebSocket(addr); } catch(e){ netState='idle'; netStatus('接続できません'); return; }
-  socket.onopen = () => send({type:'join', room});
-  socket.onclose = () => { if (netState !== 'idle' && netState !== 'playing'){ netState='idle'; netStatus('切断されました'); } };
+  socket.onopen = () => send({type:'join', room, max});
+  socket.onclose = () => { if (netState !== 'idle' && netState !== 'playing'){ netState='idle'; netStatus('切断されました'); el('lobby').style.display='none'; } };
   socket.onerror = () => netStatus('接続エラー：アドレスを確認する');
   socket.onmessage = ev => { let m; try{ m = JSON.parse(ev.data); }catch(e){ return; } handleNet(m); };
 }
 function handleNet(m){
-  if (m.type === 'joined'){ mySlot = m.slot; netState = 'waiting'; netStatus('相手を待っています…（ルーム「'+room+'」）'); return; }
-  if (m.type === 'full'){ netState = 'idle'; netStatus('このルームは満員です'); return; }
-  if (m.type === 'ready'){
-    netState = 'ready'; netStatus('対戦相手が接続しました。開始します…');
-    if (mySlot === 1) hostBeginMatch(); else netStatus('対戦相手の準備を待っています…');
+  if (m.type === 'joined'){
+    myId = m.id; hostId = m.hostId; isHost = !!m.isHost; roomMax = m.max || 8;
+    for (const id of (m.peers || [])) REMOTES.set(id, createRemote(id));
+    netState = 'waiting';
+    netStatus(isHost ? '参加者を待っています…（ルーム「'+room+'」）' : 'ホストが揃うのを待っています…');
+    updateLobbyUI();
     return;
   }
-  if (m.type === 'init'){
-    const rng = mulberry32(m.seed);
-    buildMaze(rng);
-    const mySpot = mySlot === 1 ? m.spot1 : m.spot2;
-    const theirSpot = mySlot === 1 ? m.spot2 : m.spot1;
-    beginOnlineMatch(mySpot, theirSpot);
+  if (m.type === 'full'){ netState = 'idle'; netStatus('このルームは満員です'); return; }
+  if (m.type === 'started'){ netState = 'idle'; netStatus('このルームは既に対戦を開始しています'); return; }
+  if (m.type === 'peer_joined'){
+    if (netState !== 'waiting') return;
+    REMOTES.set(m.id, createRemote(m.id));
+    updateLobbyUI();
+    return;
+  }
+  if (m.type === 'host'){
+    hostId = m.id; isHost = (m.id === myId);
+    if (netState === 'waiting') updateLobbyUI();
+    return;
+  }
+  if (m.type === 'start'){
+    // ホスト自身は startBtn クリック時に既にローカルで開始済みなので、
+    // 他プレイヤーから見た場合のみここで開始する。
+    if (m.from === myId) return;
+    beginMatchLocal(m.seed, m.spawns);
     return;
   }
   if (m.type === 'state'){
+    let r = REMOTES.get(m.from);
+    if (!r){ r = createRemote(m.from); REMOTES.set(m.from, r); }
     const now = performance.now();
-    REMOTE._p0x = REMOTE.x; REMOTE._p0y = REMOTE.y;
-    REMOTE._p0jz = REMOTE.jumpZ; REMOTE._p0cz = REMOTE.crouchZ;
-    REMOTE._p0dx = REMOTE.dx; REMOTE._p0dy = REMOTE.dy;
-    REMOTE._p1x = m.x; REMOTE._p1y = m.y;
-    REMOTE._p1jz = m.jumpZ || 0; REMOTE._p1cz = m.crouchZ || 0;
-    REMOTE._p1dx = typeof m.dx === 'number' ? m.dx : 1;
-    REMOTE._p1dy = typeof m.dy === 'number' ? m.dy : 0;
-    REMOTE._dur = REMOTE._lastMsgT ? Math.min(220, Math.max(30, now - REMOTE._lastMsgT)) : 60;
-    REMOTE._lastMsgT = now; REMOTE._t0 = now;
-    REMOTE.hp = m.hp; REMOTE.ammo = m.ammo;
-    REMOTE.dead = m.dead; REMOTE.kills = m.kills; REMOTE.crouch = !!m.crouch; REMOTE.sliding = !!m.sliding;
+    r._p0x = r.x; r._p0y = r.y; r._p0jz = r.jumpZ; r._p0cz = r.crouchZ; r._p0dx = r.dx; r._p0dy = r.dy;
+    r._p1x = m.x; r._p1y = m.y;
+    r._p1jz = m.jumpZ || 0; r._p1cz = m.crouchZ || 0;
+    r._p1dx = typeof m.dx === 'number' ? m.dx : 1;
+    r._p1dy = typeof m.dy === 'number' ? m.dy : 0;
+    r._dur = r._lastMsgT ? Math.min(220, Math.max(30, now - r._lastMsgT)) : 60;
+    r._lastMsgT = now; r._t0 = now;
+    r.hp = m.hp; r.ammo = m.ammo;
+    r.dead = m.dead; r.kills = m.kills; r.crouch = !!m.crouch; r.sliding = !!m.sliding;
     return;
   }
-  if (m.type === 'shoot'){ REMOTE.flash = 0.06; REMOTE.mmT = 3; return; }
+  if (m.type === 'shoot'){
+    const r = REMOTES.get(m.from);
+    if (r){ r.flash = 0.06; r.mmT = 3; }
+    return;
+  }
   if (m.type === 'hit'){
-    if (!alive || P.hurt === undefined) return;
-    P.hp -= m.dmg; P.hurt = 1; P.hurtAngle = hitDirFrom(REMOTE.x, REMOTE.y); beep(90,.2,'sawtooth',.1);
+    if (!alive) return;
+    const attacker = REMOTES.get(m.from);
+    P.hp -= m.dmg; P.hurt = 1;
+    P.hurtAngle = attacker ? hitDirFrom(attacker.x, attacker.y) : 0;
+    beep(90,.2,'sawtooth',.1);
     if (P.hp <= 0){
-      P.hp = 0; respawnSelf(); send({type:'died'});
+      P.hp = 0; respawnSelf(); send({type:'died', to: m.from});
     }
     updHUD();
     return;
   }
   if (m.type === 'died'){
+    if (m.to && m.to !== myId) return;
     P.kills++; pts += 100; beep(120,.35,'sawtooth',.09); updHUD();
-    if (P.kills >= CFG.target) finishOnline(true);
+    if (P.kills >= CFG.target){ send({type:'matchover', winnerId: myId}); finishOnline(myId); }
     return;
   }
+  if (m.type === 'matchover'){ finishOnline(m.winnerId); return; }
   if (m.type === 'peer_left'){
+    REMOTES.delete(m.id);
     if (netState === 'playing'){
-      alive = false; document.exitPointerLock?.();
-      over('接続切れ', 'DISCONNECTED', '対戦相手が切断した。', 'メニューへ', `あなた ${P.kills} — ${REMOTE.kills} 相手`, backToMenu);
-    } else {
-      netState = 'waiting'; netStatus('相手が切断しました。待っています…');
+      if (REMOTES.size === 0){
+        alive = false; document.exitPointerLock?.();
+        over('接続切れ', 'DISCONNECTED', '対戦相手が全員切断した。', 'メニューへ', `あなた ${P.kills} キル`, backToMenu);
+      }
+    } else if (netState === 'waiting'){
+      updateLobbyUI();
     }
     return;
   }
 }
 function hostBeginMatch(){
+  if (!isHost || REMOTES.size < 1) return;
   const seed = (Math.random()*1e9) | 0;
   buildMaze(mulberry32(seed));
-  const spot1 = freeSpot(Math.random, null);
-  const spot2 = freeSpot(Math.random, [spot1]);
-  send({ type:'init', seed, spot1, spot2 });
-  beginOnlineMatch(spot1, spot2);
+  const ids = [myId, ...REMOTES.keys()];
+  const placed = [];
+  const spawns = {};
+  for (const id of ids){
+    const s = freeSpot(Math.random, placed);
+    spawns[id] = s; placed.push(s);
+  }
+  send({ type:'start', seed, spawns });
+  beginMatchLocal(seed, spawns);
 }
-function beginOnlineMatch(mySpot, theirSpot){
+function beginMatchLocal(seed, spawns){
+  buildMaze(mulberry32(seed));
+  const mySpot = spawns[myId] || freeSpot(Math.random, null);
   placePlayer(mySpot);
-  REMOTE.x = theirSpot.x; REMOTE.y = theirSpot.y; REMOTE.dx = 1; REMOTE.dy = 0; REMOTE.hp = 100; REMOTE.ammo = 12;
-  REMOTE.dead = false; REMOTE.kills = 0; REMOTE.flash = 0; REMOTE.mmT = 0; REMOTE.jumpZ = 0; REMOTE.crouchZ = 0; REMOTE.crouch = false; REMOTE.sliding = false;
-  REMOTE._p0x = REMOTE._p1x = theirSpot.x; REMOTE._p0y = REMOTE._p1y = theirSpot.y;
-  REMOTE._p0jz = REMOTE._p1jz = 0; REMOTE._p0cz = REMOTE._p1cz = 0;
-  REMOTE._p0dx = REMOTE._p1dx = 1; REMOTE._p0dy = REMOTE._p1dy = 0;
-  REMOTE._t0 = performance.now(); REMOTE._dur = 60; REMOTE._lastMsgT = 0;
+  for (const [id, r] of REMOTES){
+    if (!spawns[id]){ REMOTES.delete(id); continue; }
+    const fresh = createRemote(id);
+    const s = spawns[id];
+    fresh.x = fresh._p0x = fresh._p1x = s.x;
+    fresh.y = fresh._p0y = fresh._p1y = s.y;
+    fresh._t0 = performance.now(); fresh._dur = 60; fresh._lastMsgT = 0;
+    REMOTES.set(id, fresh);
+  }
   P.kills = 0; pts = 0;
   netState = 'playing';
   alive = true;
@@ -646,9 +739,8 @@ function beginOnlineMatch(mySpot, theirSpot){
   if (!isTouch) cv.requestPointerLock?.();
 }
 function respawnSelf(){
-  const spot = freeSpot(Math.random, [REMOTE]);
+  const spot = freeSpot(Math.random, [...REMOTES.values()]);
   placePlayer(spot);
-  REMOTE.mmT = 0;
 }
 let netTick = 0;
 function netLoop(dt){
@@ -728,7 +820,7 @@ addEventListener('touchend', e => {
 });
 
 /* ============ aiming / targets ============ */
-function targetsFor(){ return CFG.mode === 'online' ? (REMOTE.dead ? [] : [REMOTE]) : foes; }
+function targetsFor(){ return CFG.mode === 'online' ? [...REMOTES.values()].filter(r => !r.dead) : foes; }
 function project(f){
   const inv = 1 / (P.px*P.dy - P.dx*P.py);
   const rx = f.x - P.x, ry = f.y - P.y;
@@ -832,7 +924,7 @@ function shoot(){
     const mult = headshot ? 2 : 1;
     if (CFG.mode === 'online'){
       t.flash = 0.12; beep(headshot ? 700 : 520, .07, 'triangle', .07);
-      send({ type:'hit', dmg: Math.round(12 * mult) });
+      send({ type:'hit', to: t.id, dmg: Math.round(12 * mult) });
     } else {
       t.hp -= mult; t.flash = 0.12;
       beep(headshot ? 700 : 520, .07, 'triangle', .07);
@@ -920,8 +1012,10 @@ function step(dt){
       }
     }
   } else {
-    if (REMOTE.flash > 0) REMOTE.flash -= dt;
-    if (REMOTE.mmT > 0) REMOTE.mmT -= dt;
+    for (const r of REMOTES.values()){
+      if (r.flash > 0) r.flash -= dt;
+      if (r.mmT > 0) r.mmT -= dt;
+    }
     netLoop(dt);
   }
   if (P.hurt > 0){
@@ -941,7 +1035,7 @@ function step(dt){
 
 /* ============ render ============ */
 function render(){
-  updateRemoteInterp();
+  updateAllRemoteInterp();
   const horizon = H/2 + pitch;
   const g = ctx.createLinearGradient(0,0,0,horizon);
   g.addColorStop(0,'#05080b'); g.addColorStop(1,'#151d24');
@@ -1036,9 +1130,13 @@ function drawMap(){
   mc.fillStyle = '#39454d';
   for (let y=0; y<N; y++) for (let x=0; x<N; x++)
     if (grid[y][x] > 0) mc.fillRect(x*t, y*t, t, t);
-  if (CFG.mode === 'online' && REMOTE.mmT > 0 && !REMOTE.dead){
-    mc.fillStyle = '#c4462c';
-    mc.beginPath(); mc.arc(REMOTE.x*t, REMOTE.y*t, 2.6, 0, 7); mc.fill();
+  if (CFG.mode === 'online'){
+    for (const r of REMOTES.values()){
+      if (r.mmT > 0 && !r.dead){
+        mc.fillStyle = KIND_COLORS[r.kind][0];
+        mc.beginPath(); mc.arc(r.x*t, r.y*t, 2.6, 0, 7); mc.fill();
+      }
+    }
   }
   mc.fillStyle = '#f2b544';
   mc.beginPath(); mc.arc(P.x*t, P.y*t, 2.6, 0, 7); mc.fill();
@@ -1055,9 +1153,15 @@ function updHUD(){
   el('ammonum').textContent = P.reload > 0 ? '—' : P.ammo;
   el('ammonum').classList.toggle('empty', P.ammo === 0);
   if (CFG.mode === 'online'){
-    el('top').innerHTML = `あなた <b>${P.kills}</b> &nbsp;—&nbsp; <b>${REMOTE.kills}</b> 相手 &nbsp;·&nbsp; ${CFG.target}キル先取`;
+    el('top').innerHTML = `あなた <b>${P.kills}</b> キル &nbsp;·&nbsp; ${REMOTES.size + 1}人対戦 &nbsp;·&nbsp; ${CFG.target}キル先取`;
+    const rows = [{ id:null, label:'あなた', kills:P.kills }];
+    for (const r of REMOTES.values()) rows.push({ id:r.id, label:callsign(r.id), kills:r.kills });
+    rows.sort((a,b) => b.kills - a.kills);
+    el('scoreboard').innerHTML = rows.map(r =>
+      `<div${r.id===null?' class="me"':''}>${r.label} ${r.kills}</div>`).join('');
   } else {
     el('top').innerHTML = `区画 <b>${wave}</b> &nbsp;·&nbsp; 残り <b>${foes.length}</b> &nbsp;·&nbsp; <b>${pts}</b>`;
+    el('scoreboard').innerHTML = '';
   }
 }
 
@@ -1080,7 +1184,7 @@ function applyCfg(){
   document.body.classList.toggle('online', CFG.mode === 'online');
   document.body.classList.toggle('solo', CFG.mode === 'solo');
   el('blurb').innerHTML = CFG.mode === 'online'
-    ? 'サーバーに接続し、相手と同じルームコードに入ると自動で対戦が始まる。'
+    ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。人数がそろったらホストが対戦を開始する。'
     : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
   cv.style.cursor = 'none';
 }
@@ -1088,6 +1192,7 @@ sSens.oninput = applySens;
 el('g_solo').onclick = () => { CFG.mode = 'solo'; applyCfg(); };
 el('g_online').onclick = () => { CFG.mode = 'online'; applyCfg(); };
 el('connectBtn').onclick = connect;
+el('startBtn').onclick = hostBeginMatch;
 applyCfg();
 
 // サーバーから配信されている(file://ではなくhttp/httpsで開いている)場合は、
@@ -1105,6 +1210,9 @@ function backToMenu(){
   el('score').textContent = '';
   applyCfg();
   netState = 'idle';
+  el('lobby').style.display = 'none';
+  el('scoreboard').innerHTML = '';
+  REMOTES.clear();
   if (socket){ try{ socket.close(); }catch(e){} socket = null; }
 }
 function resume(){ alive = true; veil.classList.add('gone'); if (!isTouch) cv.requestPointerLock?.(); }
@@ -1139,7 +1247,7 @@ function pause(){
     document.exitPointerLock?.();
     el('title').innerHTML = '<span>一時停止</span>PAUSED';
     el('blurb').innerHTML = '対戦を一時停止した。感度はここで調整できる。';
-    el('score').textContent = `あなた ${P.kills} — ${REMOTE.kills} 相手`;
+    el('score').textContent = scoreboardText();
     el('modefield').style.display = 'none';
     el('netfield').style.display = 'none';
     el('sensfield').style.display = '';
@@ -1160,10 +1268,17 @@ function die(){
   best = Math.max(best, pts);
   over('信号途絶', 'GAME OVER', `区画 ${wave} で倒れた。`, 'もう一度', `${pts} 点 ／ 最高 ${best} 点`, start);
 }
-function finishOnline(iwon){
+function scoreboardText(){
+  const rows = [{ label:'あなた', kills:P.kills }];
+  for (const r of REMOTES.values()) rows.push({ label:callsign(r.id), kills:r.kills });
+  rows.sort((a,b) => b.kills - a.kills);
+  return rows.map(r => `${r.label} ${r.kills}`).join(' ／ ');
+}
+function finishOnline(winnerId){
   alive = false; document.exitPointerLock?.();
-  if (iwon) over('決着', 'YOU WIN', `${CFG.target} キル先取した。`, 'メニューへ', `あなた ${P.kills} — ${REMOTE.kills} 相手`, backToMenu);
-  else over('決着', 'YOU LOSE', `相手に ${CFG.target} キル先取された。`, 'メニューへ', `あなた ${P.kills} — ${REMOTE.kills} 相手`, backToMenu);
+  const iwon = winnerId === myId;
+  if (iwon) over('決着', 'YOU WIN', `${CFG.target} キル先取した。`, 'メニューへ', scoreboardText(), backToMenu);
+  else over('決着', 'YOU LOSE', `${callsign(winnerId)} に ${CFG.target} キル先取された。`, 'メニューへ', scoreboardText(), backToMenu);
 }
 el('go').onclick = start;
 el('gear').onclick = () => { if (alive) pause(); };
