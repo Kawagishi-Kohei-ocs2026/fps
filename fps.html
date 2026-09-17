@@ -195,63 +195,94 @@ function freeSpot(rng, minFrom){
 }
 
 /* ============ sprites ============ */
+const GUN = '#20262b', GUN_HI = '#3a444c'; // shared weapon colors, same for every kind
 function makeSprite(body, head, eye, pose, facing){
   const s = document.createElement('canvas'); s.width = s.height = 64;
   const c = s.getContext('2d');
   if (!pose){
     if (facing === 'back'){
-      // seen from behind: same silhouette, no face, a pack on the back reads as "turned away"
+      // seen from behind: arms are shortened to the upper arm only (the forearms
+      // are bent forward, holding the gun out of sight), and the rifle's stock
+      // peeks past the head, tucked into the shoulder like an over-the-shoulder aim
       c.fillStyle = body; c.fillRect(24,18,16,30);
-      c.fillRect(18,22,6,20); c.fillRect(40,22,6,20);
+      c.fillRect(18,22,6,11); c.fillRect(40,22,6,11);
       c.fillRect(25,48,5,14); c.fillRect(34,48,5,14);
       c.fillStyle = head; c.fillRect(22,4,20,16);
+      c.fillStyle = GUN; c.fillRect(41,11,6,10);
+      c.fillStyle = GUN_HI; c.fillRect(41,11,2,10);
       c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(27,20,10,16);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(24,18,5,30); c.fillRect(25,48,5,14);
     } else if (facing === 'side'){
-      // seen from the side: narrower profile, one arm/leg forward, one eye at the leading edge
+      // seen from the side: narrower profile, one leg forward. Both hands are
+      // brought together on the gun and hold it straight out in the facing
+      // direction, so the long barrel silhouette makes the side view instantly
+      // recognizable next to the compact front/back poses.
       c.fillStyle = body;
       c.fillRect(28,18,12,30);
-      c.fillRect(30,22,6,18);
       c.fillRect(24,48,7,14); c.fillRect(34,50,7,12);
+      c.fillRect(30,20,6,9);
+      c.fillRect(34,24,13,6);
       c.fillStyle = head; c.fillRect(26,4,16,16);
       c.fillStyle = eye; c.fillRect(34,10,4,4);
+      c.fillStyle = GUN; c.fillRect(26,25,8,5);
+      c.fillRect(36,24,22,4);
+      c.fillStyle = GUN_HI; c.fillRect(55,23,4,3);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(28,18,4,30); c.fillRect(34,50,4,12);
     } else {
+      // seen from the front: both arms bend inward to a shared grip at the
+      // centre of the chest. Pointed straight at the camera the gun mostly
+      // foreshortens away, reading as a compact hand block with a short
+      // barrel poking up — deliberately narrower than the side silhouette.
       c.fillStyle = body; c.fillRect(24,18,16,30);
-      c.fillRect(18,22,6,20); c.fillRect(40,22,6,20);
+      c.fillRect(18,23,6,9); c.fillRect(40,23,6,9);
+      c.fillRect(22,30,8,7); c.fillRect(34,30,8,7);
       c.fillRect(25,48,5,14); c.fillRect(34,48,5,14);
       c.fillStyle = head; c.fillRect(22,4,20,16);
       c.fillStyle = eye; c.fillRect(26,10,4,4); c.fillRect(34,10,4,4);
+      c.fillStyle = GUN; c.fillRect(26,33,12,6);
+      c.fillRect(29,26,6,8);
+      c.fillStyle = GUN_HI; c.fillRect(29,26,2,8);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(24,18,5,30); c.fillRect(25,48,5,14);
     }
   } else if (pose === 'crouch'){
     if (facing === 'back'){
       c.fillStyle = body;
       c.fillRect(22,28,20,20);
-      c.fillRect(14,32,7,15); c.fillRect(43,32,7,15);
+      c.fillRect(14,32,7,8); c.fillRect(43,32,7,8);
       c.fillRect(19,47,9,8);  c.fillRect(36,47,9,8);
       c.fillRect(16,54,8,8);  c.fillRect(40,54,8,8);
       c.fillStyle = head; c.fillRect(21,15,22,15);
+      c.fillStyle = GUN; c.fillRect(39,14,6,9);
+      c.fillStyle = GUN_HI; c.fillRect(39,14,2,9);
       c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(25,30,14,14);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(22,28,5,20); c.fillRect(16,54,4,8);
     } else if (facing === 'side'){
       c.fillStyle = body;
       c.fillRect(26,28,14,20);
-      c.fillRect(20,34,7,13);
       c.fillRect(22,47,9,8); c.fillRect(34,49,8,7);
       c.fillRect(19,54,8,8); c.fillRect(37,55,7,7);
+      c.fillRect(28,32,6,8);
+      c.fillRect(32,36,9,5);
       c.fillStyle = head; c.fillRect(24,17,18,14);
       c.fillStyle = eye; c.fillRect(34,22,4,4);
+      c.fillStyle = GUN; c.fillRect(24,34,7,5);
+      c.fillRect(33,35,18,4);
+      c.fillStyle = GUN_HI; c.fillRect(49,34,4,3);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(26,28,4,20); c.fillRect(19,54,4,8);
     } else {
-      // compressed, wide-legged crouching pose — head dips low, knees bend outward
+      // compressed, wide-legged crouching pose — head dips low, knees bend outward,
+      // and both hands still meet at the centre to hold the gun, exactly as when standing
       c.fillStyle = body;
       c.fillRect(22,28,20,20);                      // squat torso, lower & shorter
-      c.fillRect(14,32,7,15); c.fillRect(43,32,7,15); // arms, bent down at sides
+      c.fillRect(14,32,7,8); c.fillRect(43,32,7,8);   // upper arms, bent down at the shoulder
+      c.fillRect(19,38,7,7); c.fillRect(38,38,7,7);   // forearms, angled in to the shared grip
       c.fillRect(19,47,9,8);  c.fillRect(36,47,9,8);  // thighs, splayed outward (knee bend)
       c.fillRect(16,54,8,8);  c.fillRect(40,54,8,8);  // shins, tucked back under the thighs
       c.fillStyle = head; c.fillRect(21,15,22,15);
       c.fillStyle = eye; c.fillRect(25,21,4,4); c.fillRect(35,21,4,4);
+      c.fillStyle = GUN; c.fillRect(24,41,16,6);
+      c.fillRect(28,34,6,8);
+      c.fillStyle = GUN_HI; c.fillRect(28,34,2,8);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(22,28,5,20); c.fillRect(16,54,4,8);
     }
   } else if (pose === 'slide'){
