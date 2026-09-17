@@ -219,6 +219,19 @@ function makeSprite(body, head, eye, pose, facing){
       c.fillStyle = GUN_HI; c.fillRect(41,11,2,10);
       c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(27,20,10,16);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(24,18,5,30); c.fillRect(25,48,5,14);
+    } else if (facing === 'bdiag'){
+      // three-quarter back view (halfway between back and side): still mostly
+      // a back silhouette, but turned enough that more of the gun's length
+      // shows past the shoulder than the straight-back pose does
+      c.fillStyle = body;
+      c.fillRect(25,18,15,30);
+      c.fillRect(19,22,5,8); c.fillRect(39,22,6,10);
+      c.fillRect(25,48,6,14); c.fillRect(34,49,6,13);
+      c.fillStyle = head; c.fillRect(22,4,20,16);
+      c.fillStyle = GUN; c.fillRect(41,14,5,9); c.fillRect(44,22,10,4);
+      c.fillStyle = GUN_HI; c.fillRect(41,14,2,9); c.fillRect(52,21,3,3);
+      c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(28,20,9,16);
+      c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(25,18,5,30); c.fillRect(25,48,5,14);
     } else if (facing === 'side'){
       // seen from the side: narrower profile, one leg forward. Both hands are
       // brought together on the gun and hold it straight out in the facing
@@ -235,6 +248,22 @@ function makeSprite(body, head, eye, pose, facing){
       c.fillRect(36,24,22,4);
       c.fillStyle = GUN_HI; c.fillRect(55,23,4,3);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(28,18,4,30); c.fillRect(34,50,4,12);
+    } else if (facing === 'fdiag'){
+      // three-quarter front view (halfway between front and side): the near
+      // arm/leg lead the way like the side pose, the far arm tucks in, and
+      // the gun angles diagonally forward instead of pointing straight down
+      // the barrel (front) or straight out (side)
+      c.fillStyle = body;
+      c.fillRect(25,18,15,30);
+      c.fillRect(20,23,4,7); c.fillRect(38,23,6,9);
+      c.fillRect(29,30,6,7); c.fillRect(35,30,7,7);
+      c.fillRect(24,48,6,14); c.fillRect(34,49,6,13);
+      c.fillStyle = head; c.fillRect(23,4,18,16);
+      c.fillStyle = eye; c.fillRect(25,10,3,4); c.fillRect(34,10,4,4);
+      c.fillStyle = GUN; c.fillRect(30,32,10,6); c.fillRect(40,29,10,4);
+      c.fillStyle = GUN_HI; c.fillRect(30,26,2,7); c.fillRect(48,28,3,3);
+      c.fillRect(30,26,6,7);
+      c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(25,18,5,30); c.fillRect(24,48,5,14);
     } else {
       // seen from the front: both arms bend inward to a shared grip at the
       // centre of the chest. Pointed straight at the camera the gun mostly
@@ -263,6 +292,17 @@ function makeSprite(body, head, eye, pose, facing){
       c.fillStyle = GUN_HI; c.fillRect(39,14,2,9);
       c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(25,30,14,14);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(22,28,5,20); c.fillRect(16,54,4,8);
+    } else if (facing === 'bdiag'){
+      c.fillStyle = body;
+      c.fillRect(23,28,18,20);
+      c.fillRect(15,32,6,8); c.fillRect(42,32,7,9);
+      c.fillRect(20,47,9,8); c.fillRect(35,47,9,8);
+      c.fillRect(17,54,8,8); c.fillRect(39,54,8,8);
+      c.fillStyle = head; c.fillRect(21,15,22,15);
+      c.fillStyle = GUN; c.fillRect(38,14,5,9); c.fillRect(41,23,10,4);
+      c.fillStyle = GUN_HI; c.fillRect(38,14,2,9); c.fillRect(49,22,3,3);
+      c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(26,30,14,14);
+      c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(23,28,5,20); c.fillRect(17,54,4,8);
     } else if (facing === 'side'){
       c.fillStyle = body;
       c.fillRect(26,28,14,20);
@@ -276,6 +316,19 @@ function makeSprite(body, head, eye, pose, facing){
       c.fillRect(33,35,18,4);
       c.fillStyle = GUN_HI; c.fillRect(49,34,4,3);
       c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(26,28,4,20); c.fillRect(19,54,4,8);
+    } else if (facing === 'fdiag'){
+      c.fillStyle = body;
+      c.fillRect(23,28,18,20);
+      c.fillRect(16,32,6,8); c.fillRect(41,32,7,9);
+      c.fillRect(21,38,6,7); c.fillRect(37,38,7,7);
+      c.fillRect(20,47,9,8); c.fillRect(35,47,9,8);
+      c.fillRect(17,54,8,8); c.fillRect(39,54,8,8);
+      c.fillStyle = head; c.fillRect(20,15,22,15);
+      c.fillStyle = eye; c.fillRect(23,21,3,4); c.fillRect(32,21,4,4);
+      c.fillStyle = GUN; c.fillRect(26,41,14,6); c.fillRect(37,36,9,4);
+      c.fillStyle = GUN_HI; c.fillRect(26,34,2,8); c.fillRect(44,35,3,3);
+      c.fillRect(26,34,6,8);
+      c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(23,28,5,20); c.fillRect(17,54,4,8);
     } else {
       // compressed, wide-legged crouching pose — head dips low, knees bend outward,
       // and both hands still meet at the centre to hold the gun, exactly as when standing
@@ -337,17 +390,25 @@ function buildSet(pose, facing){
   return out;
 }
 const SPR             = buildSet(undefined, undefined); // standing, facing the camera
+const SPR_FDIAG       = buildSet(undefined, 'fdiag');   // standing, three-quarter front
 const SPR_BACK        = buildSet(undefined, 'back');    // standing, facing away from the camera
+const SPR_BDIAG       = buildSet(undefined, 'bdiag');   // standing, three-quarter back
 const SPR_SIDE        = buildSet(undefined, 'side');    // standing, facing across the camera
 const SPR_CROUCH      = buildSet('crouch', undefined);
+const SPR_CROUCH_FDIAG = buildSet('crouch', 'fdiag');
 const SPR_CROUCH_BACK = buildSet('crouch', 'back');
+const SPR_CROUCH_BDIAG = buildSet('crouch', 'bdiag');
 const SPR_CROUCH_SIDE = buildSet('crouch', 'side');
 const SPR_SLIDE       = buildSet('slide', undefined);
 const SPR_HIT = {}, MASK = {};
+const SPR_HIT_FDIAG = {}, MASK_FDIAG = {};
 const SPR_HIT_BACK = {}, MASK_BACK = {};
+const SPR_HIT_BDIAG = {}, MASK_BDIAG = {};
 const SPR_HIT_SIDE = {}, MASK_SIDE = {};
 const SPR_HIT_CROUCH = {}, MASK_CROUCH = {};
+const SPR_HIT_CROUCH_FDIAG = {}, MASK_CROUCH_FDIAG = {};
 const SPR_HIT_CROUCH_BACK = {}, MASK_CROUCH_BACK = {};
+const SPR_HIT_CROUCH_BDIAG = {}, MASK_CROUCH_BDIAG = {};
 const SPR_HIT_CROUCH_SIDE = {}, MASK_CROUCH_SIDE = {};
 const SPR_HIT_SLIDE = {}, MASK_SLIDE = {};
 function buildHitAndMask(src, hitOut, maskOut, kind){
@@ -362,36 +423,48 @@ function buildHitAndMask(src, hitOut, maskOut, kind){
   maskOut[kind] = m;
 }
 for (const k in SPR) buildHitAndMask(SPR, SPR_HIT, MASK, k);
+for (const k in SPR_FDIAG) buildHitAndMask(SPR_FDIAG, SPR_HIT_FDIAG, MASK_FDIAG, k);
 for (const k in SPR_BACK) buildHitAndMask(SPR_BACK, SPR_HIT_BACK, MASK_BACK, k);
+for (const k in SPR_BDIAG) buildHitAndMask(SPR_BDIAG, SPR_HIT_BDIAG, MASK_BDIAG, k);
 for (const k in SPR_SIDE) buildHitAndMask(SPR_SIDE, SPR_HIT_SIDE, MASK_SIDE, k);
 for (const k in SPR_CROUCH) buildHitAndMask(SPR_CROUCH, SPR_HIT_CROUCH, MASK_CROUCH, k);
+for (const k in SPR_CROUCH_FDIAG) buildHitAndMask(SPR_CROUCH_FDIAG, SPR_HIT_CROUCH_FDIAG, MASK_CROUCH_FDIAG, k);
 for (const k in SPR_CROUCH_BACK) buildHitAndMask(SPR_CROUCH_BACK, SPR_HIT_CROUCH_BACK, MASK_CROUCH_BACK, k);
+for (const k in SPR_CROUCH_BDIAG) buildHitAndMask(SPR_CROUCH_BDIAG, SPR_HIT_CROUCH_BDIAG, MASK_CROUCH_BDIAG, k);
 for (const k in SPR_CROUCH_SIDE) buildHitAndMask(SPR_CROUCH_SIDE, SPR_HIT_CROUCH_SIDE, MASK_CROUCH_SIDE, k);
 for (const k in SPR_SLIDE) buildHitAndMask(SPR_SLIDE, SPR_HIT_SLIDE, MASK_SLIDE, k);
 function getPose(f){ return f.sliding ? 'slide' : (f.crouch ? 'crouch' : 'stand'); }
 // Which side of an opponent the camera is looking at, based on their own facing
 // direction (f.dx/f.dy) rather than always looking at their front. Falls back to
 // 'front' for anything that doesn't report a facing direction (e.g. solo enemies).
+// Five buckets (front / three-quarter front / side / three-quarter back / back)
+// give a much smoother read on turning enemies than a plain front/side/back split.
 function facingView(f){
   if (typeof f.dx !== 'number' || typeof f.dy !== 'number') return { view:'front', mirror:false };
   const toViewer = Math.atan2(P.y - f.y, P.x - f.x);
   const facing = Math.atan2(f.dy, f.dx);
   let diff = facing - toViewer;
   diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-  const a = Math.abs(diff);
-  if (a < Math.PI * 0.25) return { view:'front', mirror:false }; // facing toward us -> see their front
-  if (a > Math.PI * 0.75) return { view:'back', mirror:false };  // facing away -> see their back
-  return { view:'side', mirror: diff < 0 };                      // facing across -> see their side
+  const a = Math.abs(diff), mirror = diff < 0;
+  if (a < Math.PI * 0.125) return { view:'front', mirror:false };  // facing toward us -> front
+  if (a < Math.PI * 0.375) return { view:'fdiag', mirror };        // turned partway -> three-quarter front
+  if (a < Math.PI * 0.625) return { view:'side',  mirror };        // facing across -> side
+  if (a < Math.PI * 0.875) return { view:'bdiag', mirror };        // turned partway -> three-quarter back
+  return { view:'back', mirror:false };                            // facing away -> back
 }
 function spriteSet(pose, view, hit){
   if (pose === 'slide') return hit ? SPR_HIT_SLIDE : SPR_SLIDE;
   if (pose === 'crouch'){
     if (view === 'back') return hit ? SPR_HIT_CROUCH_BACK : SPR_CROUCH_BACK;
+    if (view === 'bdiag') return hit ? SPR_HIT_CROUCH_BDIAG : SPR_CROUCH_BDIAG;
     if (view === 'side') return hit ? SPR_HIT_CROUCH_SIDE : SPR_CROUCH_SIDE;
+    if (view === 'fdiag') return hit ? SPR_HIT_CROUCH_FDIAG : SPR_CROUCH_FDIAG;
     return hit ? SPR_HIT_CROUCH : SPR_CROUCH;
   }
   if (view === 'back') return hit ? SPR_HIT_BACK : SPR_BACK;
+  if (view === 'bdiag') return hit ? SPR_HIT_BDIAG : SPR_BDIAG;
   if (view === 'side') return hit ? SPR_HIT_SIDE : SPR_SIDE;
+  if (view === 'fdiag') return hit ? SPR_HIT_FDIAG : SPR_FDIAG;
   return hit ? SPR_HIT : SPR;
 }
 
