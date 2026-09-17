@@ -27,9 +27,16 @@
   #top b{color:var(--dust);font-weight:600}
   #map{position:absolute;top:16px;right:20px;opacity:.75}
   #hit{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(196,70,44,.55) 100%);opacity:0;transition:opacity .3s}
-  #hitdir{position:absolute;inset:0;opacity:0;transition:opacity .12s linear;transform-origin:50% 50%}
-  #hitdirGlow{position:absolute;top:-15vmax;left:50%;width:95vmax;height:62vmax;transform:translateX(-50%);
-    background:radial-gradient(ellipse 55% 100% at 50% 100%,rgba(196,70,44,.85) 0%,rgba(196,70,44,0) 72%)}
+  #hitdir{position:absolute;inset:0;opacity:0;transition:opacity .15s ease-out;transform-origin:50% 50%}
+  #hitdirArrow{position:absolute;top:9vmin;left:50%;width:9vmin;height:9vmin;--pop:1;
+    transform:translateX(-50%) perspective(38vmin) rotateX(58deg);transform-style:preserve-3d}
+  #hitdirArrow .shaft{position:absolute;left:27%;top:0;width:46%;height:58%;
+    background:linear-gradient(180deg,#ff9d7e 0%,var(--rust) 75%);
+    box-shadow:0 0 2.2vmin rgba(196,70,44,.85)}
+  #hitdirArrow .head{position:absolute;left:0;top:52%;width:100%;height:48%;
+    background:linear-gradient(180deg,#ff9d7e 0%,var(--rust) 60%);
+    clip-path:polygon(50% 100%,0% 0%,100% 0%);
+    filter:drop-shadow(0 .4vmin .5vmin rgba(0,0,0,.55))}
   #gear{position:absolute;top:14px;left:18px;pointer-events:auto;background:none;border:1px solid #2b3740;
     color:#7b858c;font:inherit;font-size:11px;letter-spacing:.18em;padding:7px 13px;cursor:pointer}
   #gear:hover{color:var(--dust);border-color:#4a5860}
@@ -89,7 +96,7 @@
 
 <div id="hud">
   <div id="hit"></div>
-  <div id="hitdir"><div id="hitdirGlow"></div></div>
+  <div id="hitdir"><div id="hitdirArrow"><div class="shaft"></div><div class="head"></div></div></div>
   <button id="gear">設定</button>
   <div id="top">区画 <b id="wave">1</b> &nbsp;·&nbsp; 残り <b id="left_n">0</b> &nbsp;·&nbsp; <b id="pts">0</b></div>
   <canvas id="map" width="132" height="132"></canvas>
@@ -841,9 +848,13 @@ function step(dt){
   }
   if (P.hurt > 0){
     P.hurt -= dt*2.2;
-    el('hit').style.opacity = Math.max(0, P.hurt)*0.9;
-    el('hitdir').style.opacity = Math.max(0, P.hurt)*0.95;
+    const k = Math.max(0, P.hurt);
+    el('hit').style.opacity = k*0.9;
+    el('hitdir').style.opacity = Math.min(1, k*1.8)*0.95;
     el('hitdir').style.transform = `rotate(${P.hurtAngle||0}deg)`;
+    el('hitdirArrow').style.setProperty('--pop', (0.85 + Math.min(1,k*1.8)*0.35).toFixed(2));
+    el('hitdirArrow').style.transform =
+      `translateX(-50%) perspective(38vmin) rotateX(58deg) scale(var(--pop))`;
   }
   if (P.flash > 0) P.flash -= dt;
   if (P.kick > 0) P.kick -= dt*5;
@@ -992,7 +1003,7 @@ function applyCfg(){
   document.body.classList.toggle('solo', CFG.mode === 'solo');
   el('blurb').innerHTML = CFG.mode === 'online'
     ? 'サーバーに接続し、相手と同じルームコードに入ると自動で対戦が始まる。'
-    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ/スライディング ／ <kbd>R</kbd> リロード ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 設定';
+    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
   cv.style.cursor = 'none';
 }
 sSens.oninput = applySens;
