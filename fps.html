@@ -992,7 +992,7 @@ function applyCfg(){
   document.body.classList.toggle('solo', CFG.mode === 'solo');
   el('blurb').innerHTML = CFG.mode === 'online'
     ? 'サーバーに接続し、相手と同じルームコードに入ると自動で対戦が始まる。'
-    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
+    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ/スライディング ／ <kbd>R</kbd> リロード ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 設定';
   cv.style.cursor = 'none';
 }
 sSens.oninput = applySens;
