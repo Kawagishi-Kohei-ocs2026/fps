@@ -875,7 +875,7 @@ function step(dt){
     if (P.slideT <= 0) P.sliding = false;
   } else {
     const spdMul = P.crouch ? CROUCH_SPEED_MULT : run;
-    const sp = 2.7 * spdMul;
+    const sp = 2.4 * spdMul;
     vx = (P.dx*fwd + P.px*str) * sp;
     vy = (P.dy*fwd + P.py*str) * sp;
     bobRate = 9 * (P.crouch ? 0.6 : run);
