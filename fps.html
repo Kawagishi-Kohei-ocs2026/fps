@@ -152,7 +152,7 @@
       </div>
       <div class="row" style="margin-top:8px">
         <em>最大人数（部屋を作る側のみ有効）</em>
-        <input type="number" id="maxp" min="2" max="8" value="8" style="width:52px;background:#12181d;border:1px solid #2b3740;color:var(--dust);font:inherit;font-size:13px;padding:4px 6px">
+        <input type="number" id="maxp" min="2" max="8" value="3" style="width:52px;background:#12181d;border:1px solid #2b3740;color:var(--dust);font:inherit;font-size:13px;padding:4px 6px">
       </div>
       <p class="hint">同じサーバーアドレスとルームコードを、対戦する全員（最大8人）に入力する。最初に入室した人がホストとなり、人数がそろったら「対戦開始」を押す。</p>
       <p id="netstatus">未接続</p>
@@ -202,7 +202,7 @@ function buildMaze(rng){
     grid[my][mx] = 0; grid[ny][nx] = 0; stack.push([nx,ny]);
   }
   for (let y=2; y<N-2; y++) for (let x=2; x<N-2; x++)
-    if (grid[y][x]===1 && rng()<0.42) grid[y][x] = 0;
+    if (grid[y][x]===1 && rng()<0.8) grid[y][x] = 0;
   for (let y=0; y<N; y++) for (let x=0; x<N; x++)
     if (grid[y][x]===1) grid[y][x] = (x===0||y===0||x===N-1||y===N-1) ? 1 : (rng()<0.22 ? 3 : (rng()<0.3 ? 2 : 1));
   grid[1][1] = 0; grid[1][2] = 0; grid[2][1] = 0;
@@ -1197,7 +1197,7 @@ function applyCfg(){
   document.body.classList.toggle('solo', CFG.mode === 'solo');
   el('blurb').innerHTML = CFG.mode === 'online'
     ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。人数がそろったらホストが対戦を開始する。'
-    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>R</kbd> 再装填 ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 中断';
+    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>R</kbd> リロード ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 設定';
   cv.style.cursor = 'none';
 }
 sSens.oninput = applySens;
