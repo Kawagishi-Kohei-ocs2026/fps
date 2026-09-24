@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>SUBLEVEL 7 — 3D試作</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#0a0e12;
+    font-family:"Bahnschrift","Helvetica Neue",Arial,sans-serif;color:#c8cbc4;user-select:none}
+  #view{display:block;width:100vw;height:100vh;cursor:none}
+  #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;
+    border-radius:50%;background:#f2b544;pointer-events:none;box-shadow:0 0 4px rgba(242,181,68,.8)}
+  #veil{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:rgba(10,14,18,.94);text-align:center;padding:24px;z-index:10}
+  #veil.gone{display:none}
+  h1{font-size:clamp(28px,7vw,52px);font-weight:700;letter-spacing:-.03em}
+  h1 span{display:block;font-size:.34em;letter-spacing:.4em;color:#c4462c;font-weight:600;margin-bottom:12px}
+  p{margin-top:14px;font-size:13px;line-height:1.9;color:#7b858c;max-width:50ch}
+  kbd{background:#1b242c;color:#c8cbc4;padding:1px 6px;font:inherit;font-size:12px;border-bottom:2px solid #000}
+  button{margin-top:22px;border:0;background:#f2b544;color:#0a0e12;font:inherit;font-size:14px;font-weight:700;
+    letter-spacing:.16em;padding:14px 36px;cursor:pointer}
+  button:hover{background:#fff}
+  button:disabled{opacity:.4;cursor:not-allowed;background:#5a6068}
+  button:disabled:hover{background:#5a6068}
+  #tag{position:fixed;top:14px;left:18px;font-size:11px;letter-spacing:.14em;color:#b4bcc1;text-shadow:0 0 4px rgba(0,0,0,.55);pointer-events:none}
+
+  /* 複数人で編集（オンライン接続）まわりのUI */
+  #cfg{margin-top:22px;width:min(360px,88vw);text-align:left}
+  #modeRow{display:flex;gap:8px}
+  #modeRow button{flex:1;margin:0;padding:10px 8px;font-size:12px;letter-spacing:.06em;
+    background:#1b242c;color:#9aa4ab;border:1px solid #2a333a}
+  #modeRow button[aria-pressed="true"]{background:#f2b544;color:#0a0e12;border-color:#f2b544}
+  #netfield{display:none;margin-top:12px}
+  #netfield input{display:block;width:100%;margin-top:8px;background:#12171b;border:1px solid #2a333a;
+    color:#c8cbc4;padding:9px 10px;font:inherit;font-size:13px}
+  #netfield #connectBtn{margin:10px 0 0;width:100%;padding:10px;font-size:12px}
+  #netstatus{margin-top:10px;font-size:12px;color:#9aa4ab;min-height:1.3em;line-height:1.6}
+
+  #hotbar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:8px;z-index:5}
+  #hotbar .slot{background:rgba(20,26,31,.86);border:1px solid #2a333a;color:#9aa4ab;
+    padding:9px 14px;font-size:12px;letter-spacing:.06em;display:flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap}
+  #hotbar .slot b{background:#2a333a;color:#c8cbc4;padding:1px 7px;font-size:11px;font-weight:700}
+  #hotbar .slot.active{border-color:#f2b544;color:#f2b544}
+  #hotbar .slot.active b{background:#f2b544;color:#0a0e12}
+  #hotbar .slot .dir{color:#f2b544;font-weight:700;min-width:1em;display:inline-block;text-align:center}
+
+  #editPanel{position:fixed;top:14px;right:16px;display:flex;gap:8px;z-index:5}
+  #editPanel button{margin:0;padding:9px 14px;font-size:11px;letter-spacing:.1em;
+    background:#1b242c;color:#c8cbc4;border:1px solid #2a333a}
+  #editPanel button:hover{background:#2a333a;color:#fff}
+
+  /* ミニマップ：右上（編集ボタンの下）。上が北(-Z)、右が+X */
+  #map{position:fixed;top:58px;right:16px;width:220px;height:220px;z-index:4;pointer-events:none;
+    background:rgba(10,14,18,.72);border:1px solid #2a333a}
+  @media (max-width:700px){ #map{width:150px;height:150px} }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<canvas id="map"></canvas>
+<div id="cross"></div>
+<div id="tag">SUBLEVEL 7 — 3D 試作（移動・建築）</div>
+
+<div id="hotbar">
+  <div class="slot active" data-id="wall"><b>1</b>壁</div>
+  <div class="slot" data-id="thinwall"><b>2</b>薄い壁 <span class="dir">→</span></div>
+  <div class="slot" data-id="platform"><b>3</b>箱（ジャンプ台）</div>
+  <div class="slot" data-id="ramp"><b>4</b>坂 <span class="dir">→</span></div>
+  <div class="slot" data-id="window"><b>5</b>窓 <span class="dir">→</span></div>
+</div>
+<div id="editPanel">
+  <button id="exportBtn" type="button">書き出す</button>
+  <button id="importBtn" type="button">読み込む</button>
+  <button id="clearBtn" type="button">更地にする</button>
+  <input id="importFile" type="file" accept="application/json" style="display:none">
+</div>
+
+<div id="veil">
+  <h1><span>地下七層・試作</span>MOVEMENT + BUILD</h1>
+  <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ（窓に触れていれば乗り越え）／
+     <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 一時停止<br><br>
+     左クリック：壊す（床に戻す）／ 右クリック：選択中のブロックを設置<br>
+     <kbd>1</kbd> 壁 ／ <kbd>2</kbd> 薄い壁 ／ <kbd>3</kbd> 箱 ／ <kbd>4</kbd> 坂 ／ <kbd>5</kbd> 窓 ／
+     <kbd>R</kbd> 薄い壁・坂・窓の向きを回転<br><br>
+     窓は普段は薄い壁と同じく通行不可（弾は素通り）ですが、窓枠に接した状態で<kbd>Space</kbd>を押すと乗り越えて反対側へ抜けられます。<br><br>
+     クロスヘアの先に、置こうとしているブロックが薄く表示されます（置けない場所は赤色）。
+     画面右上から、作ったステージをJSONファイルとして書き出し・読み込みできます。</p>
+
+  <div id="cfg">
+    <div id="modeRow">
+      <button type="button" id="g_solo" aria-pressed="true">一人で作る</button>
+      <button type="button" id="g_online" aria-pressed="false">みんなで作る</button>
+    </div>
+    <div id="netfield">
+      <input id="srv" type="text" placeholder="ws://192.168.1.5:8080" autocomplete="off">
+      <input id="room" type="text" placeholder="ルームコード" autocomplete="off">
+      <button type="button" id="connectBtn">接続する</button>
+      <div id="netstatus"></div>
+    </div>
+  </div>
+
+  <button id="go">入る</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+function el(id){ return document.getElementById(id); }
+const CFG = { mode:'solo' }; // 'solo'＝一人で編集 ／ 'online'＝サーバー経由でルームの全員と共有編集
+
+/* ============ 地形パラメータ ============ */
+const N = 50;                // グリッドの一辺
+const WALL_H = 2.3;          // 壁の高さ（登れない）
+const PLATFORM_H = 1.05;     // 箱・高台の高さ（ジャンプ頂点よりわずかに低い＝直接ジャンプで乗れる）
+const THIN_WALL_T = 0.14;    // 薄い壁の厚み
+const EYE_HEIGHT = 1.55;
+const JUMP_V = 6.0, GRAVITY = 16.0;      // ジャンプ頂点 = JUMP_V^2/(2*GRAVITY) ≈ 1.125
+const MOVE_SPEED = 10, RUN_MULT = 1.35;
+const STEP_TOL = 0.16;        // これ以下の段差はジャンプ無しで乗り越えられる
+const PLAYER_R = 0.28;        // プレイヤーの当たり判定の半径
+
+/* ============ ステージデータ ============ */
+// 外周は常に壁、内側は床の更地から始めて、そこへ自由に壁・箱・坂を置いていく。
+// 薄い壁(thinwall)は見た目通りの薄い板として当たり判定を取る（マス全体は塞がない）。
+// 見た目通りマスの端に寄せた薄い板になる（dir で東西南北どちらの辺に沿わせるか指定）。
+let grid = [];
+function initFlatLevel(){
+  grid = Array.from({length:N}, (_, y) => Array.from({length:N}, (_, x) => {
+    if (x===0 || y===0 || x===N-1 || y===N-1) return {type:'wall'};
+    return {type:'floor'};
+  }));
+}
+
+// グリッド1マスぶんの直列化・復元（書き出し／読み込み／ネットワーク同期で共通して使う）
+function serializeCell(c){
+  return (c.type==='ramp' || c.type==='thinwall' || c.type==='window') ? {t:c.type, d:c.dir} : {t:c.type};
+}
+function deserializeCell(c){
+  if (!c) return {type:'floor'};
+  return (c.t==='ramp' || c.t==='thinwall' || c.t==='window') ? {type:c.t, dir:c.d||'E'} : {type:c.t||'floor'};
+}
+function serializeGrid(){ return grid.map(row => row.map(serializeCell)); }
+function applyGrid(data){ grid = data.map(row => row.map(deserializeCell)); buildScene(); }
+
+// 座標(x,y)の「地面の高さ」。薄い壁は板そのものが薄いので、床の高さとしては通常の床(0)のまま扱い、
+// 板による通行止めは collidesSolid() 側の水平方向の当たり判定だけで行う。
+function heightAt(x, y){
+  const cx = Math.floor(x), cy = Math.floor(y);
+  if (cx<0 || cy<0 || cx>=N || cy>=N) return WALL_H;
+  const cell = grid[cy][cx];
+  if (cell.type === 'wall') return WALL_H;
+  if (cell.type === 'platform') return PLATFORM_H;
+  if (cell.type === 'ramp'){
+    const fx = x-cx, fy = y-cy;
+    let t;
+    if (cell.dir==='E') t=fx; else if (cell.dir==='W') t=1-fx;
+    else if (cell.dir==='S') t=fy; else t=1-fy;
+    return Math.max(0, Math.min(1,t)) * PLATFORM_H;
+  }
+  return 0; // 'floor'・'thinwall'・'window' はどれも床の高さとしては 0（薄い板/窓枠自体は水平方向の当たり判定だけで塞ぐ）
+}
+
+// 弾（レイキャストによる射撃など）を止めるかどうか。窓は見た目に隙間があるので弾は素通りする。
+// ※このファイルには銃・弾のロジックはまだ無いが、将来そちらを実装するときはこの関数で判定する。
+function blocksProjectile(type){ return type === 'wall' || type === 'thinwall'; }
+
+// (x,y)を含むマスのセル情報。範囲外は壁扱い。
+function cellAt(x, y){
+  const cx = Math.floor(x), cy = Math.floor(y);
+  if (cx<0 || cy<0 || cx>=N || cy>=N) return {type:'wall'};
+  return grid[cy][cx];
+}
+
+// 円(中心px,py・半径r)と矩形[x0,x1]×[y0,y1]が重なっているか。
+function circleRectOverlap(px, py, r, x0, y0, x1, y1){
+  const cx = Math.max(x0, Math.min(px, x1));
+  const cy = Math.max(y0, Math.min(py, y1));
+  const dx = px-cx, dy = py-cy;
+  return dx*dx + dy*dy < r*r;
+}
+
+// 薄い壁・窓 1枚ぶんの当たり判定用の矩形。見た目の板(cellGeometryのthinGeoNS/EW)と
+// まったく同じ位置・厚みにすることで、当たり判定を見た目通りにする。
+// 窓もこの「薄い板1枚ぶん」を歩行の当たり判定として使う＝普段は薄い壁と同じく通行不可で、
+// Spaceでの乗り越え(tryClimbThrough)だけがこれを迂回する。
+function thinWallRect(cell, cx, cy){
+  const t = THIN_WALL_T;
+  if (cell.dir === 'N') return { x0: cx,     y0: cy,       x1: cx+1,   y1: cy+t   };
+  if (cell.dir === 'S') return { x0: cx,     y0: cy+1-t,   x1: cx+1,   y1: cy+1   };
+  if (cell.dir === 'W') return { x0: cx,     y0: cy,       x1: cx+t,   y1: cy+1   };
+  /* E */                return { x0: cx+1-t, y0: cy,      x1: cx+1,   y1: cy+1   };
+}
+
+function isThinPanel(type){ return type === 'thinwall' || type === 'window'; }
+
+// プレイヤー(半径r・円)が (px,py) にいるとして、周囲の壁・薄い壁・窓のどれかに重なっているか。
+// 薄い壁・窓はマス全体ではなく thinWallRect() の薄い板部分だけを塞ぐので、
+// 板が無い側からは普通にマスの中まで寄れる。
+function collidesSolid(px, py, r){
+  const gx0 = Math.floor(px-r), gx1 = Math.floor(px+r);
+  const gy0 = Math.floor(py-r), gy1 = Math.floor(py+r);
+  for (let gy = gy0; gy <= gy1; gy++){
+    for (let gx = gx0; gx <= gx1; gx++){
+      const cell = cellAt(gx, gy);
+      if (cell.type === 'wall'){
+        if (circleRectOverlap(px, py, r, gx, gy, gx+1, gy+1)) return true;
+      } else if (isThinPanel(cell.type)){
+        const b = thinWallRect(cell, gx, gy);
+        if (circleRectOverlap(px, py, r, b.x0, b.y0, b.x1, b.y1)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+// プレイヤー(半径r)が今まさに触れている窓を探す。当たり判定ぴったりの半径だと
+// 「ぶつかって止まった直後」は距離=r で厳密には非接触になってしまうので、少しだけ広げて判定する。
+function findTouchingWindow(px, py, r){
+  const pad = r + 0.08;
+  const gx0 = Math.floor(px-pad), gx1 = Math.floor(px+pad);
+  const gy0 = Math.floor(py-pad), gy1 = Math.floor(py+pad);
+  for (let gy = gy0; gy <= gy1; gy++){
+    for (let gx = gx0; gx <= gx1; gx++){
+      const cell = cellAt(gx, gy);
+      if (cell.type !== 'window') continue;
+      const b = thinWallRect(cell, gx, gy);
+      if (circleRectOverlap(px, py, pad, b.x0, b.y0, b.x1, b.y1)) return { cell, rect:b };
+    }
+  }
+  return null;
+}
+
+// 窓枠に接している状態でSpaceを押したときの「乗り越え」。窓の板をまたいで反対側へ位置を移す。
+// 抜けた先が別の何かで塞がっていたら(裏に壁を置かれていた等)、失敗としてその場に留める。
+function tryClimbThrough(){
+  if (!alive) return false;
+  const hit = findTouchingWindow(player.x, player.y, PLAYER_R);
+  if (!hit) return false;
+  const { cell, rect } = hit;
+  const margin = PLAYER_R + 0.06;
+  let nx = player.x, ny = player.y;
+  if (cell.dir === 'N' || cell.dir === 'S'){
+    const mid = (rect.y0 + rect.y1) / 2;
+    ny = player.y < mid ? rect.y1 + margin : rect.y0 - margin;
+  } else {
+    const mid = (rect.x0 + rect.x1) / 2;
+    nx = player.x < mid ? rect.x1 + margin : rect.x0 - margin;
+  }
+  if (collidesSolid(nx, ny, PLAYER_R)) return false;
+  player.x = nx; player.y = ny;
+  player.z = heightAt(nx, ny);
+  player.vz = 0; player.onGround = true;
+  return true;
+}
+
+/* ============ three.js シーン ============ */
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+const scene = new THREE.Scene();
+const BG_COLOR = 0x4a5d6b; // 背景（空）の色。明るくしたいときは値を大きく（元は 0x141b21）
+scene.background = new THREE.Color(BG_COLOR);
+// 霧（scene.fog）は使わない：遠くの壁や床までくっきり見える
+const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.05, 100);
+camera.rotation.order = 'YXZ';
+
+scene.add(new THREE.HemisphereLight(0x8fa4b0, 0x1a1410, 0.9));
+const sun = new THREE.DirectionalLight(0xfff2d8, 0.8);
+sun.position.set(6, 12, 4);
+scene.add(sun);
+
+const levelGroup = new THREE.Group();
+scene.add(levelGroup);
+
+function makeRampGeometry(dir){
+  const corners = [[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]];
+  function h(x,z){
+    const fx=x+0.5, fz=z+0.5;
+    let t;
+    if (dir==='E') t=fx; else if (dir==='W') t=1-fx;
+    else if (dir==='S') t=fz; else t=1-fz;
+    return t*PLATFORM_H;
+  }
+  const top = corners.map(([x,z]) => [x, h(x,z), z]);
+  const bot = corners.map(([x,z]) => [x, 0, z]);
+  const pos = [];
+  const push = v => pos.push(v[0],v[1],v[2]);
+  const quad = (a,b,c,d) => { push(a);push(b);push(c); push(a);push(c);push(d); };
+  // 上面(歩ける斜面)：法線が確実に +Y (上向き) になる頂点順にする
+  quad(top[3],top[2],top[1],top[0]);
+  // 底面：法線が確実に -Y (下向き) になる頂点順にする
+  quad(bot[0],bot[1],bot[2],bot[3]);
+  for (let i=0;i<4;i++){ const j=(i+1)%4; quad(bot[i],bot[j],top[j],top[i]); } // 側面4枚
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/* ---- 素材・ジオメトリ（使い回す） ---- */
+const wallMat  = new THREE.MeshStandardMaterial({ color:0x8e969e, roughness:0.9 });
+const thinMat  = new THREE.MeshStandardMaterial({ color:0xa7afb5, roughness:0.88 });
+const platMat  = new THREE.MeshStandardMaterial({ color:0xc4a37a, roughness:0.85 });
+const rampMat  = new THREE.MeshStandardMaterial({ color:0x7fb0a3, roughness:0.85, side:THREE.DoubleSide });
+const floorMat = new THREE.MeshStandardMaterial({ color:0x232b31, roughness:1 });
+
+const wallGeo   = new THREE.BoxGeometry(1, WALL_H, 1);
+const platGeo   = new THREE.BoxGeometry(1, PLATFORM_H, 1);
+const rampGeo   = { E: makeRampGeometry('E'), W: makeRampGeometry('W'), S: makeRampGeometry('S'), N: makeRampGeometry('N') };
+const thinGeoNS = new THREE.BoxGeometry(1, WALL_H, THIN_WALL_T);   // 東西の壁面(北/南の辺に沿う)
+const thinGeoEW = new THREE.BoxGeometry(THIN_WALL_T, WALL_H, 1);   // 南北の壁面(東/西の辺に沿う)
+
+const wallEdges   = new THREE.EdgesGeometry(wallGeo);
+const platEdges   = new THREE.EdgesGeometry(platGeo);
+const rampEdges   = { E: new THREE.EdgesGeometry(rampGeo.E), W: new THREE.EdgesGeometry(rampGeo.W), S: new THREE.EdgesGeometry(rampGeo.S), N: new THREE.EdgesGeometry(rampGeo.N) };
+const thinNSEdges = new THREE.EdgesGeometry(thinGeoNS);
+const thinEWEdges = new THREE.EdgesGeometry(thinGeoEW);
+
+/* ---- 窓(window)：枠(柱2本+下枠+上枠)＋中央のガラス。当たり判定は薄い壁と同じ板1枚ぶん(thinWallRect)。 ---- */
+const WIN_JAMB_W = 0.16;    // 左右の柱の太さ
+const WIN_SILL_H = 0.95;    // 下枠の高さ＝乗り越える目安の高さ
+const WIN_LINTEL_H = 0.34;  // 上枠の高さ
+const windowFrameMat = new THREE.MeshStandardMaterial({ color:0x9aa3ab, roughness:0.8 });
+const windowGlassMat = new THREE.MeshStandardMaterial({
+  color:0xbfe6f0, roughness:0.1, metalness:0.05, transparent:true, opacity:0.25,
+  depthWrite:false, side:THREE.DoubleSide,
+});
+// 方向(NS=幅がx方向 / EW=幅がz方向)ごとにパーツ形状を1回だけ作って使い回す。
+const windowGeoCache = {};
+function windowPartDefs(orientNS){
+  const key = orientNS ? 'ns' : 'ew';
+  if (windowGeoCache[key]) return windowGeoCache[key];
+  const innerLo = WIN_JAMB_W, innerHi = 1-WIN_JAMB_W, innerW = innerHi-innerLo;
+  const glassH = WALL_H - WIN_SILL_H - WIN_LINTEL_H;
+  const mk = orientNS
+    ? (w,h) => new THREE.BoxGeometry(w, h, THIN_WALL_T)
+    : (w,h) => new THREE.BoxGeometry(THIN_WALL_T, h, w);
+  const defs = [
+    { mat:'frame', geo: mk(WIN_JAMB_W, WALL_H),   off: WIN_JAMB_W/2,        h: WALL_H/2 },
+    { mat:'frame', geo: mk(WIN_JAMB_W, WALL_H),   off: 1-WIN_JAMB_W/2,      h: WALL_H/2 },
+    { mat:'frame', geo: mk(innerW, WIN_SILL_H),   off: 0.5,                 h: WIN_SILL_H/2 },
+    { mat:'frame', geo: mk(innerW, WIN_LINTEL_H), off: 0.5,                 h: WALL_H-WIN_LINTEL_H/2 },
+    { mat:'glass', geo: mk(innerW, glassH),       off: 0.5,                 h: WIN_SILL_H+glassH/2 },
+  ];
+  windowGeoCache[key] = defs;
+  return defs;
+}
+// セル(cell,x,y)から窓のGroupを組み立てる。板の位置(planeCoord)は薄い壁と同じoffで揃える。
+function buildWindowGroup(cell, x, y){
+  const orientNS = (cell.dir === 'N' || cell.dir === 'S');
+  const defs = windowPartDefs(orientNS);
+  const off = 0.5 - THIN_WALL_T/2;
+  const planeCoord = orientNS
+    ? (cell.dir==='N' ? y+0.5-off : y+0.5+off)
+    : (cell.dir==='W' ? x+0.5-off : x+0.5+off);
+  const group = new THREE.Group();
+  for (const d of defs){
+    const mesh = new THREE.Mesh(d.geo, d.mat==='glass' ? windowGlassMat : windowFrameMat);
+    if (orientNS) mesh.position.set(x + d.off, d.h, planeCoord);
+    else mesh.position.set(planeCoord, d.h, y + d.off);
+    group.add(mesh);
+  }
+  return group;
+}
+
+// セルの種類・座標から「ジオメトリ＋置くべき位置」を求める。実際の設置(meshForCell)と
+// プレビュー(ghost/outline)の両方から共通で使う。
+function cellGeometry(cell, x, y){
+  const cx = x+0.5, cz = y+0.5;
+  if (cell.type === 'wall') return { geo: wallGeo, pos: [cx, WALL_H/2, cz] };
+  if (cell.type === 'platform') return { geo: platGeo, pos: [cx, PLATFORM_H/2, cz] };
+  if (cell.type === 'ramp') return { geo: rampGeo[cell.dir], pos: [cx, 0, cz] };
+  // 窓(window)もゴースト表示・破壊アウトラインは薄い壁と同じ「板1枚」の箱で代用する
+  // （実際に設置される見た目は buildWindowGroup() が作る窓枠+ガラスの組み合わせ）。
+  if (cell.type === 'thinwall' || cell.type === 'window'){
+    const off = 0.5 - THIN_WALL_T/2;
+    if (cell.dir === 'N') return { geo: thinGeoNS, pos: [cx, WALL_H/2, cz - off] };
+    if (cell.dir === 'S') return { geo: thinGeoNS, pos: [cx, WALL_H/2, cz + off] };
+    if (cell.dir === 'W') return { geo: thinGeoEW, pos: [cx - off, WALL_H/2, cz] };
+    return { geo: thinGeoEW, pos: [cx + off, WALL_H/2, cz] }; // E
+  }
+  return null;
+}
+function edgesForCell(cell){
+  if (cell.type === 'wall') return wallEdges;
+  if (cell.type === 'platform') return platEdges;
+  if (cell.type === 'ramp') return rampEdges[cell.dir];
+  if (cell.type === 'thinwall' || cell.type === 'window') return (cell.dir==='E'||cell.dir==='W') ? thinEWEdges : thinNSEdges;
+  return null;
+}
+function matForType(type){
+  if (type==='wall') return wallMat;
+  if (type==='thinwall') return thinMat;
+  if (type==='platform') return platMat;
+  if (type==='ramp') return rampMat;
+  if (type==='window') return windowFrameMat;
+  return null;
+}
+
+function meshForCell(cell, x, y){
+  if (cell.type === 'window') return buildWindowGroup(cell, x, y);
+  const g = cellGeometry(cell, x, y);
+  if (!g) return null; // floor
+  const m = new THREE.Mesh(g.geo, matForType(cell.type));
+  m.position.set(g.pos[0], g.pos[1], g.pos[2]);
+  return m;
+}
+
+// マス目(x,y) -> そこに置いてあるメッシュ。床(floor)はメッシュを持たない（土台の床プレーンがそのまま見える）。
+const cellMeshes = new Map();
+const keyOf = (x,y) => x+','+y;
+
+function buildScene(){
+  mapDirty = true;
+  levelGroup.clear();
+  cellMeshes.clear();
+  for (let y=0; y<N; y++) for (let x=0; x<N; x++){
+    const m = meshForCell(grid[y][x], x, y);
+    if (m){ levelGroup.add(m); cellMeshes.set(keyOf(x,y), m); }
+  }
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(N, N), floorMat);
+  floor.rotation.x = -Math.PI/2;
+  floor.position.set(N/2, 0, N/2);
+  levelGroup.add(floor);
+}
+
+// 1マスだけ張り替える（編集のたびにシーン全体を作り直さないため）
+function updateCell(x, y){
+  mapDirty = true;
+  const k = keyOf(x,y);
+  const old = cellMeshes.get(k);
+  if (old){ levelGroup.remove(old); cellMeshes.delete(k); }
+  const m = meshForCell(grid[y][x], x, y);
+  if (m){ levelGroup.add(m); cellMeshes.set(k, m); }
+}
+
+/* ---- 設置プレビュー（半透明ゴースト）と 破壊対象アウトライン ---- */
+function makeGhostMat(baseColor){
+  return new THREE.MeshStandardMaterial({ color:baseColor, roughness:0.85, transparent:true, opacity:0.42, depthWrite:false, side:THREE.DoubleSide });
+}
+const ghostMats = {
+  wall: makeGhostMat(0x8e969e),
+  thinwall: makeGhostMat(0xa7afb5),
+  platform: makeGhostMat(0xc4a37a),
+  ramp: makeGhostMat(0x7fb0a3),
+  window: makeGhostMat(0xbfe6f0),
+};
+const ghostInvalidMat = makeGhostMat(0xc0453a);
+
+const ghostMesh = new THREE.Mesh(new THREE.BoxGeometry(0.01,0.01,0.01), ghostMats.wall);
+ghostMesh.visible = false;
+scene.add(ghostMesh);
+
+const outlineMesh = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color:0xf2b544, depthTest:false }));
+outlineMesh.renderOrder = 999;
+outlineMesh.visible = false;
+scene.add(outlineMesh);
+
+/* ============ プレイヤー ============ */
+const player = { x:N/2, y:N/2, z:0, vz:0, onGround:true };
+let yaw = 0, pitch = 0;
+const maxPitch = Math.PI*0.47;
+const keys = {};
+let alive = false, started = false;
+
+function freeSpot(rng){
+  let x,y,t=0;
+  do { x = 1+rng()*(N-2); y = 1+rng()*(N-2); t++; }
+  while (t<400 && (heightAt(x,y) > 0.05 || collidesSolid(x,y,PLAYER_R)));
+  return {x,y};
+}
+
+function doJump(){
+  if (!alive || !player.onGround) return;
+  player.vz = JUMP_V; player.onGround = false;
+}
+
+const _fwd = new THREE.Vector3(), _right = new THREE.Vector3();
+function step(dt){
+  if (!alive) return;
+  // 先に視点を回転させ、その「実際にカメラが向いているベクトル」を three.js 自身から
+  // 取得して使う（sin/cosを手で組むと符号を間違えやすいので、これで根本的に確実にする）。
+  camera.rotation.y = -yaw;
+  camera.rotation.x = pitch;
+  camera.getWorldDirection(_fwd);
+  _fwd.y = 0;
+  if (_fwd.lengthSq() < 1e-6) _fwd.set(0,0,-1);
+  _fwd.normalize();
+  _right.set(-_fwd.z, 0, _fwd.x); // 前方ベクトルを90度回した「右」ベクトル
+
+  // ---- 水平方向：WASD ----
+  // 「壁で止まるか」の判定と「その場所の高さ」の判定を分ける。
+  // 坂(ramp)は常に歩行OK（ジャンプ無しで登り降りできる）にし、
+  // 箱など段差のある床(platform)は従来どおり STEP_TOL を超えたらジャンプ必須にする。
+  let fwd=0, str=0;
+  if (keys.KeyW) fwd+=1; if (keys.KeyS) fwd-=1;
+  if (keys.KeyD) str+=1; if (keys.KeyA) str-=1;
+  if (fwd || str){
+    const len = Math.hypot(fwd,str); fwd/=len; str/=len;
+    const run = (keys.ShiftLeft || keys.ShiftRight) ? RUN_MULT : 1;
+    const speed = MOVE_SPEED * run;
+    const vx = (_fwd.x*fwd + _right.x*str) * speed;
+    const vy = (_fwd.z*fwd + _right.z*str) * speed;
+    const r = PLAYER_R;
+
+    // 「壁で止まるか」は移動先での当たり判定(プレイヤーを半径rの円として、壁・薄い壁の
+    // 実際の見た目の形と重なるか)で判定する。薄い壁は板の部分だけを塞ぐので、
+    // 板が無い側からは(そのマスの中までなら)ぴったり近づける。
+    // 「段差を登れるか」は移動先そのもの(半径オフセット無し)の高さで判定する。
+    const stepOk = (cx, cy) => {
+      const cell = cellAt(cx, cy);
+      if (cell.type === 'ramp') return true; // 坂は常に通行可
+      return heightAt(cx, cy) <= player.z + STEP_TOL; // 箱の直登りは不可（ジャンプが必要）
+    };
+
+    const nx = player.x + vx*dt;
+    const ny = player.y + vy*dt;
+    if (stepOk(nx, player.y) && !collidesSolid(nx, player.y, r)) player.x = nx;
+    if (stepOk(player.x, ny) && !collidesSolid(player.x, ny, r)) player.y = ny;
+  }
+
+  // ---- 垂直方向：重力・ジャンプ・地面追従 ----
+  const standingCell = cellAt(player.x, player.y);
+  const groundH = heightAt(player.x, player.y);
+  if (player.onGround && standingCell.type === 'ramp'){
+    // 坂の上を歩いている間は、毎フレーム斜面の高さにぴったりスナップさせる。
+    player.z = groundH;
+    player.vz = 0;
+  } else {
+    player.vz -= GRAVITY*dt;
+    let nz = player.z + player.vz*dt;
+    if (nz <= groundH){ nz = groundH; player.vz = 0; player.onGround = true; } else player.onGround = false;
+    player.z = nz;
+  }
+
+  camera.position.set(player.x, player.z + EYE_HEIGHT, player.y);
+}
+
+/* ============ ステージ編集（Minecraft風・置く/壊す） ============ */
+let selectedBlock = 'wall';
+let selDir = 'E'; // 薄い壁・坂で使う向き
+const dirArrow = { E:'→', W:'←', S:'↓', N:'↑' };
+
+function selectBlock(id){
+  selectedBlock = id;
+  document.querySelectorAll('#hotbar .slot').forEach(el => el.classList.toggle('active', el.dataset.id===id));
+}
+function rotateDir(){
+  if (selectedBlock !== 'ramp' && selectedBlock !== 'thinwall' && selectedBlock !== 'window') return; // 向きを持つブロックの時だけ回転
+  const order = ['E','S','W','N'];
+  selDir = order[(order.indexOf(selDir)+1) % order.length];
+  document.querySelectorAll('#hotbar .dir').forEach(el => el.textContent = dirArrow[selDir]);
+}
+document.querySelectorAll('#hotbar .slot').forEach(el => {
+  el.addEventListener('click', () => selectBlock(el.dataset.id));
+});
+
+const raycaster = new THREE.Raycaster();
+raycaster.far = 6.5; // 手が届く範囲
+const _viewDir = new THREE.Vector3();
+function castTarget(){
+  camera.getWorldDirection(_viewDir);
+  raycaster.set(camera.position, _viewDir);
+  // 窓(window)は複数パーツのGroupなので、子メッシュまで見るために recursive=true にする。
+  const hits = raycaster.intersectObjects(levelGroup.children, true);
+  return hits.length ? hits[0] : null;
+}
+
+// hit: レイキャストの結果。into=true なら当たったブロック自身のマス、
+// into=false ならその面のすぐ外側（隣の空きマス）を返す。
+function cellFromHit(hit, into){
+  const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+  const nudge = into ? -0.01 : 0.01;
+  return { x: Math.floor(hit.point.x + n.x*nudge), y: Math.floor(hit.point.z + n.z*nudge) };
+}
+
+function inEditableBounds(x, y){ return x>0 && y>0 && x<N-1 && y<N-1; }
+
+function breakBlock(){
+  const hit = castTarget();
+  if (!hit) return;
+  const c = cellFromHit(hit, true);
+  if (!inEditableBounds(c.x, c.y)) return; // 外周の壁は壊せない（外に出られてしまうため）
+  if (grid[c.y][c.x].type === 'floor') return;
+  grid[c.y][c.x] = {type:'floor'};
+  updateCell(c.x, c.y);
+  broadcastEdit(c.x, c.y, null);
+}
+
+function currentGhostCell(){
+  return selectedBlock === 'ramp' ? {type:'ramp', dir:selDir}
+       : selectedBlock === 'thinwall' ? {type:'thinwall', dir:selDir}
+       : selectedBlock === 'window' ? {type:'window', dir:selDir}
+       : {type:selectedBlock};
+}
+
+function canPlaceAt(x, y){
+  if (!inEditableBounds(x, y)) return false;
+  if (Math.floor(player.x)===x && Math.floor(player.y)===y) return false; // 自分の足元には置けない（挟まり防止）
+  return grid[y][x].type === 'floor'; // 何か置いてある場所には重ねて置けない
+}
+
+function placeBlock(){
+  const hit = castTarget();
+  if (!hit) return;
+  const c = cellFromHit(hit, false);
+  if (!canPlaceAt(c.x, c.y)) return;
+  grid[c.y][c.x] = currentGhostCell();
+  updateCell(c.x, c.y);
+  broadcastEdit(c.x, c.y, grid[c.y][c.x]);
+}
+
+// 毎フレーム：ゴースト(設置予定表示)とアウトライン(破壊対象表示)を更新
+function updatePreview(){
+  if (!alive || document.pointerLockElement !== canvas){
+    ghostMesh.visible = false; outlineMesh.visible = false; return;
+  }
+  const hit = castTarget();
+  if (!hit){ ghostMesh.visible = false; outlineMesh.visible = false; return; }
+
+  // 破壊対象のアウトライン
+  const bc = cellFromHit(hit, true);
+  if (inEditableBounds(bc.x, bc.y) && grid[bc.y][bc.x].type !== 'floor'){
+    const cell = grid[bc.y][bc.x];
+    const g = cellGeometry(cell, bc.x, bc.y);
+    outlineMesh.geometry = edgesForCell(cell);
+    outlineMesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
+    outlineMesh.visible = true;
+  } else {
+    outlineMesh.visible = false;
+  }
+
+  // 設置プレビュー(半透明ゴースト)
+  const pc = cellFromHit(hit, false);
+  if (inEditableBounds(pc.x, pc.y)){
+    const ghostCell = currentGhostCell();
+    const g = cellGeometry(ghostCell, pc.x, pc.y);
+    const valid = canPlaceAt(pc.x, pc.y);
+    ghostMesh.geometry = g.geo;
+    ghostMesh.material = valid ? ghostMats[ghostCell.type] : ghostInvalidMat;
+    ghostMesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
+    ghostMesh.visible = true;
+  } else {
+    ghostMesh.visible = false;
+  }
+}
+
+/* ============ 複数人で編集（オンライン） ============
+   サーバー(簡易WebSocketリレー)へ同じルームコードで接続した全員が、同じステージを見ながら
+   ブロックの設置・破壊をリアルタイムに共有できる。他の人は簡単な人形アバターとして見える。
+   最初に入室した人が「ホスト」となり、新しく入ってきた人にその時点のステージを送って揃える。 */
+const REMOTES = new Map();      // id -> {x,y,z,yaw, 補間用の値...}
+const remoteMeshes = new Map(); // id -> THREE.Group（アバター）
+
+function idColor(id){
+  let h = 0; for (let i=0; i<id.length; i++) h = (h*31 + id.charCodeAt(i)) >>> 0;
+  return new THREE.Color(`hsl(${h % 360}, 62%, 56%)`);
+}
+function createRemote(id){
+  return { id, x:N/2, y:N/2, z:0, yaw:0,
+    _p0x:N/2, _p0y:N/2, _p0z:0, _p0yaw:0, _p1x:N/2, _p1y:N/2, _p1z:0, _p1yaw:0,
+    _t0:performance.now(), _dur:80, _lastMsgT:0 };
+}
+function buildRemoteMesh(id){
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: idColor(id), roughness:0.75 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.85, 4, 8), mat);
+  body.position.y = 0.88;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), mat);
+  head.position.y = 1.55;
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.22, 8),
+    new THREE.MeshStandardMaterial({ color:0xf2b544 }));
+  nose.rotation.x = Math.PI/2; nose.position.set(0, 1.55, -0.26);
+  g.add(body, head, nose);
+  return g;
+}
+function syncRemoteMeshes(){
+  for (const id of [...remoteMeshes.keys()]) if (!REMOTES.has(id)) disposeRemoteMesh(id);
+  for (const id of REMOTES.keys()) if (!remoteMeshes.has(id)){
+    const g = buildRemoteMesh(id); scene.add(g); remoteMeshes.set(id, g);
+  }
+}
+function disposeRemoteMesh(id){
+  const g = remoteMeshes.get(id);
+  if (g){ scene.remove(g); remoteMeshes.delete(id); }
+}
+function clearRemoteMeshes(){ for (const id of [...remoteMeshes.keys()]) disposeRemoteMesh(id); }
+function updateRemoteMeshes(){
+  syncRemoteMeshes();
+  const now = performance.now();
+  for (const [id, r] of REMOTES){
+    const t = r._dur ? Math.min(1, (now - r._t0) / r._dur) : 1;
+    r.x = r._p0x + (r._p1x - r._p0x) * t;
+    r.y = r._p0y + (r._p1y - r._p0y) * t;
+    r.z = r._p0z + (r._p1z - r._p0z) * t;
+    let dyaw = r._p1yaw - r._p0yaw;
+    while (dyaw > Math.PI) dyaw -= Math.PI*2;
+    while (dyaw < -Math.PI) dyaw += Math.PI*2;
+    r.yaw = r._p0yaw + dyaw * t;
+    const m = remoteMeshes.get(id);
+    if (m){ m.position.set(r.x, r.z, r.y); m.rotation.y = -r.yaw; }
+  }
+}
+
+let socket = null, netState = 'idle', myId = null, hostId = null, isHost = false, roomMax = 8, room = '';
+function send(obj){ if (socket && socket.readyState === 1) socket.send(JSON.stringify(obj)); }
+function netStatus(t){ el('netstatus').textContent = t; }
+function broadcastEdit(x, y, cell){
+  if (CFG.mode !== 'online') return;
+  send({ type:'edit', x, y, cell: cell ? serializeCell(cell) : null });
+}
+function broadcastClear(){ if (CFG.mode === 'online') send({ type:'clear' }); }
+function broadcastFullGrid(){ if (CFG.mode === 'online') send({ type:'grid', grid: serializeGrid() }); }
+
+function connect(){
+  const addr = el('srv').value.trim();
+  room = el('room').value.trim();
+  if (!addr || !room){ netStatus('サーバーアドレスとルームコードを入力する'); return; }
+  if (socket){ try { socket.close(); } catch(e){} }
+  REMOTES.clear(); clearRemoteMeshes(); myId = null; hostId = null; isHost = false;
+  netState = 'connecting'; netStatus('接続中…');
+  try { socket = new WebSocket(addr); } catch(e){ netState = 'idle'; netStatus('接続できません'); return; }
+  socket.onopen = () => send({ type:'join', room, max: roomMax });
+  socket.onclose = () => {
+    if (netState !== 'idle'){ netState = 'idle'; netStatus('切断されました'); refreshGoState(); }
+  };
+  socket.onerror = () => netStatus('接続エラー：アドレスを確認する');
+  socket.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch(e){ return; } handleNet(m); };
+}
+function handleNet(m){
+  if (m.type === 'joined'){
+    myId = m.id; hostId = m.hostId; isHost = !!m.isHost; roomMax = m.max || 8;
+    for (const id of (m.peers || [])) REMOTES.set(id, createRemote(id));
+    netState = 'ready';
+    netStatus(`接続完了（ルーム「${room}」・${REMOTES.size + 1}人）`);
+    refreshGoState();
+    return;
+  }
+  if (m.type === 'full'){ netState = 'idle'; netStatus('このルームは満員です'); return; }
+  if (m.type === 'peer_joined'){
+    REMOTES.set(m.id, createRemote(m.id));
+    if (isHost) send({ type:'grid', to: m.id, grid: serializeGrid() }); // 新しく入った人に今のステージを渡す
+    if (netState === 'ready'){ netStatus(`接続完了（ルーム「${room}」・${REMOTES.size + 1}人）`); refreshGoState(); }
+    return;
+  }
+  if (m.type === 'host'){ hostId = m.id; isHost = (m.id === myId); return; }
+  if (m.type === 'peer_left'){
+    REMOTES.delete(m.id); disposeRemoteMesh(m.id);
+    if (netState === 'ready'){ netStatus(`接続完了（ルーム「${room}」・${REMOTES.size + 1}人）`); refreshGoState(); }
+    return;
+  }
+  if (m.type === 'state'){
+    let r = REMOTES.get(m.from);
+    if (!r){ r = createRemote(m.from); REMOTES.set(m.from, r); }
+    const now = performance.now();
+    r._p0x = r.x; r._p0y = r.y; r._p0z = r.z; r._p0yaw = r.yaw;
+    r._p1x = m.x; r._p1y = m.y; r._p1z = m.z || 0; r._p1yaw = typeof m.yaw === 'number' ? m.yaw : 0;
+    r._dur = r._lastMsgT ? Math.min(300, Math.max(30, now - r._lastMsgT)) : 80;
+    r._lastMsgT = now; r._t0 = now;
+    return;
+  }
+  if (m.type === 'edit'){
+    if (!inEditableBounds(m.x, m.y)) return;
+    grid[m.y][m.x] = deserializeCell(m.cell);
+    updateCell(m.x, m.y);
+    return;
+  }
+  if (m.type === 'clear'){ initFlatLevel(); buildScene(); return; }
+  if (m.type === 'grid'){
+    if (m.to && m.to !== myId) return;
+    applyGrid(m.grid);
+    return;
+  }
+}
+function refreshGoState(){
+  const go = el('go');
+  const ready = CFG.mode === 'solo' || netState === 'ready';
+  go.disabled = !ready;
+  go.textContent = (CFG.mode === 'online' && netState === 'ready') ? `入る（${REMOTES.size + 1}人）` : '入る';
+}
+function applyMode(){
+  el('g_solo').setAttribute('aria-pressed', String(CFG.mode === 'solo'));
+  el('g_online').setAttribute('aria-pressed', String(CFG.mode === 'online'));
+  el('netfield').style.display = CFG.mode === 'online' ? '' : 'none';
+  refreshGoState();
+}
+el('g_solo').onclick = () => {
+  if (CFG.mode === 'online' && socket){
+    try { socket.close(); } catch(e){}
+    socket = null; netState = 'idle'; REMOTES.clear(); clearRemoteMeshes();
+  }
+  CFG.mode = 'solo'; applyMode();
+};
+el('g_online').onclick = () => { CFG.mode = 'online'; applyMode(); };
+el('connectBtn').onclick = connect;
+applyMode();
+// http/httpsで配信されている場合は、そのサーバー自身のアドレスを候補として自動入力しておく
+if (location.protocol === 'http:' || location.protocol === 'https:'){
+  const wsProto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+  el('srv').value = wsProto + location.host;
+}
+
+/* ============ 入力 ============ */
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space'){ if (!tryClimbThrough()) doJump(); e.preventDefault(); }
+  if (e.code === 'Escape' && alive) pause();
+  if (e.code === 'Digit1') selectBlock('wall');
+  if (e.code === 'Digit2') selectBlock('thinwall');
+  if (e.code === 'Digit3') selectBlock('platform');
+  if (e.code === 'Digit4') selectBlock('ramp');
+  if (e.code === 'Digit5') selectBlock('window');
+  if (e.code === 'KeyR') rotateDir();
+});
+addEventListener('keyup', e => keys[e.code] = false);
+addEventListener('mousemove', e => {
+  if (document.pointerLockElement !== canvas) return;
+  yaw += e.movementX * 0.0022;
+  pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch - e.movementY * 0.0022));
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('mousedown', e => {
+  if (!alive) return;
+  if (document.pointerLockElement !== canvas){ canvas.requestPointerLock?.(); return; }
+  if (e.button === 0) breakBlock();
+  else if (e.button === 2) placeBlock();
+});
+
+/* ============ ミニマップ（右上） ============
+   置いた壁・箱・坂・薄い壁・窓が、編集のたびに反映される。上が北(-Z)、右が+X。
+   ブロックの部分は別キャンバス(mapBase)に描いておき、編集があったときだけ描き直す。
+   毎フレームは、それを写して自分の位置と向きだけを重ねる。 */
+const mapEl = document.getElementById('map'), mapCtx = mapEl.getContext('2d');
+const MAP_DPR = Math.min(2, window.devicePixelRatio || 1);
+mapEl.width = mapEl.height = Math.round(220 * MAP_DPR);
+const mapBase = document.createElement('canvas');
+mapBase.width = mapBase.height = mapEl.width;
+const mapBaseCtx = mapBase.getContext('2d');
+let mapDirty = true;
+const MAP_COL = { wall:'#7a848c', platform:'#b39468', thin:'#c3cad0', window:'#6fd0d6' };
+function redrawMapBase(){
+  const c = mapBaseCtx, S = mapBase.width, t = S / N;
+  const th = Math.max(2 * MAP_DPR, t * 0.3);        // 薄い壁・窓の線の太さ
+  c.clearRect(0, 0, S, S);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){
+    const cell = grid[y][x], X = x * t, Y = y * t;
+    if (cell.type === 'wall'){ c.fillStyle = MAP_COL.wall; c.fillRect(X, Y, t, t); }
+    else if (cell.type === 'platform'){ c.fillStyle = MAP_COL.platform; c.fillRect(X, Y, t, t); }
+    else if (cell.type === 'ramp'){
+      // 坂は、低い側→高い側へ色が明るくなる（向きが分かるように）
+      const d = cell.dir;
+      const g = d === 'E' ? c.createLinearGradient(X, 0, X + t, 0)
+              : d === 'W' ? c.createLinearGradient(X + t, 0, X, 0)
+              : d === 'S' ? c.createLinearGradient(0, Y, 0, Y + t)
+              :             c.createLinearGradient(0, Y + t, 0, Y);
+      g.addColorStop(0, '#3f7a6e'); g.addColorStop(1, '#9fd6c8');
+      c.fillStyle = g; c.fillRect(X, Y, t, t);
+    }
+    else if (cell.type === 'thinwall' || cell.type === 'window'){   // マスの縁に細く描く（dir=N/S/W/E）
+      c.fillStyle = cell.type === 'window' ? MAP_COL.window : MAP_COL.thin;
+      if (cell.dir === 'N') c.fillRect(X, Y, t, th);
+      else if (cell.dir === 'S') c.fillRect(X, Y + t - th, t, th);
+      else if (cell.dir === 'W') c.fillRect(X, Y, th, t);
+      else c.fillRect(X + t - th, Y, th, t);
+    }
+  }
+}
+function drawMap(){
+  if (mapDirty){ redrawMapBase(); mapDirty = false; }
+  const c = mapCtx, S = mapEl.width, t = S / N, px = player.x * t, py = player.y * t;
+  c.clearRect(0, 0, S, S);
+  c.drawImage(mapBase, 0, 0);
+  if (CFG.mode === 'online'){
+    c.fillStyle = '#6fd0d6';
+    for (const r of REMOTES.values()){ c.beginPath(); c.arc(r.x*t, r.y*t, 2.6*MAP_DPR, 0, 7); c.fill(); }
+  }
+  c.strokeStyle = '#f2b544'; c.fillStyle = '#f2b544'; c.lineWidth = 1.6 * MAP_DPR;
+  c.beginPath(); c.arc(px, py, 3 * MAP_DPR, 0, 7); c.fill();
+  c.beginPath(); c.moveTo(px, py);
+  c.lineTo((player.x + Math.sin(yaw) * 2.2) * t, (player.y - Math.cos(yaw) * 2.2) * t); c.stroke();
+}
+
+/* ============ 画面フロー ============ */
+const veil = document.getElementById('veil');
+function start(){
+  if (!started){
+    const s = { x:N/2, y:N/2 };
+    player.x = s.x; player.y = s.y; player.z = heightAt(s.x,s.y); player.vz = 0; player.onGround = true;
+    yaw = 0; pitch = 0;
+    started = true;
+  }
+  // 2回目以降(Escで一時停止→再開)はステージも位置もそのまま再開する（編集内容を消さないため）
+  alive = true; veil.classList.add('gone'); canvas.requestPointerLock?.();
+}
+function pause(){ alive = false; document.exitPointerLock?.(); veil.classList.remove('gone'); }
+document.getElementById('go').onclick = start;
+
+document.getElementById('exportBtn').onclick = () => {
+  const data = { n:N, grid: serializeGrid() };
+  const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'sublevel7-stage.json';
+  a.click();
+  URL.revokeObjectURL(url);
+};
+document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
+document.getElementById('importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!data || !Array.isArray(data.grid) || data.grid.length !== N) throw new Error('グリッドサイズが一致しません(N=' + N + ')');
+    applyGrid(data.grid);
+    const s = freeSpot(Math.random);
+    player.x = s.x; player.y = s.y; player.z = heightAt(s.x,s.y); player.vz = 0; player.onGround = true;
+    broadcastFullGrid(); // みんなで編集中なら、読み込んだステージを全員に配る
+  } catch (err) {
+    alert('読み込みに失敗しました: ' + err.message);
+  }
+});
+document.getElementById('clearBtn').onclick = () => {
+  if (!confirm('編集中のステージを更地に戻します。よろしいですか？')) return;
+  initFlatLevel();
+  buildScene();
+  const s = { x:N/2, y:N/2 };
+  player.x = s.x; player.y = s.y; player.z = heightAt(s.x,s.y); player.vz = 0; player.onGround = true;
+  broadcastClear();
+};
+
+function resize(){
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', resize);
+resize();
+
+let last = performance.now();
+let lastStateSend = 0;
+function frame(now){
+  const dt = Math.min(0.05, (now-last)/1000); last = now;
+  step(dt);
+  updatePreview();
+  if (CFG.mode === 'online' && alive && now - lastStateSend > 80){
+    lastStateSend = now;
+    send({ type:'state', x:player.x, y:player.y, z:player.z, yaw });
+  }
+  updateRemoteMeshes();
+  drawMap();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+initFlatLevel(); buildScene();
+camera.position.set(N/2, EYE_HEIGHT, N/2);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
