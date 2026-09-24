@@ -11,8 +11,8 @@
   #view{display:block;width:100vw;height:100vh;cursor:none}
   #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;
     border-radius:50%;background:#f2b544;pointer-events:none;box-shadow:0 0 4px rgba(242,181,68,.8)}
-  #veil{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    background:rgba(10,14,18,.94);text-align:center;padding:24px;z-index:10}
+  #veil{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;justify-content:safe center;
+    background:rgba(10,14,18,.94);text-align:center;padding:24px;z-index:10;overflow-y:auto}
   #veil.gone{display:none}
   h1{font-size:clamp(28px,7vw,52px);font-weight:700;letter-spacing:-.03em}
   h1 span{display:block;font-size:.34em;letter-spacing:.4em;color:#c4462c;font-weight:600;margin-bottom:12px}
@@ -31,6 +31,10 @@
   #sizeRow input{width:64px;background:#12171b;border:1px solid #2a333a;color:#c8cbc4;padding:7px 8px;font:inherit;font-size:13px;text-align:right}
   #sizeRow button{margin:0;padding:8px 14px;font-size:12px;letter-spacing:.08em;background:#1b242c;color:#c8cbc4;border:1px solid #2a333a;cursor:pointer}
   #sizeRow button:hover{background:#2a333a;color:#fff}
+  #sizePreviewBox{margin-top:10px;text-align:center}
+  #sizePreview{display:block;margin:0 auto;width:140px;height:140px;background:rgba(10,14,18,.72);border:1px solid #2a333a}
+  #sizePreviewCap{margin-top:6px;font-size:12px;color:#9aa4ab;min-height:1.4em;letter-spacing:.04em}
+  #sizePreviewCap.warn{color:#e5766b}
 
   /* 複数人で編集（オンライン接続）まわりのUI */
   #cfg{margin-top:22px;width:min(360px,88vw);text-align:left}
@@ -107,6 +111,10 @@
     <label>縦 <input id="sizeH" type="number" min="8" max="200" step="1" value="50"></label>
     <button type="button" id="sizeBtn">変更</button>
   </div>
+  <div id="sizePreviewBox">
+    <canvas id="sizePreview"></canvas>
+    <div id="sizePreviewCap"></div>
+  </div>
 
   <div id="cfg">
     <div id="modeRow">
@@ -150,12 +158,13 @@ const PLAYER_R = 0.28;        // プレイヤーの当たり判定の半径
 // 薄い壁(thinwall)は見た目通りの薄い板として当たり判定を取る（マス全体は塞がない）。
 // 見た目通りマスの端に寄せた薄い板になる（dir で東西南北どちらの辺に沿わせるか指定）。
 let grid = [];
-function initFlatLevel(){
-  grid = Array.from({length:H}, (_, y) => Array.from({length:W}, (_, x) => {
-    if (x===0 || y===0 || x===W-1 || y===H-1) return {type:'wall'};
+function flatGrid(w, h){
+  return Array.from({length:h}, (_, y) => Array.from({length:w}, (_, x) => {
+    if (x===0 || y===0 || x===w-1 || y===h-1) return {type:'wall'};
     return {type:'floor'};
   }));
 }
+function initFlatLevel(){ grid = flatGrid(W, H); }
 
 // グリッド1マスぶんの直列化・復元（書き出し／読み込み／ネットワーク同期で共通して使う）
 function serializeCell(c){
@@ -178,17 +187,19 @@ function applyGrid(data){
   player.z = heightAt(player.x, player.y); player.vz = 0; player.onGround = true;
 }
 // 今のステージの内容をできるだけ残したまま、サイズだけ変える（外周は新しいサイズで壁に張り直す）
+// nw×nh にしたときのグリッドを「作るだけ」で返す（今のステージは変えない）。プレビューと実際の変更で共通。
+function resizedGrid(nw, nh){
+  const g = flatGrid(nw, nh);
+  for (let y=1; y<Math.min(H, nh)-1; y++) for (let x=1; x<Math.min(W, nw)-1; x++) g[y][x] = grid[y][x];
+  return g;
+}
 function resizeGrid(nw, nh){
-  const old = grid, ow = W, oh = H;
-  W = nw; H = nh;
-  initFlatLevel();
-  for (let y=1; y<Math.min(oh, nh)-1; y++) for (let x=1; x<Math.min(ow, nw)-1; x++) grid[y][x] = old[y][x];
-  const g = serializeGrid();
-  applyGrid(g);
+  applyGrid(resizedGrid(nw, nh).map(row => row.map(serializeCell)));
 }
 function syncSizeInputs(){
   const a = document.getElementById('sizeW'), b = document.getElementById('sizeH');
   if (a) a.value = W; if (b) b.value = H;
+  if (typeof drawSizePreview === 'function') drawSizePreview();
 }
 
 // 座標(x,y)の「地面の高さ」。薄い壁は板そのものが薄いので、床の高さとしては通常の床(0)のまま扱い、
@@ -832,7 +843,9 @@ function refreshGoState(){
 function applyMode(){
   el('g_solo').setAttribute('aria-pressed', String(CFG.mode === 'solo'));
   el('g_online').setAttribute('aria-pressed', String(CFG.mode === 'online'));
-  el('netfield').style.display = CFG.mode === 'online' ? '' : 'none';
+  el('netfield').style.display = CFG.mode === 'online' ? 'block' : 'none';
+  if (CFG.mode === 'online' && netState === 'idle' && !el('netstatus').textContent)
+    netStatus('サーバーアドレスとルームコードを入れて「接続する」を押すと、入れるようになります');
   refreshGoState();
 }
 el('g_solo').onclick = () => {
@@ -927,23 +940,22 @@ mapBase.width = mapBase.height = mapEl.width;
 const mapBaseCtx = mapBase.getContext('2d');
 let mapDirty = true;
 const MAP_COL = { wall:'#7a848c', platform:'#b39468', thin:'#c3cad0', window:'#6fd0d6' };
-function redrawMapBase(){
-  const c = mapBaseCtx, S = mapBase.width, t = S / Math.max(W, H);
+// グリッド g(gw×gh)を、1マスの大きさ t で c に描く。ミニマップとサイズ変更のプレビューで共通。
+function paintCells(c, g, gw, gh, t){
   const th = Math.max(2 * MAP_DPR, t * 0.3);        // 薄い壁・窓の線の太さ
-  c.clearRect(0, 0, S, S);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
-    const cell = grid[y][x], X = x * t, Y = y * t;
+  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++){
+    const cell = g[y][x], X = x * t, Y = y * t;
     if (cell.type === 'wall'){ c.fillStyle = MAP_COL.wall; c.fillRect(X, Y, t, t); }
     else if (cell.type === 'platform'){ c.fillStyle = MAP_COL.platform; c.fillRect(X, Y, t, t); }
     else if (cell.type === 'ramp'){
       // 坂は、低い側→高い側へ色が明るくなる（向きが分かるように）
       const d = cell.dir;
-      const g = d === 'E' ? c.createLinearGradient(X, 0, X + t, 0)
-              : d === 'W' ? c.createLinearGradient(X + t, 0, X, 0)
-              : d === 'S' ? c.createLinearGradient(0, Y, 0, Y + t)
-              :             c.createLinearGradient(0, Y + t, 0, Y);
-      g.addColorStop(0, '#3f7a6e'); g.addColorStop(1, '#9fd6c8');
-      c.fillStyle = g; c.fillRect(X, Y, t, t);
+      const gr = d === 'E' ? c.createLinearGradient(X, 0, X + t, 0)
+               : d === 'W' ? c.createLinearGradient(X + t, 0, X, 0)
+               : d === 'S' ? c.createLinearGradient(0, Y, 0, Y + t)
+               :             c.createLinearGradient(0, Y + t, 0, Y);
+      gr.addColorStop(0, '#3f7a6e'); gr.addColorStop(1, '#9fd6c8');
+      c.fillStyle = gr; c.fillRect(X, Y, t, t);
     }
     else if (cell.type === 'thinwall' || cell.type === 'window'){   // マスの縁に細く描く（dir=N/S/W/E）
       c.fillStyle = cell.type === 'window' ? MAP_COL.window : MAP_COL.thin;
@@ -954,6 +966,53 @@ function redrawMapBase(){
     }
   }
 }
+function redrawMapBase(){
+  const c = mapBaseCtx, S = mapBase.width;
+  c.clearRect(0, 0, S, S);
+  paintCells(c, grid, W, H, S / Math.max(W, H));
+}
+// ===== サイズ変更のプレビュー =====
+// 入力中の 横×縦 にしたときのステージを、ミニマップと同じ描き方で小さく表示する。
+// 内容は左上を基準に残り、外周は新しいサイズで張り直される。縮めて消える建物は赤で示す。
+const prevEl = document.getElementById('sizePreview'), prevCtx = prevEl.getContext('2d');
+const PREV_CSS = 140;
+prevEl.width = prevEl.height = Math.round(PREV_CSS * MAP_DPR);
+function readSizeInputs(){
+  const nw = parseInt(document.getElementById('sizeW').value, 10);
+  const nh = parseInt(document.getElementById('sizeH').value, 10);
+  const ok = nw >= MIN_SIZE && nw <= MAX_SIZE && nh >= MIN_SIZE && nh <= MAX_SIZE;
+  return { nw, nh, ok };
+}
+function drawSizePreview(){
+  if (!grid.length) return;   // ステージがまだ作られていない起動直前は何もしない
+  const cap = document.getElementById('sizePreviewCap'), c = prevCtx, S = prevEl.width;
+  c.clearRect(0, 0, S, S);
+  const { nw, nh, ok } = readSizeInputs();
+  if (!ok){
+    cap.textContent = '横・縦とも ' + MIN_SIZE + '〜' + MAX_SIZE + ' の整数で入力してください';
+    cap.className = 'warn';
+    return;
+  }
+  const g = resizedGrid(nw, nh), t = S / Math.max(nw, nh);
+  paintCells(c, g, nw, nh, t);
+  // 縮めたときに消える建物（今の内側にあって、新しい内側からはみ出るもの）を数えて赤で示す
+  let lost = 0;
+  c.fillStyle = 'rgba(229,118,107,.85)';
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++){
+    if (grid[y][x].type === 'floor') continue;
+    if (x <= nw - 2 && y <= nh - 2) continue;
+    lost++;
+    if (x < S / t && y < S / t) c.fillRect(x * t, y * t, t, t);   // 新しい外周にかかる分など、枠内に見える分だけ描く
+  }
+  c.strokeStyle = 'rgba(242,181,68,.7)'; c.lineWidth = 1; c.setLineDash([4, 3]);
+  c.strokeRect(0.5, 0.5, nw * t - 1, nh * t - 1); c.setLineDash([]);
+  const same = nw === W && nh === H;
+  cap.textContent = (same ? '今のサイズ ' : 'プレビュー ') + nw + '×' + nh + (lost ? '　消える建物 ' + lost + ' マス' : '');
+  cap.className = lost ? 'warn' : '';
+}
+document.getElementById('sizeW').addEventListener('input', drawSizePreview);
+document.getElementById('sizeH').addEventListener('input', drawSizePreview);
+
 function drawMap(){
   if (mapDirty){ redrawMapBase(); mapDirty = false; }
   const c = mapCtx, S = mapEl.width, t = S / Math.max(W, H), px = player.x * t, py = player.y * t;
@@ -981,7 +1040,7 @@ function start(){
   // 2回目以降(Escで一時停止→再開)はステージも位置もそのまま再開する（編集内容を消さないため）
   alive = true; veil.classList.add('gone'); canvas.requestPointerLock?.();
 }
-function pause(){ alive = false; document.exitPointerLock?.(); veil.classList.remove('gone'); }
+function pause(){ alive = false; document.exitPointerLock?.(); veil.classList.remove('gone'); syncSizeInputs(); }
 document.getElementById('go').onclick = start;
 
 document.getElementById('exportBtn').onclick = () => {
@@ -1062,6 +1121,7 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 initFlatLevel(); buildScene();
+drawSizePreview();
 camera.position.set(W/2, EYE_HEIGHT, H/2);
 requestAnimationFrame(frame);
 </script>
