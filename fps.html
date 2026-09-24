@@ -11,75 +11,72 @@
   html,body{height:100%;overflow:hidden;background:var(--void);
     font-family:"Bahnschrift","DIN Alternate","Helvetica Neue",Arial,sans-serif;
     color:var(--dust);-webkit-user-select:none;user-select:none;touch-action:none}
-  #view{display:block;width:100vw;height:100vh;image-rendering:pixelated;cursor:none}
+  #view{display:block;width:100vw;height:100vh;cursor:none}
+
+  #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;
+    border-radius:50%;background:var(--sodium);pointer-events:none;box-shadow:0 0 4px rgba(242,181,68,.8)}
 
   #hud{position:fixed;inset:0;pointer-events:none}
-  .corner{position:absolute;bottom:18px;display:flex;align-items:flex-end;gap:14px}
-  #left{left:20px}
-  #right{right:20px;flex-direction:row-reverse;text-align:right}
-  .num{font-size:44px;line-height:.82;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-  .tag{font-size:11px;letter-spacing:.14em;color:#6d7880;margin-top:6px}
-  #hpnum{color:var(--sodium)} #hpnum.hurt{color:var(--rust)}
-  #ammonum.empty{color:var(--rust)}
-  #hpbar{width:7px;height:74px;background:#141b21;position:relative;overflow:hidden}
-  #hpfill{position:absolute;bottom:0;left:0;right:0;background:var(--sodium);transition:height .12s}
-  #top{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.28em;color:#5d6970}
+  #top{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.28em;color:#b4bcc1;text-shadow:0 0 4px rgba(0,0,0,.55)}
   #top b{color:var(--dust);font-weight:600}
   #map{position:absolute;top:16px;right:20px;opacity:.75}
   #scoreboard{position:absolute;top:154px;right:20px;text-align:right;font-size:11px;line-height:1.7;
     color:#8b959c;letter-spacing:.04em;opacity:.9}
   #scoreboard .me{color:var(--sodium);font-weight:700}
-  #hit{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 35%,rgba(196,70,44,.55) 100%);opacity:0;transition:opacity .3s}
-  #hitdir{position:absolute;inset:0;opacity:0;transition:opacity .15s ease-out;transform-origin:50% 50%}
-  #hitdirArrow{position:absolute;top:9vmin;left:50%;width:9vmin;height:9vmin;--pop:1;
-    transform:translateX(-50%) perspective(38vmin) rotateX(58deg);transform-style:preserve-3d}
-  #hitdirArrow .shaft{position:absolute;left:27%;top:42%;width:46%;height:58%;
-    background:linear-gradient(0deg,#ff9d7e 0%,var(--rust) 75%);
-    box-shadow:0 0 2.2vmin rgba(196,70,44,.85)}
-  #hitdirArrow .head{position:absolute;left:0;top:0;width:100%;height:46%;
-    background:linear-gradient(0deg,#ff9d7e 0%,var(--rust) 60%);
-    clip-path:polygon(50% 0%,0% 100%,100% 100%);
-    filter:drop-shadow(0 -.4vmin .5vmin rgba(0,0,0,.55))}
+  .corner{position:absolute;bottom:18px;display:flex;align-items:flex-end;gap:14px}
+  #hpcorner{left:20px}
+  #ammocorner{right:20px;flex-direction:row-reverse;text-align:right}
+  .num{font-size:38px;line-height:.82;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .tag{font-size:11px;letter-spacing:.14em;color:#6d7880;margin-top:6px}
+  #hpnum{color:var(--sodium)} #hpnum.hurt{color:var(--rust)}
+  #ammonum.empty{color:var(--rust)}
+  #hpbar{width:6px;height:64px;background:#141b21;position:relative;overflow:hidden}
+  #hpfill{position:absolute;bottom:0;left:0;right:0;background:var(--sodium);transition:height .12s}
   #gear{position:absolute;top:14px;left:18px;pointer-events:auto;background:none;border:1px solid #2b3740;
     color:#7b858c;font:inherit;font-size:11px;letter-spacing:.18em;padding:7px 13px;cursor:pointer}
   #gear:hover{color:var(--dust);border-color:#4a5860}
+  #gear:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
 
-  #veil{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    background:rgba(10,14,18,.94);text-align:center;padding:24px;overflow-y:auto}
+  /* justify-content:center だと、中身が画面より高いときに上側がスクロールできず見切れる。
+     代わりに先頭／末尾の子要素の margin:auto で中央寄せにする（収まる時は中央、あふれる時は上から表示）。 */
+  #veil{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+    background:rgba(10,14,18,.94);text-align:center;padding:24px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #veil > :first-child{margin-top:auto}
+  #veil > :last-child{margin-bottom:auto}
   #veil.gone{display:none}
   #title{font-size:clamp(34px,8vw,74px);font-weight:700;letter-spacing:-.04em;line-height:.88}
   #title span{display:block;font-size:.34em;letter-spacing:.42em;color:var(--rust);font-weight:600;margin-bottom:14px}
-  #blurb{margin-top:16px;font-size:13.5px;line-height:1.95;color:#7b858c;max-width:40ch}
+  #blurb{margin-top:16px;font-size:13.5px;line-height:1.95;color:#7b858c;max-width:44ch}
   kbd{background:#1b242c;color:var(--dust);padding:1px 6px;font:inherit;font-size:12px;border-bottom:2px solid #000}
   #go{margin-top:24px;pointer-events:auto;border:0;background:var(--sodium);color:#0a0e12;
     font:inherit;font-size:15px;font-weight:700;letter-spacing:.18em;padding:15px 40px;cursor:pointer}
   #go:hover{background:#fff}
-  #go:disabled{background:#39454d;color:#6d7880;cursor:default}
   #go:focus-visible,#gear:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
-  #quit{margin-top:12px;pointer-events:auto;border:1px solid var(--rust);background:none;color:var(--rust);
-    font:inherit;font-size:13px;font-weight:600;letter-spacing:.16em;padding:12px 34px;cursor:pointer}
-  #quit:hover{background:var(--rust);color:#0a0e12}
-  #quit:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
   #score{margin-top:16px;font-size:13px;color:#5d6970;letter-spacing:.1em}
 
   #cfg{margin-top:24px;width:min(380px,92vw);text-align:left;border-top:1px solid #222c34;padding-top:18px}
   .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;font-size:13px}
   .row em{font-style:normal;color:#6d7880;font-size:12px;letter-spacing:.06em}
   .row b{color:var(--sodium);font-weight:600;font-variant-numeric:tabular-nums}
-  .field{margin-bottom:18px}
+  .field{margin-bottom:4px}
   .hint{font-size:11px;color:#59636a;line-height:1.75;margin-top:6px}
   input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:none;height:20px;cursor:pointer}
   input[type=range]::-webkit-slider-runnable-track{height:2px;background:#2b3740}
   input[type=range]::-moz-range-track{height:2px;background:#2b3740}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--sodium);margin-top:-6px;border-radius:0}
   input[type=range]::-moz-range-thumb{width:14px;height:14px;background:var(--sodium);border:0;border-radius:0}
-  .seg{display:flex;border:1px solid #2b3740}
-  .seg button{flex:1;background:none;border:0;color:#7b858c;font:inherit;font-size:12px;padding:11px 4px;cursor:pointer;letter-spacing:.08em}
-  .seg button[aria-pressed=true]{background:var(--steel);color:var(--dust)}
-  .seg button:not(:last-child){border-right:1px solid #2b3740}
-  input[type=text]{width:100%;background:#12181d;border:1px solid #2b3740;color:var(--dust);
+
+  #note{margin-top:22px;font-size:11px;color:#4a545b;letter-spacing:.04em;max-width:44ch;line-height:1.7}
+
+  .seg{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .seg button{flex:1 1 auto;min-width:88px;background:none;border:1px solid #2b3740;color:#7b858c;font:inherit;
+    font-size:12px;padding:10px 8px;cursor:pointer;letter-spacing:.04em}
+  .seg button[aria-pressed=true]{background:var(--steel);color:var(--dust);border-color:#4a5860}
+  #go:disabled{background:#39454d;color:#6d7880;cursor:default}
+
+  input[type=text],input[type=number]{width:100%;background:#12181d;border:1px solid #2b3740;color:var(--dust);
     font:inherit;font-size:13px;padding:10px 11px;margin-top:8px;letter-spacing:.02em}
-  input[type=text]:focus{outline:1px solid var(--acid)}
+  input[type=text]:focus,input[type=number]:focus{outline:1px solid var(--acid)}
   #netrow{display:flex;gap:8px;margin-top:8px}
   #netrow button{flex:none;border:1px solid var(--sodium);background:none;color:var(--sodium);
     font:inherit;font-size:12px;padding:0 16px;cursor:pointer;letter-spacing:.1em}
@@ -90,91 +87,187 @@
     font-weight:700;letter-spacing:.14em;padding:11px 26px;cursor:pointer}
   #startBtn:hover{background:#fff}
   #startBtn:disabled{background:#39454d;color:#6d7880;cursor:default}
+  #quit{display:none;margin-top:14px;pointer-events:auto;border:1px solid var(--rust);background:none;color:var(--rust);
+    font:inherit;font-size:13px;font-weight:600;letter-spacing:.16em;padding:12px 34px;cursor:pointer}
+  #quit:hover{background:var(--rust);color:#0a0e12}
+  #quit:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
 
   #touch{position:fixed;inset:0;display:none;pointer-events:none}
   body.touch #touch{display:block}
   #stick{position:absolute;left:26px;bottom:26px;width:118px;height:118px;border:2px solid #2b3740;border-radius:50%;pointer-events:auto}
   #knob{position:absolute;left:39px;top:39px;width:40px;height:40px;border-radius:50%;background:#2b3740}
-  #fire{position:absolute;right:26px;bottom:26px;width:96px;height:96px;border-radius:50%;
-    border:2px solid var(--rust);background:rgba(196,70,44,.18);pointer-events:auto}
+  #jumpBtn{position:absolute;right:26px;bottom:26px;width:92px;height:92px;border-radius:50%;
+    border:2px solid var(--sodium);background:rgba(242,181,68,.16);pointer-events:auto;
+    display:flex;align-items:center;justify-content:center;font-size:12px;letter-spacing:.1em;color:var(--sodium)}
+  #crouchBtn,#runBtn{position:absolute;bottom:132px;width:72px;height:44px;border-radius:6px;
+    border:1px solid #3a454d;background:rgba(20,26,31,.7);pointer-events:auto;
+    display:flex;align-items:center;justify-content:center;font-size:11px;letter-spacing:.06em;color:#9aa4ab}
+  #crouchBtn{right:132px}
+  #runBtn{right:26px}
+  #crouchBtn.active,#runBtn.active{border-color:var(--acid);color:var(--acid)}
+  #fireBtn{position:absolute;right:26px;bottom:190px;width:68px;height:68px;border-radius:50%;
+    border:2px solid var(--rust);background:rgba(196,70,44,.16);pointer-events:auto;
+    display:flex;align-items:center;justify-content:center;font-size:11px;letter-spacing:.08em;color:var(--rust)}
+  #fireBtn.active{background:rgba(196,70,44,.4)}
+
+
+  #hurtflash{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(circle, rgba(196,70,44,0) 45%, rgba(196,70,44,.5) 100%);
+    opacity:0}
+  #hurtflash.show{opacity:1;transition:opacity .05s}
+  #hurtflash:not(.show){transition:opacity .35s}
+  /* 被弾方向インジケーター：照準まわりの（床に寝かせた見え方の）楕円リング上に置いた矢印が、
+     撃ってきた相手の“画面に映っている位置”を直接指す。位置・向き・大きさはJS(updateHitMarks)が毎フレーム決める */
+  #hitring{position:absolute;inset:0}
+  .hitarrow{position:absolute;left:0;top:0;width:13vmin;height:13vmin;margin:-6.5vmin 0 0 -6.5vmin;
+    opacity:0;filter:drop-shadow(0 0 1.6vmin rgba(196,70,44,.9))}
+  .hitarrow svg{display:block;width:100%;height:100%;overflow:visible}
+  .hitarrow path{fill:var(--rust);stroke:#ff9d7e;stroke-width:2;stroke-linejoin:round}
 </style>
 </head>
-<body class="solo">
+<body>
 <canvas id="view"></canvas>
+<div id="cross"></div>
+<div id="hurtflash"></div>
 
 <div id="hud">
-  <div id="hit"></div>
-  <div id="hitdir"><div id="hitdirArrow"><div class="shaft"></div><div class="head"></div></div></div>
-  <button id="gear">設定</button>
-  <div id="top">区画 <b id="wave">1</b> &nbsp;·&nbsp; 残り <b id="left_n">0</b> &nbsp;·&nbsp; <b id="pts">0</b></div>
   <canvas id="map" width="132" height="132"></canvas>
+  <div id="hitring"></div>
+  <button id="gear">設定</button>
+  <div id="top">SUBLEVEL 7 &nbsp;·&nbsp; 移動練習</div>
   <div id="scoreboard"></div>
-  <div class="corner" id="left">
+  <div class="corner" id="hpcorner">
     <div id="hpbar"><div id="hpfill" style="height:100%"></div></div>
     <div><div class="num" id="hpnum">100</div><div class="tag">体力</div></div>
   </div>
-  <div class="corner" id="right">
+  <div class="corner" id="ammocorner">
     <div><div class="num" id="ammonum">12</div><div class="tag">装弾 / <span id="reserve">∞</span></div></div>
   </div>
 </div>
 
 <div id="touch">
   <div id="stick"><div id="knob"></div></div>
-  <div id="fire"></div>
+  <div id="crouchBtn">しゃがむ</div>
+  <div id="runBtn">走る</div>
+  <div id="fireBtn">撃つ</div>
+  <div id="jumpBtn">ジャンプ</div>
 </div>
 
 <div id="veil">
   <h1 id="title"><span>地下七層</span>SUBLEVEL 7</h1>
-  <p id="blurb"></p>
-  <button id="go">進入する</button>
-  <button id="quit" style="display:none">切断する</button>
-  <div id="score"></div>
+  <p id="blurb">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ<br>
+    <kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>Esc</kbd> 設定<br>
+    左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br><br>
+    窓は普段は薄い壁と同じく通れないが、窓枠に触れた状態で<kbd>Space</kbd>を押すと乗り越えて反対側へ抜けられる。
+  </p>
+  <button id="go" disabled>読み込み中…</button>
+  <p id="score"></p>
 
   <div id="cfg">
     <div class="field" id="modefield">
       <div class="row"><em>モード</em></div>
       <div class="seg">
-        <button id="g_solo" aria-pressed="true">ソロ掃討</button>
-        <button id="g_online" aria-pressed="false">対人（オンライン）</button>
+        <button type="button" id="g_solo" aria-pressed="true">ソロ（練習）</button>
+        <button type="button" id="g_online" aria-pressed="false">対人（オンライン）</button>
       </div>
     </div>
-    <div class="field" id="sensfield">
+    <div class="field" id="stagefield">
+      <div class="row"><em>ステージ</em></div>
+      <div class="seg" id="stageSeg"></div>
+    </div>
+    <div class="field">
       <div class="row"><em>感度</em><b id="v_sens">1.00</b></div>
       <input type="range" id="s_sens" min="0.15" max="3" step="0.05" value="1">
-      <p class="hint">視点は常に画面中央固定。マウスの動きで振り向く。</p>
     </div>
     <div class="field" id="netfield" style="display:none">
       <div class="row"><em>サーバー接続</em></div>
       <input type="text" id="srv" placeholder="ws://192.168.1.5:8080" autocomplete="off">
       <div id="netrow">
         <input type="text" id="room" placeholder="ルームコード" autocomplete="off" style="margin-top:0">
-        <button id="connectBtn">接続</button>
+        <button type="button" id="connectBtn">接続</button>
       </div>
       <div class="row" style="margin-top:8px">
         <em>最大人数（部屋を作る側のみ有効）</em>
-        <input type="number" id="maxp" min="2" max="8" value="3" style="width:52px;background:#12181d;border:1px solid #2b3740;color:var(--dust);font:inherit;font-size:13px;padding:4px 6px">
+        <input type="number" id="maxp" min="2" max="8" value="4" style="width:52px">
       </div>
-      <p class="hint">同じサーバーアドレスとルームコードを、対戦する全員（最大8人）に入力する。最初に入室した人がホストとなり、人数がそろったら「対戦開始」を押す。</p>
+      <p class="hint">同じサーバーアドレスとルームコードを、対戦する全員（最大8人）に入力する。最初に入室した人がホストとなり、ステージを選んで人数がそろったら「対戦開始」を押す。</p>
       <p id="netstatus">未接続</p>
       <div id="lobby" style="display:none">
         <p id="playercount" class="hint"></p>
-        <button id="startBtn" style="display:none">対戦開始</button>
+        <button type="button" id="startBtn" style="display:none">対戦開始</button>
       </div>
     </div>
   </div>
+  <button type="button" id="quit">切断する</button>
+
+  <p id="note">※ このビルドは3D移植の途中段階（ステップ5：オンライン対戦の3D対応、5-5まで完了）。ロビー・接続・対戦開始・状態同期・射撃判定（体／頭）とダメージ（本体12／頭部24、2D版と同じ数値）・被弾時の画面フラッシュ・HP0での自動リスポーンに加えて、キル数のカウント、相手を倒した際の通知、既定キル数（5キル）先取での勝敗判定と決着画面まで実装済み。相手プレイヤーの見た目は2D版(fps.html)と同じドット絵スプライトをビルボードとして貼る方式に変更し、しゃがみ・スライディングのポーズと見ている向き（正面／斜め前／横／斜め後ろ／背面）で絵を描き分ける。プレイヤーの見分けも2D版と同じく配色ごと変えて行う。次はステップ6（ミニマップ、被弾エフェクト、パフォーマンス調整などの仕上げ）を予定。ステージは <kbd>stages.json</kbd> から読み込まれ、それが読めない環境（file://で直接開いた場合など）では内蔵の練習ステージのみになる。</p>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
 'use strict';
-const cv = document.getElementById('view'), ctx = cv.getContext('2d');
 const el = id => document.getElementById(id);
+const canvas = el('view');
 const isTouch = matchMedia('(hover:none)').matches || 'ontouchstart' in window;
 if (isTouch) document.body.classList.add('touch');
-const SCALE = isTouch ? 0.45 : 0.62;
-let W = 0, H = 0;
-const CFG = { sens: 1, mode: 'solo', target: 5 };
+const CFG = { sens: 1, mode: 'solo', target: 5 }; // target: 対戦の決着に必要なキル数（2D版と同じ既定値）
 
-/* ============ seeded rng ============ */
+/* ============ 地形パラメータ（fps3d_prototype.htmlより） ============ */
+const N = 25;
+const WALL_H = 2.3;
+const PLATFORM_H = 1.05;
+const THIN_WALL_T = 0.14;
+const EYE_HEIGHT = 1.55;
+const JUMP_V = 6.0, GRAVITY = 16.0;
+const MOVE_SPEED = 3.4, RUN_MULT = 1.35;
+const STEP_TOL = 0.16;
+const PLAYER_R = 0.28;
+const CROUCH_SPEED_MULT = 0.5, CROUCH_DUCK = 0.55, CROUCH_EASE = 10;
+const SLIDE_SPEED = 5.6, SLIDE_DURATION = 0.5;
+const VAULT_DUR = 0.42;      // 窓を乗り越える動作の長さ（秒）
+const VAULT_LIFT = 0.24;     // 乗り越え中に視点が持ち上がる高さ
+const VAULT_DIP = 0.10;      // 乗り越え中に視線が下を向く量（ラジアン）
+const VAULT_ROLL = 0.045;    // 乗り越え中にカメラが傾く量（ラジアン）
+
+/* ============ 武器（fps.html 変更前2D版の数値を踏襲） ============ */
+const MAG = 12;              // 装弾数（予備弾は∞）
+const RELOAD_TIME = 1.0;     // リロード秒数
+const AUTO_FIRE_INTERVAL = 0.25; // 長押し連射の発射間隔（秒）。小さいほど速い
+const FIRE_COOLDOWN = 0.06;  // 発射間隔（連射レート上限）
+const KICK_DECAY = 5;        // 反動の減衰速度
+// 対プレイヤーへのダメージ量。2D版のオンライン対戦時の値（本体12／頭部24）を踏襲。
+const DMG_BODY = 12, DMG_HEAD = 24;
+
+/* ============ ステージ ============ */
+// 次のステップでstages.json化する前提の、手作りの練習用ステージ。
+// 通常の壁の区画に加えて、薄い壁／窓／坂＋箱を一通り試せるように配置してある。
+let grid = [];
+function buildDefaultStage(){
+  const g = Array.from({length:N}, (_, y) => Array.from({length:N}, (_, x) => {
+    if (x===0 || y===0 || x===N-1 || y===N-1) return {type:'wall'};
+    return {type:'floor'};
+  }));
+  const wallRow = (y, x0, x1) => { for (let x=x0; x<=x1; x++) g[y][x] = {type:'wall'}; };
+
+  // 中央を貫く仕切り壁：通常の壁／薄い壁／窓／通路(床のまま)を並べて比較できるようにする
+  wallRow(12, 2, 9);
+  g[12][10] = {type:'thinwall', dir:'N'};
+  g[12][11] = {type:'window', dir:'N'};
+  wallRow(12, 13, 22);
+
+  // 坂→箱：ジャンプ無しで登れる坂と、ジャンプが要る箱を並べる
+  g[5][17] = {type:'ramp', dir:'E'};
+  g[5][18] = {type:'platform'};
+  g[5][19] = {type:'platform'};
+  g[9][3]  = {type:'platform'};
+
+  // 遮蔽物の柱をいくつか
+  for (const [x,y] of [[6,6],[6,7],[16,16],[17,16],[9,18],[9,19],[19,9]]) g[y][x] = {type:'wall'};
+
+  return g;
+}
+// シード付き乱数（ランダムステージ生成に使う）
 function mulberry32(seed){
   let s = seed >>> 0;
   return function(){
@@ -185,41 +278,852 @@ function mulberry32(seed){
   };
 }
 
-/* ============ maze ============ */
-const N = 25;
-let grid = [];
-function buildMaze(rng){
-  rng = rng || Math.random;
-  grid = Array.from({length:N}, () => Array(N).fill(1));
-  const stack = [[1,1]]; grid[1][1] = 0;
+// ランダムステージ：まず迷路の骨格（壁/床のみ）を掘り、通路を分ける壁の一部を
+// 薄い壁・窓に差し替え、開けた床にジャンプ台（坂＋箱）を点在させる。
+function generateRandomStage(rng){
+  const g = Array.from({length:N}, () => Array.from({length:N}, () => ({type:'wall'})));
+  const passable = Array.from({length:N}, () => Array(N).fill(false));
+  const setFloor = (x,y) => { g[y][x] = {type:'floor'}; passable[y][x] = true; };
+  setFloor(1,1);
+  const stack = [[1,1]];
   while (stack.length){
     const [x,y] = stack[stack.length-1];
     const opts = [[2,0],[-2,0],[0,2],[0,-2]]
       .map(([dx,dy]) => [x+dx, y+dy, x+dx/2, y+dy/2])
-      .filter(([nx,ny]) => nx>0 && ny>0 && nx<N-1 && ny<N-1 && grid[ny][nx]===1);
+      .filter(([nx,ny]) => nx>0 && ny>0 && nx<N-1 && ny<N-1 && !passable[ny][nx]);
     if (!opts.length){ stack.pop(); continue; }
     const [nx,ny,mx,my] = opts[(rng()*opts.length)|0];
-    grid[my][mx] = 0; grid[ny][nx] = 0; stack.push([nx,ny]);
+    setFloor(mx,my); setFloor(nx,ny); stack.push([nx,ny]);
   }
   for (let y=2; y<N-2; y++) for (let x=2; x<N-2; x++)
-    if (grid[y][x]===1 && rng()<1) grid[y][x] = 0;
-  for (let y=0; y<N; y++) for (let x=0; x<N; x++)
-    if (grid[y][x]===1) grid[y][x] = (x===0||y===0||x===N-1||y===N-1) ? 1 : (rng()<0.22 ? 3 : (rng()<0.3 ? 2 : 1));
-  grid[1][1] = 0; grid[1][2] = 0; grid[2][1] = 0;
+    if (!passable[y][x] && rng() < 0.4) setFloor(x,y);
+
+  // 通路を分ける壁のうち、向かい合う2方向だけが床のものを薄い壁／窓に差し替える
+  for (let y=1; y<N-1; y++) for (let x=1; x<N-1; x++){
+    if (g[y][x].type !== 'wall') continue;
+    const nF = passable[y-1][x], sF = passable[y+1][x], wF = passable[y][x-1], eF = passable[y][x+1];
+    if (nF && sF && !wF && !eF){
+      const roll = rng();
+      if (roll < 0.10) g[y][x] = {type:'window', dir:'N'};
+      else if (roll < 0.22) g[y][x] = {type:'thinwall', dir:'N'};
+    } else if (eF && wF && !nF && !sF){
+      const roll = rng();
+      if (roll < 0.10) g[y][x] = {type:'window', dir:'W'};
+      else if (roll < 0.22) g[y][x] = {type:'thinwall', dir:'W'};
+    }
+  }
+
+  // ジャンプ練習台（坂＋箱）を開けた床にいくつか置く
+  let placed = 0, tries = 0;
+  const dirs = ['E','W','S','N'];
+  while (placed < 3 && tries < 300){
+    tries++;
+    const x = 2 + ((rng()*(N-5))|0), y = 2 + ((rng()*(N-5))|0);
+    const dir = dirs[(rng()*4)|0];
+    const [dx,dy] = dir==='E' ? [1,0] : dir==='W' ? [-1,0] : dir==='S' ? [0,1] : [0,-1];
+    const px = x+dx, py = y+dy;
+    if (px<=0 || py<=0 || px>=N-1 || py>=N-1) continue;
+    if (g[y][x].type !== 'floor' || g[py][px].type !== 'floor') continue;
+    g[y][x] = {type:'ramp', dir};
+    g[py][px] = {type:'platform'};
+    placed++;
+  }
+  return g;
 }
-const solid = (x,y) => x<0||y<0||x>=N||y>=N || grid[y|0][x|0] > 0;
-const WALLC = {1:[142,151,158], 2:[168,128,104], 3:[116,142,136]};
+
+// 現在のgridに対して、当たらない床の1点を探す（プレイヤーの出現位置決めに使う）。
+// minFrom（{x,y}の配列）を渡すと、それらから一定距離離れた場所を優先して探す
+// （オンライン対戦で複数人の出現位置が重ならないようにするため）。
 function freeSpot(rng, minFrom){
-  rng = rng || Math.random;
   let x, y, t = 0;
   do {
-    x = 1 + rng()*(N-2); y = 1 + rng()*(N-2); t++;
-  } while (t < 600 && (solid(x,y) || (minFrom && minFrom.some(p => Math.hypot(x-p.x, y-p.y) < 7))));
+    x = 2 + rng()*(N-4); y = 2 + rng()*(N-4); t++;
+  } while (t < 400 && (heightAt(x,y) > 0.05 || collidesSolid(x,y,PLAYER_R) ||
+    (minFrom && t < 300 && minFrom.some(p => Math.hypot(x-p.x, y-p.y) < 5))));
   return {x, y};
 }
 
-/* ============ sprites ============ */
-const GUN = '#20262b', GUN_HI = '#3a444c'; // shared weapon colors, same for every kind
+function heightAt(x, y){
+  const cx = Math.floor(x), cy = Math.floor(y);
+  if (cx<0 || cy<0 || cx>=N || cy>=N) return WALL_H;
+  const cell = grid[cy][cx];
+  if (cell.type === 'wall') return WALL_H;
+  if (cell.type === 'platform') return PLATFORM_H;
+  if (cell.type === 'ramp'){
+    const fx = x-cx, fy = y-cy;
+    let t;
+    if (cell.dir==='E') t=fx; else if (cell.dir==='W') t=1-fx;
+    else if (cell.dir==='S') t=fy; else t=1-fy;
+    return Math.max(0, Math.min(1,t)) * PLATFORM_H;
+  }
+  return 0;
+}
+// 弾を止めるか（射撃はまだ無いが、後のステップでここを使う）
+function blocksProjectile(type){ return type === 'wall' || type === 'thinwall'; }
+function cellAt(x, y){
+  const cx = Math.floor(x), cy = Math.floor(y);
+  if (cx<0 || cy<0 || cx>=N || cy>=N) return {type:'wall'};
+  return grid[cy][cx];
+}
+function circleRectOverlap(px, py, r, x0, y0, x1, y1){
+  const cx = Math.max(x0, Math.min(px, x1));
+  const cy = Math.max(y0, Math.min(py, y1));
+  const dx = px-cx, dy = py-cy;
+  return dx*dx + dy*dy < r*r;
+}
+function thinWallRect(cell, cx, cy){
+  const t = THIN_WALL_T;
+  if (cell.dir === 'N') return { x0: cx,     y0: cy,       x1: cx+1,   y1: cy+t   };
+  if (cell.dir === 'S') return { x0: cx,     y0: cy+1-t,   x1: cx+1,   y1: cy+1   };
+  if (cell.dir === 'W') return { x0: cx,     y0: cy,       x1: cx+t,   y1: cy+1   };
+  /* E */                return { x0: cx+1-t, y0: cy,      x1: cx+1,   y1: cy+1   };
+}
+function isThinPanel(type){ return type === 'thinwall' || type === 'window'; }
+function collidesSolid(px, py, r){
+  const gx0 = Math.floor(px-r), gx1 = Math.floor(px+r);
+  const gy0 = Math.floor(py-r), gy1 = Math.floor(py+r);
+  for (let gy = gy0; gy <= gy1; gy++){
+    for (let gx = gx0; gx <= gx1; gx++){
+      const cell = cellAt(gx, gy);
+      if (cell.type === 'wall'){
+        if (circleRectOverlap(px, py, r, gx, gy, gx+1, gy+1)) return true;
+      } else if (isThinPanel(cell.type)){
+        const b = thinWallRect(cell, gx, gy);
+        if (circleRectOverlap(px, py, r, b.x0, b.y0, b.x1, b.y1)) return true;
+      }
+    }
+  }
+  return false;
+}
+function findTouchingWindow(px, py, r){
+  const pad = r + 0.08;
+  const gx0 = Math.floor(px-pad), gx1 = Math.floor(px+pad);
+  const gy0 = Math.floor(py-pad), gy1 = Math.floor(py+pad);
+  for (let gy = gy0; gy <= gy1; gy++){
+    for (let gx = gx0; gx <= gx1; gx++){
+      const cell = cellAt(gx, gy);
+      if (cell.type !== 'window') continue;
+      const b = thinWallRect(cell, gx, gy);
+      if (circleRectOverlap(px, py, pad, b.x0, b.y0, b.x1, b.y1)) return { cell, rect:b };
+    }
+  }
+  return null;
+}
+function tryClimbThrough(){
+  if (!alive) return false;
+  if (P.vault) return true; // 乗り越え中は再入力を受け付けない（ジャンプにも回さない）
+  const hit = findTouchingWindow(player.x, player.y, PLAYER_R);
+  if (!hit) return false;
+  const { cell, rect } = hit;
+  const margin = PLAYER_R + 0.06;
+  let nx = player.x, ny = player.y;
+  if (cell.dir === 'N' || cell.dir === 'S'){
+    const mid = (rect.y0 + rect.y1) / 2;
+    ny = player.y < mid ? rect.y1 + margin : rect.y0 - margin;
+  } else {
+    const mid = (rect.x0 + rect.x1) / 2;
+    nx = player.x < mid ? rect.x1 + margin : rect.x0 - margin;
+  }
+  if (collidesSolid(nx, ny, PLAYER_R)) return false;
+  // 反対側の位置を目標にして、step() の中で一定時間かけて移動させる
+  P.crouch = false; P.sliding = false;
+  P.vault = { t:0, x0:player.x, y0:player.y, z0:player.z, x1:nx, y1:ny, z1:heightAt(nx, ny),
+              side: (vaultSide = -vaultSide),
+              yaw: Math.atan2(nx - player.x, -(ny - player.y)) };  // 越える向き（yaw と同じ定義）
+  netTick = 1; // 開始をすぐ相手に伝える（次のフレームで状態を送る）
+  player.vz = 0; player.onGround = true;
+  beep(240, .12, 'triangle', .05);
+  return true;
+}
+let vaultSide = 1; // 乗り越えるたびにカメラの傾く向きを左右交互にする
+
+/* ============ three.js シーン ============ */
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+const scene = new THREE.Scene();
+const BG_COLOR = 0x4a5d6b; // 背景（空）と遠景の霧の色。明るくしたいときは値を大きく（元は 0x141b21）
+scene.background = new THREE.Color(BG_COLOR);
+scene.fog = new THREE.Fog(BG_COLOR, 8, 26);
+const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.05, 100);
+camera.rotation.order = 'YXZ';
+
+scene.add(new THREE.HemisphereLight(0x8fa4b0, 0x1a1410, 0.9));
+const sun = new THREE.DirectionalLight(0xfff2d8, 0.8);
+sun.position.set(6, 12, 4);
+scene.add(sun);
+
+const levelGroup = new THREE.Group();
+scene.add(levelGroup);
+
+function makeRampGeometry(dir){
+  const corners = [[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]];
+  function h(x,z){
+    const fx=x+0.5, fz=z+0.5;
+    let t;
+    if (dir==='E') t=fx; else if (dir==='W') t=1-fx;
+    else if (dir==='S') t=fz; else t=1-fz;
+    return t*PLATFORM_H;
+  }
+  const top = corners.map(([x,z]) => [x, h(x,z), z]);
+  const bot = corners.map(([x,z]) => [x, 0, z]);
+  const pos = [];
+  const push = v => pos.push(v[0],v[1],v[2]);
+  const quad = (a,b,c,d) => { push(a);push(b);push(c); push(a);push(c);push(d); };
+  quad(top[3],top[2],top[1],top[0]);
+  quad(bot[0],bot[1],bot[2],bot[3]);
+  for (let i=0;i<4;i++){ const j=(i+1)%4; quad(bot[i],bot[j],top[j],top[i]); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const wallMat  = new THREE.MeshStandardMaterial({ color:0x8e969e, roughness:0.9 });
+const thinMat  = new THREE.MeshStandardMaterial({ color:0xa7afb5, roughness:0.88 });
+const platMat  = new THREE.MeshStandardMaterial({ color:0xc4a37a, roughness:0.85 });
+const rampMat  = new THREE.MeshStandardMaterial({ color:0x7fb0a3, roughness:0.85, side:THREE.DoubleSide });
+const floorMat = new THREE.MeshStandardMaterial({ color:0x232b31, roughness:1 });
+
+const wallGeo   = new THREE.BoxGeometry(1, WALL_H, 1);
+const platGeo   = new THREE.BoxGeometry(1, PLATFORM_H, 1);
+const rampGeo   = { E: makeRampGeometry('E'), W: makeRampGeometry('W'), S: makeRampGeometry('S'), N: makeRampGeometry('N') };
+const thinGeoNS = new THREE.BoxGeometry(1, WALL_H, THIN_WALL_T);
+const thinGeoEW = new THREE.BoxGeometry(THIN_WALL_T, WALL_H, 1);
+
+const WIN_JAMB_W = 0.16, WIN_SILL_H = 0.95, WIN_LINTEL_H = 0.34;
+const windowFrameMat = new THREE.MeshStandardMaterial({ color:0x9aa3ab, roughness:0.8 });
+const windowGlassMat = new THREE.MeshStandardMaterial({
+  color:0xbfe6f0, roughness:0.1, metalness:0.05, transparent:true, opacity:0.25,
+  depthWrite:false, side:THREE.DoubleSide,
+});
+const windowGeoCache = {};
+function windowPartDefs(orientNS){
+  const key = orientNS ? 'ns' : 'ew';
+  if (windowGeoCache[key]) return windowGeoCache[key];
+  const innerLo = WIN_JAMB_W, innerHi = 1-WIN_JAMB_W, innerW = innerHi-innerLo;
+  const glassH = WALL_H - WIN_SILL_H - WIN_LINTEL_H;
+  const mk = orientNS
+    ? (w,h) => new THREE.BoxGeometry(w, h, THIN_WALL_T)
+    : (w,h) => new THREE.BoxGeometry(THIN_WALL_T, h, w);
+  const defs = [
+    { mat:'frame', geo: mk(WIN_JAMB_W, WALL_H),   off: WIN_JAMB_W/2,        h: WALL_H/2 },
+    { mat:'frame', geo: mk(WIN_JAMB_W, WALL_H),   off: 1-WIN_JAMB_W/2,      h: WALL_H/2 },
+    { mat:'frame', geo: mk(innerW, WIN_SILL_H),   off: 0.5,                 h: WIN_SILL_H/2 },
+    { mat:'frame', geo: mk(innerW, WIN_LINTEL_H), off: 0.5,                 h: WALL_H-WIN_LINTEL_H/2 },
+    { mat:'glass', geo: mk(innerW, glassH),       off: 0.5,                 h: WIN_SILL_H+glassH/2 },
+  ];
+  windowGeoCache[key] = defs;
+  return defs;
+}
+function buildWindowGroup(cell, x, y){
+  const orientNS = (cell.dir === 'N' || cell.dir === 'S');
+  const defs = windowPartDefs(orientNS);
+  const off = 0.5 - THIN_WALL_T/2;
+  const planeCoord = orientNS
+    ? (cell.dir==='N' ? y+0.5-off : y+0.5+off)
+    : (cell.dir==='W' ? x+0.5-off : x+0.5+off);
+  const group = new THREE.Group();
+  for (const d of defs){
+    const mesh = new THREE.Mesh(d.geo, d.mat==='glass' ? windowGlassMat : windowFrameMat);
+    if (orientNS) mesh.position.set(x + d.off, d.h, planeCoord);
+    else mesh.position.set(planeCoord, d.h, y + d.off);
+    group.add(mesh);
+  }
+  return group;
+}
+function cellGeometry(cell, x, y){
+  const cx = x+0.5, cz = y+0.5;
+  if (cell.type === 'wall') return { geo: wallGeo, pos: [cx, WALL_H/2, cz] };
+  if (cell.type === 'platform') return { geo: platGeo, pos: [cx, PLATFORM_H/2, cz] };
+  if (cell.type === 'ramp') return { geo: rampGeo[cell.dir], pos: [cx, 0, cz] };
+  if (cell.type === 'thinwall' || cell.type === 'window'){
+    const off = 0.5 - THIN_WALL_T/2;
+    if (cell.dir === 'N') return { geo: thinGeoNS, pos: [cx, WALL_H/2, cz - off] };
+    if (cell.dir === 'S') return { geo: thinGeoNS, pos: [cx, WALL_H/2, cz + off] };
+    if (cell.dir === 'W') return { geo: thinGeoEW, pos: [cx - off, WALL_H/2, cz] };
+    return { geo: thinGeoEW, pos: [cx + off, WALL_H/2, cz] };
+  }
+  return null;
+}
+function matForType(type){
+  if (type==='wall') return wallMat;
+  if (type==='thinwall') return thinMat;
+  if (type==='platform') return platMat;
+  if (type==='ramp') return rampMat;
+  if (type==='window') return windowFrameMat;
+  return null;
+}
+function meshForCell(cell, x, y){
+  if (cell.type === 'window') return buildWindowGroup(cell, x, y);
+  const g = cellGeometry(cell, x, y);
+  if (!g) return null;
+  const m = new THREE.Mesh(g.geo, matForType(cell.type));
+  m.position.set(g.pos[0], g.pos[1], g.pos[2]);
+  return m;
+}
+// 射撃レイキャストの対象（弾を止めるセルのメッシュだけを集める）。
+// blocksProjectile()の定義と一致させる：wall/thinwallは止める、window/floor/ramp/platformは止めない。
+const attackBlockers = [];
+function buildScene(){
+  levelGroup.clear();
+  attackBlockers.length = 0;
+  for (let y=0; y<N; y++) for (let x=0; x<N; x++){
+    const cell = grid[y][x];
+    const m = meshForCell(cell, x, y);
+    if (!m) continue;
+    levelGroup.add(m);
+    if (blocksProjectile(cell.type)){
+      m.userData.cellType = cell.type;
+      attackBlockers.push(m);
+    }
+  }
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(N, N), floorMat);
+  floor.rotation.x = -Math.PI/2;
+  floor.position.set(N/2, 0, N/2);
+  levelGroup.add(floor);
+}
+
+/* ============ 音（fps.html 変更前2D版のbeep()をそのまま移植） ============ */
+let actx = null;
+function beep(freq, dur, type, vol){
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, actx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*0.35), actx.currentTime+dur);
+  g.gain.setValueAtTime(vol, actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
+  o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
+}
+
+/* ============ プレイヤー ============ */
+const player = { x:4.5, y:4.5, z:0, vz:0, onGround:true };
+let yaw = 0, pitch = 0;
+const maxPitch = Math.PI*0.47;
+const keys = {};
+let alive = false, started = false;
+let fireCd = 0;        // 連射用の発射間隔タイマー
+let mouseFire = false; // 左クリック長押し中
+const P = {
+  crouch:false, crouchEase:0, sliding:false, slideT:0, slideDir:new THREE.Vector3(),
+  vault:null, // 窓の乗り越え中は {t,x0,y0,z0,x1,y1,z1,side,yaw}
+  vaultEnd:false, // 乗り越えが終わった直後（相手へ完了を1回だけ伝えるため）
+  hp:100, ammo:MAG, reload:0, flash:0, kick:0, kills:0,
+};
+// 対戦相手の表示名。コールサインなどの管理はしないので、idの先頭4文字だけを使う。
+function callsign(id){ return id ? ('P-' + id.slice(0,4).toUpperCase()) : '？'; }
+
+/* ============ 射撃・当たり判定（ステップ3、ステップ5-4でオンライン対戦に対応） ============ */
+// クロスヘア中心（カメラの向き）からレイキャストし、attackBlockers（壁／薄い壁）に
+// 当たるかどうかを見る。武器（装弾数・連射間隔・リロード）は変更前の2D版(fps.html)の
+// 数値をそのまま踏襲。オンライン対戦中は、壁とは別に相手プレイヤーのメッシュ（胴体／頭）
+// にもレイキャストし、壁より手前で当たった場合だけダメージを与える（壁の裏の相手には
+// 当たらない）。頭に当たった場合はDMG_HEAD、それ以外はDMG_BODYを与える。
+const MAX_SHOT_RANGE = 30;
+const BASE_FOV = camera.fov;
+const raycaster = new THREE.Raycaster();
+raycaster.far = MAX_SHOT_RANGE;
+const sparkGeo = new THREE.IcosahedronGeometry(0.055, 0);
+const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })   // 着弾：軌跡と同じ白;
+
+function spawnTracer(from, to){
+  const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
+  const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 })   // 弾の軌跡：薄い白;
+  const line = new THREE.Line(geo, mat);
+  scene.add(line);
+  setTimeout(() => { scene.remove(line); geo.dispose(); mat.dispose(); }, 70);
+}
+function spawnImpact(point, normal){
+  const spark = new THREE.Mesh(sparkGeo, sparkMat);
+  spark.position.copy(point);
+  if (normal) spark.position.addScaledVector(normal, 0.02);
+  scene.add(spark);
+  setTimeout(() => scene.remove(spark), 130);
+}
+// ===== 被弾方向インジケーター =====
+// 撃たれた瞬間に、①矢印を置く場所（正面から見た敵の方向で決まる楕円リング上の点）と
+// ②矢印の向き（その時に敵が画面に映っている位置。背後などカメラに映らない場合はリングの外向き）を決めて固定する。
+// 追従はしない。あとは時間で薄れて消えるだけ。相手ごとに別の矢印が出る。
+const HITDIR_LIFE = 1.1;                 // 表示時間（秒）
+const HITDIR_RING = 24;                  // リングの横半径（vmin）
+const HITDIR_SQUASH = 0.55;              // 床に寝かせた見え方の縦の潰れ
+const hitMarks = new Map();              // 相手id → { el, t, qx, qy, ang, depth }
+const _hv = new THREE.Vector3();
+function addHitMark(id, x, z){           // x, z = 撃ってきた相手のワールド位置
+  let h = hitMarks.get(id);
+  if (!h){
+    const node = document.createElement('div'); node.className = 'hitarrow';
+    node.innerHTML = '<svg viewBox="0 0 40 40"><path d="M20 2 L38 34 L20 25 L2 34 Z"/></svg>';
+    el('hitring').appendChild(node);
+    h = { el: node }; hitMarks.set(id, h);
+  }
+  h.t = 1;                                // 同じ相手にもう一度撃たれたら、その時点の位置・向きで置き直す
+  const r = REMOTES.get(id);
+  const y = r ? r.z + (r.sliding ? 0.3 : r.crouch ? 0.6 : 0.85) : 0.85;   // 狙う高さ＝胴体・銃のあたり
+  const W = innerWidth, H = innerHeight, cx = W/2, cy = H/2;
+  const Rx = HITDIR_RING * Math.min(W,H) / 100, Ry = Rx * HITDIR_SQUASH;
+  const a = Math.atan2(x - player.x, -(z - player.y)) - yaw;     // 正面から時計回り(rad)。yawは-Zを0として+Xへ時計回り
+  h.qx = cx + Rx * Math.sin(a); h.qy = cy - Ry * Math.cos(a);    // 矢印の位置
+  h.depth = 1 - 0.18 * Math.cos(a);                              // 手前(背後)ほど少し大きく
+  let wx = Math.sin(a), wy = -Math.cos(a) * HITDIR_SQUASH;       // 既定の向き＝リングの外向き
+  camera.updateMatrixWorld();
+  _hv.set(x, y, z).applyMatrix4(camera.matrixWorldInverse);
+  if (_hv.z < -0.1){                                             // カメラの前方 → 画面に映る位置を指す
+    _hv.applyMatrix4(camera.projectionMatrix);
+    const px = cx + _hv.x * cx, py = cy - _hv.y * cy;
+    if (Math.hypot(px - h.qx, py - h.qy) > 4){ wx = px - h.qx; wy = py - h.qy; }
+  }
+  h.ang = Math.atan2(wx, -wy / HITDIR_SQUASH);                   // 縦を潰した後の見た目が(wx,wy)を向くように逆算
+}
+function updateHitMarks(dt){             // 位置・向きは固定。時間で薄れて消えるだけ
+  for (const [id, h] of hitMarks){
+    h.t -= dt / HITDIR_LIFE;
+    if (h.t <= 0){ h.el.remove(); hitMarks.delete(id); continue; }
+    const k = Math.min(1, h.t * 1.8);    // 前半は全開、後半でフェードアウト
+    const sc = (0.85 + k * 0.35) * h.depth;
+    h.el.style.opacity = k * 0.95;
+    h.el.style.transform = `translate(${h.qx.toFixed(1)}px,${h.qy.toFixed(1)}px) scale(${sc.toFixed(3)},${(sc*HITDIR_SQUASH).toFixed(3)}) rotate(${h.ang.toFixed(4)}rad)`;
+  }
+}
+function clearHitMarks(){ for (const h of hitMarks.values()) h.el.remove(); hitMarks.clear(); }
+// ===== ミニマップ（右上） =====
+// 自分は常に表示（向きの線つき）。相手はオンライン中、撃った直後の数秒（mmT）だけ映る。上が-Z（北）、右が+X。
+const mm = el('map'), mc = mm.getContext('2d'), MAP_PX = 132;
+let mapT = 0;
+function drawMap(){
+  if (!grid.length) return;
+  const t = MAP_PX / N, th = Math.max(1.6, t * 0.28);
+  mc.clearRect(0, 0, MAP_PX, MAP_PX);
+  mc.fillStyle = 'rgba(10,14,18,.55)'; mc.fillRect(0, 0, MAP_PX, MAP_PX);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){
+    const c = grid[y][x], X = x * t, Y = y * t;
+    if (c.type === 'wall'){ mc.fillStyle = '#39454d'; mc.fillRect(X, Y, t, t); }
+    else if (c.type === 'platform'){ mc.fillStyle = '#5a5140'; mc.fillRect(X, Y, t, t); }
+    else if (c.type === 'ramp'){ mc.fillStyle = '#3d5a55'; mc.fillRect(X, Y, t, t); }
+    else if (c.type === 'thinwall' || c.type === 'window'){   // 薄い壁・窓はセルの縁に細く描く（dir=N/S/W/E）
+      mc.fillStyle = c.type === 'window' ? '#4fa3a3' : '#7b858c';
+      if (c.dir === 'N') mc.fillRect(X, Y, t, th);
+      else if (c.dir === 'S') mc.fillRect(X, Y + t - th, t, th);
+      else if (c.dir === 'W') mc.fillRect(X, Y, th, t);
+      else mc.fillRect(X + t - th, Y, th, t);
+    }
+  }
+  if (CFG.mode === 'online'){
+    for (const r of REMOTES.values()){
+      if (r.mmT > 0 && !r.dead){
+        mc.fillStyle = KIND_COLORS[idToKind(r.id)][0];
+        mc.beginPath(); mc.arc(r.x * t, r.y * t, 2.6, 0, 7); mc.fill();
+      }
+    }
+  }
+  mc.fillStyle = '#f2b544'; mc.strokeStyle = '#f2b544'; mc.lineWidth = 1.4;
+  mc.beginPath(); mc.arc(player.x * t, player.y * t, 2.6, 0, 7); mc.fill();
+  mc.beginPath(); mc.moveTo(player.x * t, player.y * t);
+  mc.lineTo((player.x + Math.sin(yaw) * 1.6) * t, (player.y - Math.cos(yaw) * 1.6) * t); mc.stroke();
+}
+function tickMap(dt){
+  for (const r of REMOTES.values()) if (r.mmT > 0) r.mmT -= dt;
+  mapT += dt; if (mapT > 0.08){ mapT = 0; drawMap(); }
+}
+let hurtTimer = null;
+function flashHurt(){
+  const fl = el('hurtflash');
+  fl.classList.add('show');
+  clearTimeout(hurtTimer);
+  hurtTimer = setTimeout(() => fl.classList.remove('show'), 90);
+}
+function updHUD(){
+  el('hpnum').textContent = Math.max(0, Math.round(P.hp));
+  el('hpnum').classList.toggle('hurt', P.hp <= 30);
+  el('hpfill').style.height = Math.max(0, P.hp) + '%';
+  el('hpfill').style.background = P.hp <= 30 ? '#c4462c' : '#f2b544';
+  el('ammonum').textContent = P.reload > 0 ? '—' : P.ammo;
+  el('ammonum').classList.toggle('empty', P.ammo === 0);
+  if (CFG.mode === 'online'){
+    el('top').innerHTML = `あなた <b>${P.kills}</b> キル &nbsp;·&nbsp; ${REMOTES.size + 1}人対戦 &nbsp;·&nbsp; ${CFG.target}キル先取`;
+    const rows = [{ id:null, label:'あなた', kills:P.kills }];
+    for (const r of REMOTES.values()) rows.push({ id:r.id, label:callsign(r.id), kills:r.kills });
+    rows.sort((a,b) => b.kills - a.kills);
+    el('scoreboard').innerHTML = rows.map(r =>
+      `<div${r.id===null?' class="me"':''}>${r.label} ${r.kills}</div>`).join('');
+  } else {
+    el('top').innerHTML = 'SUBLEVEL 7 &nbsp;·&nbsp; 移動練習';
+    el('scoreboard').innerHTML = '';
+  }
+}
+function doReload(){
+  if (!alive || P.reload > 0 || P.ammo === MAG) return;
+  P.reload = RELOAD_TIME;
+  beep(160, .12, 'square', .05);
+  updHUD();
+}
+// オンライン対戦中、今シューティングの対象にできる相手（死んでいない相手）の
+// 胴体／頭メッシュを毎回組み直す。userDataに相手id・頭かどうかを積んでおき、
+// レイキャストが当たった時にどちらの相手のどこに当たったかを判別できるようにする。
+function remoteHitMeshes(){
+  const list = [];
+  for (const [id, m] of remoteMeshes){
+    const r = REMOTES.get(id);
+    if (!r || r.dead) continue;
+    m.torso.userData.remoteId = id; m.torso.userData.isHead = false;
+    m.head.userData.remoteId = id; m.head.userData.isHead = true;
+    list.push(m.torso, m.head);
+  }
+  return list;
+}
+function shoot(){
+  if (!alive || P.reload > 0) return;
+  if (P.ammo <= 0){ doReload(); return; }
+  P.ammo--; P.flash = FIRE_COOLDOWN; P.kick = 1; fireCd = AUTO_FIRE_INTERVAL;
+  beep(320, .16, 'square', .11);
+  if (CFG.mode === 'online') send({ type:'shoot' });
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  raycaster.set(camera.position, dir);
+  const wallHit = raycaster.intersectObjects(attackBlockers, false)[0];
+  let playerHit = null;
+  if (CFG.mode === 'online'){
+    const targets = remoteHitMeshes();
+    if (targets.length) playerHit = raycaster.intersectObjects(targets, false)[0];
+  }
+  let hit = wallHit, hitIsPlayer = false;
+  if (playerHit && (!wallHit || playerHit.distance < wallHit.distance)){ hit = playerHit; hitIsPlayer = true; }
+
+  if (hit && hit.distance <= MAX_SHOT_RANGE){
+    const normal = (!hitIsPlayer && hit.face)
+      ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+      : null;
+    spawnTracer(camera.position, hit.point);
+    spawnImpact(hit.point, normal);
+    if (hitIsPlayer){
+      const remoteId = hit.object.userData.remoteId;
+      const headshot = hit.object.userData.isHead;
+      const dmg = headshot ? DMG_HEAD : DMG_BODY;
+      const remote = REMOTES.get(remoteId);
+      if (remote) remote.flashUntil = performance.now() + 150;
+      send({ type:'hit', to: remoteId, dmg });
+      beep(headshot ? 700 : 520, .07, 'triangle', .07);
+    }
+  } else {
+    spawnTracer(camera.position, camera.position.clone().addScaledVector(dir, MAX_SHOT_RANGE));
+  }
+  updHUD();
+  if (P.ammo === 0) doReload();
+}
+
+function doJump(){
+  if (!alive || !player.onGround || P.sliding || P.vault) return;
+  player.vz = JUMP_V; player.onGround = false;
+  P.crouch = false; // ジャンプすると立ち上がる
+}
+function isRunningNow(){
+  const shift = keys.ShiftLeft || keys.ShiftRight || touchRun;
+  const moving = keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD ||
+                 keys.ArrowUp || keys.ArrowDown || move.x || move.y;
+  return !!(shift && moving);
+}
+function toggleCrouch(){
+  if (!alive || P.sliding || P.vault) return;
+  if (P.crouch){ P.crouch = false; return; }
+  if (isRunningNow()) startSlide(); else P.crouch = true;
+}
+function startSlide(){
+  P.crouch = false;
+  P.sliding = true;
+  P.slideT = SLIDE_DURATION;
+  let fwd = 0, str = 0;
+  if (keys.KeyW || keys.ArrowUp) fwd += 1;
+  if (keys.KeyS || keys.ArrowDown) fwd -= 1;
+  if (keys.KeyD) str += 1;
+  if (keys.KeyA) str -= 1;
+  fwd += move.y; str += move.x;
+  let dx = _fwd.x*fwd + _right.x*str, dz = _fwd.z*fwd + _right.z*str;
+  const len = Math.hypot(dx, dz);
+  if (len < 0.001){ dx = _fwd.x; dz = _fwd.z; } else { dx /= len; dz /= len; }
+  P.slideDir.set(dx, 0, dz);
+}
+
+const _fwd = new THREE.Vector3(), _right = new THREE.Vector3();
+function step(dt){
+  if (!alive) return;
+  netLoop(dt);
+  updateAllRemoteInterp();
+  if (fireCd > 0) fireCd -= dt;
+  if ((firing || mouseFire) && fireCd <= 0 && P.flash <= 0 && P.ammo > 0 && P.reload <= 0) shoot();
+  if (P.reload > 0){
+    P.reload -= dt;
+    if (P.reload <= 0){ P.reload = 0; P.ammo = MAG; beep(280,.09,'square',.05); updHUD(); }
+  }
+  if (P.flash > 0) P.flash -= dt;
+  if (P.kick > 0) P.kick -= dt*KICK_DECAY;
+  camera.fov = BASE_FOV + Math.max(0, P.kick) * 2.2;
+  camera.updateProjectionMatrix();
+
+  camera.rotation.y = -yaw;
+  camera.rotation.x = pitch;
+  camera.rotation.z = 0;
+  camera.getWorldDirection(_fwd);
+  _fwd.y = 0;
+  if (_fwd.lengthSq() < 1e-6) _fwd.set(0,0,-1);
+  _fwd.normalize();
+  _right.set(-_fwd.z, 0, _fwd.x);
+
+  let vaultLift = 0, vaultArc = 0;
+  if (P.vault){
+    // 窓の乗り越え：入力移動と重力は止め、開始位置→反対側へ滑らかに移動する
+    const v = P.vault;
+    v.t += dt;
+    const u = Math.min(1, v.t / VAULT_DUR);
+    const e = u*u*(3 - 2*u);                       // ease in-out
+    player.x = v.x0 + (v.x1 - v.x0) * e;
+    player.y = v.y0 + (v.y1 - v.y0) * e;
+    player.z = v.z0 + (v.z1 - v.z0) * e;
+    player.vz = 0; player.onGround = true;
+    vaultArc = Math.sin(Math.PI * u);              // 0→1→0 の山（途中が一番大きい）
+    vaultLift = vaultArc * VAULT_LIFT;
+    if (u >= 1){ beep(150, .09, 'triangle', .06); P.vault = null; P.vaultEnd = true; }  // 着地音
+  } else {
+    let fwd=0, str=0;
+    if (keys.KeyW || keys.ArrowUp) fwd+=1; if (keys.KeyS || keys.ArrowDown) fwd-=1;
+    if (keys.KeyD) str+=1; if (keys.KeyA) str-=1;
+    fwd += move.y; str += move.x;
+    const run = isRunningNow() ? RUN_MULT : 1;
+
+    let vx=0, vz=0;
+    if (P.sliding){
+      P.slideT -= dt;
+      const k = Math.sqrt(Math.max(0, P.slideT / SLIDE_DURATION));
+      const spd = SLIDE_SPEED * k;
+      vx = P.slideDir.x * spd; vz = P.slideDir.z * spd;
+      if (P.slideT <= 0) P.sliding = false;
+    } else if (fwd || str){
+      const len = Math.hypot(fwd,str); fwd/=len; str/=len;
+      const spdMul = P.crouch ? CROUCH_SPEED_MULT : run;
+      const speed = MOVE_SPEED * spdMul;
+      vx = (_fwd.x*fwd + _right.x*str) * speed;
+      vz = (_fwd.z*fwd + _right.z*str) * speed;
+    }
+
+    const r = PLAYER_R;
+    const stepOk = (cx, cy) => {
+      const cell = cellAt(cx, cy);
+      if (cell.type === 'ramp') return true;
+      return heightAt(cx, cy) <= player.z + STEP_TOL;
+    };
+    const nx = player.x + vx*dt;
+    const ny = player.y + vz*dt;
+    if (stepOk(nx, player.y) && !collidesSolid(nx, player.y, r)) player.x = nx;
+    if (stepOk(player.x, ny) && !collidesSolid(player.x, ny, r)) player.y = ny;
+
+    const standingCell = cellAt(player.x, player.y);
+    const groundH = heightAt(player.x, player.y);
+    if (player.onGround && standingCell.type === 'ramp'){
+      player.z = groundH; player.vz = 0;
+    } else {
+      player.vz -= GRAVITY*dt;
+      let nz = player.z + player.vz*dt;
+      if (nz <= groundH){ nz = groundH; player.vz = 0; player.onGround = true; } else player.onGround = false;
+      player.z = nz;
+    }
+  }
+
+  const duckTarget = (P.crouch || P.sliding) ? CROUCH_DUCK : 0;
+  P.crouchEase += (duckTarget - P.crouchEase) * Math.min(1, dt * CROUCH_EASE);
+
+  camera.position.set(player.x, player.z + EYE_HEIGHT - P.crouchEase + vaultLift, player.y);
+  if (vaultArc){
+    camera.rotation.x = pitch - vaultArc * VAULT_DIP;                       // 越える瞬間に少し下を向く
+    camera.rotation.z = vaultArc * VAULT_ROLL * (P.vault ? P.vault.side : vaultSide); // わずかに傾く
+  }
+
+  if (CFG.mode === 'online'){ syncRemoteMeshes(); updateRemoteMeshes(dt); }
+}
+
+/* ============ 入力 ============ */
+let move = {x:0, y:0}, lookId = null, stickId = null, touchRun = false, firing = false;
+addEventListener('keydown', e => {
+  if (!e.repeat){
+    if (e.code === 'Space'){ if (!tryClimbThrough()) doJump(); }
+    if (e.code === 'ControlLeft' || e.code === 'ControlRight' || e.code === 'KeyC') toggleCrouch();
+    if (e.code === 'KeyR') doReload();
+  }
+  keys[e.code] = true;
+  if (e.code === 'Escape' && alive) pause();
+  if (['Space','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', e => keys[e.code] = false);
+addEventListener('mousemove', e => {
+  if (document.pointerLockElement !== canvas) return;
+  yaw += e.movementX * 0.0022 * CFG.sens;
+  pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch - e.movementY * 0.0022 * CFG.sens));
+});
+canvas.addEventListener('click', () => { if (alive && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); });
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0 && alive && document.pointerLockElement === canvas){ mouseFire = true; shoot(); }
+});
+// ボタンを離したら連射停止（キャンバス外で離した場合も拾うため window で受ける）
+addEventListener('mouseup', e => { if (e.button === 0) mouseFire = false; });
+addEventListener('blur', () => { mouseFire = false; });
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement !== canvas) mouseFire = false;
+  if (alive && !isTouch && document.pointerLockElement !== canvas) pause();
+});
+
+// タッチ操作：左スティックで移動、右半分ドラッグで視点、ボタンでジャンプ／しゃがみ／走る
+const stick = el('stick'), knob = el('knob');
+const jumpBtn = el('jumpBtn'), crouchBtn = el('crouchBtn'), runBtn = el('runBtn'), fireBtn = el('fireBtn');
+stick.addEventListener('touchstart', e => { stickId = e.changedTouches[0].identifier; e.preventDefault(); }, {passive:false});
+jumpBtn.addEventListener('touchstart', e => { if (!tryClimbThrough()) doJump(); e.preventDefault(); }, {passive:false});
+crouchBtn.addEventListener('touchstart', e => { toggleCrouch(); crouchBtn.classList.toggle('active', P.crouch); e.preventDefault(); }, {passive:false});
+runBtn.addEventListener('touchstart', e => { touchRun = true; runBtn.classList.add('active'); e.preventDefault(); }, {passive:false});
+runBtn.addEventListener('touchend', () => { touchRun = false; runBtn.classList.remove('active'); });
+fireBtn.addEventListener('touchstart', e => { firing = true; shoot(); fireBtn.classList.add('active'); e.preventDefault(); }, {passive:false});
+fireBtn.addEventListener('touchend', () => { firing = false; fireBtn.classList.remove('active'); });
+addEventListener('touchmove', e => {
+  for (const t of e.changedTouches){
+    if (t.identifier === stickId){
+      const r = stick.getBoundingClientRect();
+      const dx = t.clientX - (r.left + r.width/2), dy = t.clientY - (r.top + r.height/2);
+      const d = Math.hypot(dx,dy) || 1, m = Math.min(1, d/52);
+      move.x = dx/d*m; move.y = -dy/d*m;
+      knob.style.transform = `translate(${dx/d*m*38}px,${dy/d*m*38}px)`;
+    } else if (t.identifier === lookId){
+      yaw += (t.clientX - t._px) * 0.0032 * CFG.sens;
+      pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch - (t.clientY - t._py) * 0.0032 * CFG.sens));
+      t._px = t.clientX; t._py = t.clientY;
+    }
+  }
+  e.preventDefault();
+}, {passive:false});
+addEventListener('touchstart', e => {
+  for (const t of e.changedTouches)
+    if (lookId === null && stickId !== t.identifier && t.clientX > innerWidth*0.35){ lookId = t.identifier; t._px = t.clientX; t._py = t.clientY; }
+}, {passive:true});
+addEventListener('touchend', e => {
+  for (const t of e.changedTouches){
+    if (t.identifier === stickId){ stickId = null; move.x = move.y = 0; knob.style.transform = ''; }
+    if (t.identifier === lookId) lookId = null;
+  }
+});
+
+/* ============ 設定 ============ */
+const sSens = el('s_sens');
+function applySens(){ CFG.sens = parseFloat(sSens.value); el('v_sens').textContent = CFG.sens.toFixed(2); }
+sSens.oninput = applySens;
+applySens();
+
+/* ============ ステージ選択 ============ */
+// stages.json の {t,d} 形式を内部で使う {type,dir} 形式に変換する
+function cellFromJSON(c){ return (c.d !== undefined) ? {type:c.t, dir:c.d} : {type:c.t}; }
+
+let STAGES = [];               // [{id, name, cells}]
+let selectedStageId = 'random';
+let stagesReady = false;
+
+async function loadStages(){
+  try {
+    const res = await fetch('stages.json', { cache:'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    STAGES = (data.stages || []).map(s => ({
+      id: s.id, name: s.name,
+      cells: s.grid.map(row => row.map(cellFromJSON)),
+    }));
+  } catch (err){
+    // file:// で直接開いた場合などfetchできない時は、内蔵の練習ステージだけで動かす
+    console.warn('stages.json を読み込めなかったため、内蔵ステージのみ使用します。', err);
+    STAGES = [{ id:'practice-a', name:'練習場（内蔵）', cells: buildDefaultStage() }];
+  }
+  selectedStageId = STAGES[0] ? STAGES[0].id : 'random';
+  stagesReady = true;
+  renderStageSeg();
+  el('go').disabled = false;
+  el('go').textContent = '進入する';
+}
+function renderStageSeg(){
+  const seg = el('stageSeg');
+  seg.innerHTML = '';
+  const items = [...STAGES.map(s => ({ id:s.id, label:s.name })), { id:'random', label:'ランダム' }];
+  for (const it of items){
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = it.label;
+    b.setAttribute('aria-pressed', String(it.id === selectedStageId));
+    b.onclick = () => setStage(it.id);
+    seg.appendChild(b);
+  }
+}
+function setStage(id){
+  if (selectedStageId === id) return;
+  selectedStageId = id;
+  started = false; // 次に入場する時に選び直したステージを作り直す
+  renderStageSeg();
+}
+function currentStageCells(){
+  if (selectedStageId === 'random') return generateRandomStage(mulberry32((Math.random()*1e9) | 0));
+  const s = STAGES.find(s => s.id === selectedStageId);
+  return s ? s.cells : generateRandomStage(mulberry32((Math.random()*1e9) | 0));
+}
+
+/* ============ オンライン対戦（ステップ5） ============ */
+// server.js（中身を知らない純粋な中継役）は無改造のまま、2D版(fps.html)と
+// ほぼ同じメッセージプロトコルでロビー〜対戦開始〜決着までを行う。
+// ロビーUI・接続・部屋参加・ホスト進行・対戦開始（ステージ共有と出現位置決め）、
+// 相手プレイヤーの見た目・移動同期・命中判定・キル/リスポーン・勝敗判定（5-5）まで実装済み。
+const REMOTES = new Map();
+function createRemote(id){
+  return { id, x:4.5, y:4.5, z:0, yaw:0, hp:100, ammo:MAG, dead:false, kills:0,
+    crouch:false, sliding:false, crouchEase:0, speed:0,
+    vaultU:0, vyaw:0, _p0vu:0, _p1vu:0, // 窓の乗り越え：進行度(0=していない, 0〜1=途中)と越える向き
+    // 位置・向き・しゃがみ量は前回値(_p0*)→最新値(_p1*)へ_dur ms かけて補間して滑らかに動かす
+    _p0x:4.5, _p0y:4.5, _p0z:0, _p0yaw:0, _p0ce:0,
+    _p1x:4.5, _p1y:4.5, _p1z:0, _p1yaw:0, _p1ce:0,
+    _t0:0, _dur:60, _lastMsgT:0 };
+}
+// 角度の補間は±PIをまたぐ向きの反転を防ぐため、最短経路で回す
+function lerpAngle(a, b, t){
+  let d = (b - a) % (Math.PI*2);
+  if (d > Math.PI) d -= Math.PI*2;
+  if (d < -Math.PI) d += Math.PI*2;
+  return a + d*t;
+}
+function updateAllRemoteInterp(){
+  if (CFG.mode !== 'online') return;
+  const now = performance.now();
+  for (const r of REMOTES.values()){
+    const t = r._dur > 0 ? Math.min(1, (now - r._t0) / r._dur) : 1;
+    r.x = r._p0x + (r._p1x - r._p0x) * t;
+    r.y = r._p0y + (r._p1y - r._p0y) * t;
+    r.z = r._p0z + (r._p1z - r._p0z) * t;
+    r.crouchEase = r._p0ce + (r._p1ce - r._p0ce) * t;
+    r.vaultU = r._p0vu + (r._p1vu - r._p0vu) * t;
+    r.yaw = lerpAngle(r._p0yaw, r._p1yaw, t);
+  }
+}
+// 自分の位置・向き・状態を一定間隔（約60ms＝秒16回程度）で送る。
+// 武器の値（MAG等）は2D版と同じ数値をそのまま使っているので、相手側でもそのまま解釈できる。
+let netTick = 0;
+function netLoop(dt){
+  if (CFG.mode !== 'online' || netState !== 'playing') return;
+  netTick += dt;
+  if (netTick > 0.06){
+    netTick = 0;
+    // vu：窓の乗り越えの進行度。終わった直後の1回だけ 1 を送り、相手側で最後まで動かして止める。
+    const vu = P.vault ? Math.max(0.001, Math.min(1, P.vault.t / VAULT_DUR)) : (P.vaultEnd ? 1 : 0);
+    P.vaultEnd = false;
+    send({ type:'state', x:player.x, y:player.y, z:player.z, yaw, crouchEase:P.crouchEase,
+           hp:P.hp, ammo:P.ammo, kills:P.kills, crouch:P.crouch, sliding:P.sliding,
+           vu, vyaw: P.vault ? P.vault.yaw : 0 });
+    updHUD(); // スコアボードに相手のキル数（state経由で届く）を反映する
+  }
+}
+
+/* ============ 相手プレイヤーの見た目（2D版 fps.html と同じドット絵スプライト方式） ============ */
+// fps.html のスプライト生成コード（makeSprite / KIND_COLORS / idToKind）をそのまま流用し、
+// キャンバスで描いたドット絵キャラクターを3D空間の板（ビルボード）に貼り付けて表示する。
+// 立ち・しゃがみ・スライディングの各ポーズと、見ている向き（正面／斜め前／横／斜め後ろ／背面）
+// ごとに絵を描き分け、視点との角度に応じてテクスチャを差し替える（クラシックな「スプライトFPS」方式）。
+// プレイヤーごとの見分けは fps.html と同じく、体・頭・目（バイザー）の配色を丸ごと変えて行う。
+const GUN = '#20262b', GUN_HI = '#3a444c'; // 銃の色は全キャラ共通
 function makeSprite(body, head, eye, pose, facing){
   const s = document.createElement('canvas'); s.width = s.height = 64;
   const c = s.getContext('2d');
@@ -393,9 +1297,9 @@ function makeSprite(body, head, eye, pose, facing){
   }
   return s;
 }
-const CROUCH_VIS_SCALE = 0.72; // how short a crouching sprite is drawn vs standing
-const SLIDE_VIS_SCALE = 0.44;  // how short a sliding sprite is drawn vs standing
-const SLIDE_WIDTH_MULT = 0.95; // sliding is laid out low & wide rather than tall
+const CROUCH_VIS_SCALE = 0.72; // しゃがみ時、立ち姿に対してどれだけ縦を縮めて描くか
+const SLIDE_VIS_SCALE = 0.44;  // スライディング時、立ち姿に対してどれだけ縦を縮めて描くか
+const SLIDE_WIDTH_MULT = 0.95; // スライディングは縦に短く横に長いレイアウトにする
 const KIND_COLORS = {
   a:  ['#5b6b4e','#2a3238','#f2b544'],
   b:  ['#7a4a3a','#2a3238','#f2b544'],
@@ -412,189 +1316,328 @@ const KIND_COLORS = {
 const REMOTE_KINDS = ['p2','p3','p4','p5','p6','p7','p8'];
 function idToKind(id){
   let h = 0;
-  for (let i=0; i<id.length; i++) h = (h*31 + id.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return REMOTE_KINDS[h % REMOTE_KINDS.length];
 }
-function callsign(id){ return id ? ('P-' + id.slice(0,4).toUpperCase()) : '？'; }
 function buildSet(pose, facing){
   const out = {};
-  for (const k in KIND_COLORS) out[k] = makeSprite(...KIND_COLORS[k], pose, facing);
+  for (const k of REMOTE_KINDS) out[k] = makeSprite(...KIND_COLORS[k], pose, facing);
   return out;
 }
-const SPR             = buildSet(undefined, undefined); // standing, facing the camera
-const SPR_FDIAG       = buildSet(undefined, 'fdiag');   // standing, three-quarter front
-const SPR_BACK        = buildSet(undefined, 'back');    // standing, facing away from the camera
-const SPR_BDIAG       = buildSet(undefined, 'bdiag');   // standing, three-quarter back
-const SPR_SIDE        = buildSet(undefined, 'side');    // standing, facing across the camera
-const SPR_CROUCH      = buildSet('crouch', undefined);
+const SPR              = buildSet(undefined, undefined); // 立ち・正面
+const SPR_FDIAG        = buildSet(undefined, 'fdiag');   // 立ち・斜め前
+const SPR_BACK         = buildSet(undefined, 'back');    // 立ち・背面
+const SPR_BDIAG        = buildSet(undefined, 'bdiag');   // 立ち・斜め後ろ
+const SPR_SIDE         = buildSet(undefined, 'side');    // 立ち・横
+const SPR_CROUCH       = buildSet('crouch', undefined);
 const SPR_CROUCH_FDIAG = buildSet('crouch', 'fdiag');
-const SPR_CROUCH_BACK = buildSet('crouch', 'back');
+const SPR_CROUCH_BACK  = buildSet('crouch', 'back');
 const SPR_CROUCH_BDIAG = buildSet('crouch', 'bdiag');
-const SPR_CROUCH_SIDE = buildSet('crouch', 'side');
-const SPR_SLIDE       = buildSet('slide', undefined);
-const SPR_HIT = {}, MASK = {};
-const SPR_HIT_FDIAG = {}, MASK_FDIAG = {};
-const SPR_HIT_BACK = {}, MASK_BACK = {};
-const SPR_HIT_BDIAG = {}, MASK_BDIAG = {};
-const SPR_HIT_SIDE = {}, MASK_SIDE = {};
-const SPR_HIT_CROUCH = {}, MASK_CROUCH = {};
-const SPR_HIT_CROUCH_FDIAG = {}, MASK_CROUCH_FDIAG = {};
-const SPR_HIT_CROUCH_BACK = {}, MASK_CROUCH_BACK = {};
-const SPR_HIT_CROUCH_BDIAG = {}, MASK_CROUCH_BDIAG = {};
-const SPR_HIT_CROUCH_SIDE = {}, MASK_CROUCH_SIDE = {};
-const SPR_HIT_SLIDE = {}, MASK_SLIDE = {};
-function buildHitAndMask(src, hitOut, maskOut, kind){
-  const s = document.createElement('canvas'); s.width = s.height = 64;
-  const c = s.getContext('2d');
-  c.drawImage(src[kind],0,0); c.globalCompositeOperation = 'source-in';
-  c.fillStyle = '#ffe9e2'; c.fillRect(0,0,64,64);
-  hitOut[kind] = s;
-  const d = src[kind].getContext('2d').getImageData(0,0,64,64).data;
-  const m = new Uint8Array(64*64);
-  for (let i=0; i<64*64; i++) m[i] = d[i*4+3] > 40 ? 1 : 0;
-  maskOut[kind] = m;
+const SPR_CROUCH_SIDE  = buildSet('crouch', 'side');
+const SPR_SLIDE        = buildSet('slide', undefined); // スライディングはどの角度から見ても同じ絵を使う
+
+// 被弾／発砲の一瞬だけ白っぽく光らせるための「ヒット版」スプライトを、通常版から作っておく。
+function buildHitSet(srcSet){
+  const out = {};
+  for (const k in srcSet){
+    const src = srcSet[k];
+    const s = document.createElement('canvas'); s.width = s.height = 64;
+    const c = s.getContext('2d');
+    c.drawImage(src, 0, 0);
+    c.globalCompositeOperation = 'source-in';
+    c.fillStyle = '#ffe9e2'; c.fillRect(0, 0, 64, 64);
+    out[k] = s;
+  }
+  return out;
 }
-for (const k in SPR) buildHitAndMask(SPR, SPR_HIT, MASK, k);
-for (const k in SPR_FDIAG) buildHitAndMask(SPR_FDIAG, SPR_HIT_FDIAG, MASK_FDIAG, k);
-for (const k in SPR_BACK) buildHitAndMask(SPR_BACK, SPR_HIT_BACK, MASK_BACK, k);
-for (const k in SPR_BDIAG) buildHitAndMask(SPR_BDIAG, SPR_HIT_BDIAG, MASK_BDIAG, k);
-for (const k in SPR_SIDE) buildHitAndMask(SPR_SIDE, SPR_HIT_SIDE, MASK_SIDE, k);
-for (const k in SPR_CROUCH) buildHitAndMask(SPR_CROUCH, SPR_HIT_CROUCH, MASK_CROUCH, k);
-for (const k in SPR_CROUCH_FDIAG) buildHitAndMask(SPR_CROUCH_FDIAG, SPR_HIT_CROUCH_FDIAG, MASK_CROUCH_FDIAG, k);
-for (const k in SPR_CROUCH_BACK) buildHitAndMask(SPR_CROUCH_BACK, SPR_HIT_CROUCH_BACK, MASK_CROUCH_BACK, k);
-for (const k in SPR_CROUCH_BDIAG) buildHitAndMask(SPR_CROUCH_BDIAG, SPR_HIT_CROUCH_BDIAG, MASK_CROUCH_BDIAG, k);
-for (const k in SPR_CROUCH_SIDE) buildHitAndMask(SPR_CROUCH_SIDE, SPR_HIT_CROUCH_SIDE, MASK_CROUCH_SIDE, k);
-for (const k in SPR_SLIDE) buildHitAndMask(SPR_SLIDE, SPR_HIT_SLIDE, MASK_SLIDE, k);
-function getPose(f){ return f.sliding ? 'slide' : (f.crouch ? 'crouch' : 'stand'); }
-// Which side of an opponent the camera is looking at, based on their own facing
-// direction (f.dx/f.dy) rather than always looking at their front. Falls back to
-// 'front' for anything that doesn't report a facing direction (e.g. solo enemies).
-// Five buckets (front / three-quarter front / side / three-quarter back / back)
-// give a much smoother read on turning enemies than a plain front/side/back split.
-function facingView(f){
-  if (typeof f.dx !== 'number' || typeof f.dy !== 'number') return { view:'front', mirror:false };
-  const toViewer = Math.atan2(P.y - f.y, P.x - f.x);
-  const facing = Math.atan2(f.dy, f.dx);
-  let diff = facing - toViewer;
-  diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-  const a = Math.abs(diff), mirror = diff < 0;
-  if (a < Math.PI * 0.125) return { view:'front', mirror:false };  // facing toward us -> front
-  if (a < Math.PI * 0.375) return { view:'fdiag', mirror };        // turned partway -> three-quarter front
-  if (a < Math.PI * 0.625) return { view:'side',  mirror };        // facing across -> side
-  if (a < Math.PI * 0.875) return { view:'bdiag', mirror };        // turned partway -> three-quarter back
-  return { view:'back', mirror:false };                            // facing away -> back
+const SPR_HIT              = buildHitSet(SPR);
+const SPR_HIT_FDIAG        = buildHitSet(SPR_FDIAG);
+const SPR_HIT_BACK         = buildHitSet(SPR_BACK);
+const SPR_HIT_BDIAG        = buildHitSet(SPR_BDIAG);
+const SPR_HIT_SIDE         = buildHitSet(SPR_SIDE);
+const SPR_HIT_CROUCH       = buildHitSet(SPR_CROUCH);
+const SPR_HIT_CROUCH_FDIAG = buildHitSet(SPR_CROUCH_FDIAG);
+const SPR_HIT_CROUCH_BACK  = buildHitSet(SPR_CROUCH_BACK);
+const SPR_HIT_CROUCH_BDIAG = buildHitSet(SPR_CROUCH_BDIAG);
+const SPR_HIT_CROUCH_SIDE  = buildHitSet(SPR_CROUCH_SIDE);
+const SPR_HIT_SLIDE        = buildHitSet(SPR_SLIDE);
+
+// ドット絵なので拡大時ににじませないよう、Three.jsのテクスチャ化では最近傍補間(NearestFilter)を使う。
+function texSet(canvasSet){
+  const out = {};
+  for (const k in canvasSet){
+    const t = new THREE.CanvasTexture(canvasSet[k]);
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+    if (THREE.SRGBColorSpace) t.colorSpace = THREE.SRGBColorSpace;
+    out[k] = t;
+  }
+  return out;
 }
-function spriteSet(pose, view, hit){
-  if (pose === 'slide') return hit ? SPR_HIT_SLIDE : SPR_SLIDE;
+const TEX              = texSet(SPR),        TEX_FDIAG        = texSet(SPR_FDIAG);
+const TEX_BACK          = texSet(SPR_BACK),   TEX_BDIAG        = texSet(SPR_BDIAG);
+const TEX_SIDE          = texSet(SPR_SIDE);
+const TEX_CROUCH        = texSet(SPR_CROUCH), TEX_CROUCH_FDIAG = texSet(SPR_CROUCH_FDIAG);
+const TEX_CROUCH_BACK   = texSet(SPR_CROUCH_BACK), TEX_CROUCH_BDIAG = texSet(SPR_CROUCH_BDIAG);
+const TEX_CROUCH_SIDE   = texSet(SPR_CROUCH_SIDE);
+const TEX_SLIDE         = texSet(SPR_SLIDE);
+const TEX_HIT               = texSet(SPR_HIT),      TEX_HIT_FDIAG = texSet(SPR_HIT_FDIAG);
+const TEX_HIT_BACK         = texSet(SPR_HIT_BACK), TEX_HIT_BDIAG = texSet(SPR_HIT_BDIAG);
+const TEX_HIT_SIDE         = texSet(SPR_HIT_SIDE);
+const TEX_HIT_CROUCH       = texSet(SPR_HIT_CROUCH), TEX_HIT_CROUCH_FDIAG = texSet(SPR_HIT_CROUCH_FDIAG);
+const TEX_HIT_CROUCH_BACK  = texSet(SPR_HIT_CROUCH_BACK), TEX_HIT_CROUCH_BDIAG = texSet(SPR_HIT_CROUCH_BDIAG);
+const TEX_HIT_CROUCH_SIDE  = texSet(SPR_HIT_CROUCH_SIDE);
+const TEX_HIT_SLIDE        = texSet(SPR_HIT_SLIDE);
+
+function pickTex(pose, view, hit){
+  if (pose === 'slide') return hit ? TEX_HIT_SLIDE : TEX_SLIDE;
   if (pose === 'crouch'){
-    if (view === 'back') return hit ? SPR_HIT_CROUCH_BACK : SPR_CROUCH_BACK;
-    if (view === 'bdiag') return hit ? SPR_HIT_CROUCH_BDIAG : SPR_CROUCH_BDIAG;
-    if (view === 'side') return hit ? SPR_HIT_CROUCH_SIDE : SPR_CROUCH_SIDE;
-    if (view === 'fdiag') return hit ? SPR_HIT_CROUCH_FDIAG : SPR_CROUCH_FDIAG;
-    return hit ? SPR_HIT_CROUCH : SPR_CROUCH;
+    if (view === 'back')  return hit ? TEX_HIT_CROUCH_BACK  : TEX_CROUCH_BACK;
+    if (view === 'bdiag') return hit ? TEX_HIT_CROUCH_BDIAG : TEX_CROUCH_BDIAG;
+    if (view === 'side')  return hit ? TEX_HIT_CROUCH_SIDE  : TEX_CROUCH_SIDE;
+    if (view === 'fdiag') return hit ? TEX_HIT_CROUCH_FDIAG : TEX_CROUCH_FDIAG;
+    return hit ? TEX_HIT_CROUCH : TEX_CROUCH;
   }
-  if (view === 'back') return hit ? SPR_HIT_BACK : SPR_BACK;
-  if (view === 'bdiag') return hit ? SPR_HIT_BDIAG : SPR_BDIAG;
-  if (view === 'side') return hit ? SPR_HIT_SIDE : SPR_SIDE;
-  if (view === 'fdiag') return hit ? SPR_HIT_FDIAG : SPR_FDIAG;
-  return hit ? SPR_HIT : SPR;
+  if (view === 'back')  return hit ? TEX_HIT_BACK  : TEX_BACK;
+  if (view === 'bdiag') return hit ? TEX_HIT_BDIAG : TEX_BDIAG;
+  if (view === 'side')  return hit ? TEX_HIT_SIDE  : TEX_SIDE;
+  if (view === 'fdiag') return hit ? TEX_HIT_FDIAG : TEX_FDIAG;
+  return hit ? TEX_HIT : TEX;
 }
 
-/* ============ audio ============ */
-let actx = null;
-function beep(freq, dur, type, vol){
-  if (!actx) return;
-  const o = actx.createOscillator(), g = actx.createGain();
-  o.type = type; o.frequency.setValueAtTime(freq, actx.currentTime);
-  o.frequency.exponentialRampToValueAtTime(Math.max(40,freq*0.35), actx.currentTime+dur);
-  g.gain.setValueAtTime(vol, actx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
-  o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
+// スプライトの寸法。立った時の全高は旧・箱組みモデルと同じ1.62に揃えてある。
+const REMOTE_STAND_H = 1.62;
+const REMOTE_HEAD_H = 0.34; // 頭部の当たり判定の目安（全高に対する比率をここから計算する）
+
+/* ============ 3Dキャラクター ============
+   ドット絵スプライト（64×64）の寸法をそのままボックスで立体化したモデル。
+   正面絵から幅・高さ、側面絵から奥行きを取っている。単位はpx（1px = CHAR_U m）。
+   モデルの正面は -Z 向き、足元が原点。ステージと同じ MeshStandardMaterial で組む。 */
+const CHAR_U = 1.62 / 62;   // 立ち姿の全高が従来の1.62mになる縮尺
+// ポーズ表：hip=腰の高さ, ts=胴の縮み(縦倍率), tRx=上体の傾き(+で後ろ), tw=上体のひねり, py=腰の向き,
+// hRx/hRz=頭, gRx=銃, lR/lL=右/左脚(t=腿を前へ, k=膝, z=腿を外へ開く, kz=膝下を外へ開く), aR/aL=右/左腕(s=肩, e=肘, y=内側への振り)
+const CHAR_SLIDE_SIDE = 1;   // スライディングで脚を投げ出す側：1=キャラの左 / -1=右
+const _LEG0 = {t:0,k:0,z:0,kz:0}, _LEGC = {t:.8,k:-.9,z:.5,kz:.15}, _AIM = {s:.6,e:.97,y:.6};
+const CHAR_POSES = {
+  stand:  { hip:14,  ts:1,   tRx:0,    tw:0, py:0, hRx:0,   hRz:0, gRx:0,   gun:true,
+            lR:_LEG0, lL:_LEG0, aR:_AIM, aL:_AIM },
+  // しゃがみ：胴を縮めて頭を低く、脚は外へ開いて短く畳む（元のドット絵のしゃがみと同じ構図）
+  crouch: { hip:9.9, ts:.67, tRx:-.15, tw:0, py:0, hRx:.15, hRz:0, gRx:.15, gun:true,
+            lR:_LEGC, lL:_LEGC, aR:{s:.75,e:.97,y:.6}, aL:{s:.75,e:.97,y:.6} },
+  // スライディング：脚は体の横へ投げ出し、上半身はひねって銃を正面（照準方向）へ構える。
+  slide:  { hip:5,   ts:1,   tRx:1.0,  tw:-Math.PI/2, py:Math.PI/2, hRx:0, hRz:1.0, gRx:0, gun:true,
+            lR:{t:1.45,k:-.05,z:0,kz:0}, lL:{t:.8,k:-2.3,z:0,kz:0}, aR:_AIM, aL:_AIM }
+};
+/* ---- 窓の乗り越え（ダイブ）モーション ----
+   進行度 u=0〜1 に対するキーフレーム。lift は体全体の持ち上げ量(m)。
+   窓の開口は高さ約1mしかなく、立ったままでは頭が窓枠に当たるので、
+   体を前へ倒して水平に近い姿勢で抜け、脚は後ろへ流す。 */
+function blendPose(a, b, w){
+  const o = {};
+  for (const k in a){
+    const x = a[k], y = b[k];
+    if (typeof x === 'number') o[k] = x + (y - x) * w;
+    else if (x && typeof x === 'object') o[k] = blendPose(x, y, w);
+    else o[k] = x;
+  }
+  return o;
+}
+const _VP = over => Object.assign({}, CHAR_POSES.stand, over);
+const _VARM = (s, e, y) => ({ s, e, y });
+const _VLEG = (t, k) => ({ t, k, z:0, kz:0 });
+const CHAR_VAULT_KEYS = [
+  { u:0,    lift:0,   fwd:0,   pose:CHAR_POSES.stand },
+  // 踏み込み：一気に持ち上がって前へ傾く（銃は立てて窓枠に刺さらないようにする）
+  { u:.05,  lift:.30, fwd:.03, pose:_VP({ hip:13, tRx:-.6,  hRx:.5, gRx:1.45,
+      aR:_VARM(1.4,.5,.15), aL:_VARM(1.4,.5,.15), lR:_VLEG(.4,-.5),   lL:_VLEG(-.3,-.4) }) },
+  // 窓を抜ける：体がほぼ水平、腕は前、脚は後ろへ流れて腰壁の上を越える
+  { u:.26,  lift:.82, fwd:.18, pose:_VP({ hip:14, tRx:-1.3, hRx:.9, gRx:1.2,
+      aR:_VARM(2.7,.2,.15), aL:_VARM(2.7,.2,.15), lR:_VLEG(-1.2,-.25), lL:_VLEG(-1.1,-.45) }) },
+  { u:.55,  lift:.86, fwd:.27, pose:_VP({ hip:14, tRx:-1.3, hRx:.9, gRx:1.2,
+      aR:_VARM(2.7,.2,.15), aL:_VARM(2.7,.2,.15), lR:_VLEG(-.9,-.6),   lL:_VLEG(-.8,-.8) }) },
+  // 脚が窓枠を越えたら、膝を畳みながら降りてくる
+  { u:.72,  lift:.74, fwd:.20, pose:_VP({ hip:13, tRx:-1.0, hRx:.7, gRx:.9,
+      aR:_VARM(2.0,.3,.2),  aL:_VARM(2.0,.3,.2),  lR:_VLEG(-.3,-1.2),  lL:_VLEG(-.2,-1.3) }) },
+  // 着地：膝を曲げて衝撃を受ける
+  { u:.86,  lift:.25, fwd:.05, pose:_VP({ hip:11, tRx:-.45, hRx:.4, gRx:.5,
+      aR:_VARM(1.0,.6,.4),  aL:_VARM(1.0,.6,.4),  lR:_VLEG(.9,-1.2),   lL:_VLEG(.9,-1.2) }) },
+  { u:1,    lift:0,   fwd:0,   pose:CHAR_POSES.stand },
+];
+function vaultPoseAt(u){
+  const K = CHAR_VAULT_KEYS;
+  u = Math.max(0, Math.min(1, u));
+  let i = 0;
+  while (i < K.length - 2 && u > K[i+1].u) i++;
+  const a = K[i], b = K[i+1];
+  const x = Math.max(0, Math.min(1, (u - a.u) / (b.u - a.u)));
+  const w = x * x * (3 - 2 * x);
+  return { pose: blendPose(a.pose, b.pose, w), lift: a.lift + (b.lift - a.lift) * w,
+           fwd: (a.fwd||0) + ((b.fwd||0) - (a.fwd||0)) * w };
+}
+function buildCharacter3D(colors){
+  const [cBody, cHead, cEye] = colors;
+  const mBody = new THREE.MeshStandardMaterial({ color:cBody, roughness:.85 });
+  const mHead = new THREE.MeshStandardMaterial({ color:cHead, roughness:.6 });
+  const mGun  = new THREE.MeshStandardMaterial({ color:0x20262b, roughness:.7 });
+  const mGunHi= new THREE.MeshStandardMaterial({ color:0x3a444c, roughness:.6 });
+  const mEye  = new THREE.MeshBasicMaterial({ color:cEye });
+  const solids = [mBody, mHead, mGun, mGunHi];
+  const G = () => new THREE.Group();
+  // anchor: 'top'=上端が原点(手足), 'bot'=下端が原点(胴・頭), 0=中心
+  const box = (w,h,d,mat,x,y,z,anchor,parent) => {
+    const g = new THREE.BoxGeometry(w,h,d);
+    if (anchor === 'top') g.translate(0,-h/2,0); else if (anchor === 'bot') g.translate(0,h/2,0);
+    const m = new THREE.Mesh(g,mat); m.position.set(x,y,z); parent.add(m); return m;
+  };
+  const root = G(), pelvis = G(), torso = G(), head = G(), gun = G();
+  root.add(pelvis); pelvis.add(torso);
+  const torsoMesh = box(16,30,12,mBody,0,0,0,'bot',torso);                    // 胴
+  head.position.y = 28; torso.add(head);
+  box(20,16,16,mHead,0,0,0,'bot',head);                     // 頭（ヘルメット）
+  box(4,4,1.5,mEye,-4,8,-8.2,0,head); box(4,4,1.5,mEye,4,8,-8.2,0,head); // 目（バイザー）
+  const arms = [1,-1].map(s => {                            // s=+1:右腕(+X) / -1:左腕
+    const sh = G(); sh.position.set(11*s,25,0); sh.rotation.order = 'YXZ'; torso.add(sh);
+    box(6,9,6,mBody,0,0,0,'top',sh);
+    const el = G(); el.position.y = -9; sh.add(el);
+    box(6,9,6,mBody,0,0,0,'top',el);
+    return { sh, el, s };
+  });
+  const legs = [1,-1].map(s => {
+    const th = G(); th.position.set(4.5*s,0,0); pelvis.add(th);
+    box(5.5,7,7,mBody,0,0,0,'top',th);
+    const kn = G(); kn.position.y = -7; th.add(kn);
+    box(5,7,7,mBody,0,0,0,'top',kn);
+    return { th, kn };
+  });
+  gun.position.set(0,19,0); torso.add(gun);                 // 銃：胸の前で構える
+  box(4,6,10,mGun,0,0,-8,0,gun); box(3,3,12,mGun,0,1,-19,0,gun);
+  box(2.5,2.5,2,mGunHi,0,1,-25.5,0,gun); box(4,5,8,mGun,0,-.5,4,0,gun);
+  box(3.5,7,4,mGun,0,-6,-6,0,gun); box(2,2,6,mGunHi,0,3.5,-8,0,gun);
+  root.scale.setScalar(CHAR_U);
+  let cur = null;
+  function applyPose(p, side){
+    root.position.set(0, 0, 0);                                 // 乗り越え中の持ち上げ・前ずらしを戻す
+    pelvis.position.y = p.hip; pelvis.rotation.y = p.py * side;
+    torso.rotation.set(p.tRx, p.tw * side, 0);
+    torsoMesh.scale.y = p.ts;                                   // 胴を縮める
+    head.position.y = 28 * p.ts; head.rotation.set(p.hRx, 0, p.hRz * side);
+    gun.position.y = 19 * p.ts; gun.rotation.x = p.gRx; gun.visible = p.gun;
+    arms.forEach((a,i) => { a.sh.position.y = 25 * p.ts; const q = i ? p.aL : p.aR; a.sh.rotation.set(q.s, q.y*a.s, 0); a.el.rotation.x = q.e; });
+    legs.forEach((l,i) => { const q = i ? p.lL : p.lR, sg = i ? -1 : 1; l.th.rotation.set(q.t, 0, q.z*sg); l.kn.rotation.set(q.k, 0, q.kz*sg); });
+  }
+  function setPose(name){
+    if (name === cur) return; cur = name;
+    applyPose(CHAR_POSES[name] || CHAR_POSES.stand, (name === 'slide') ? CHAR_SLIDE_SIDE : 1);
+  }
+  // 窓の乗り越え：進行度 u(0〜1) に合わせた姿勢にする。毎フレーム呼んでよい。
+  function setVault(u){
+    const v = vaultPoseAt(u);
+    applyPose(v.pose, 1);
+    root.position.set(0, v.lift, -v.fwd);                      // 前は -Z
+    cur = 'vault';
+  }
+  // 乗り越え中の当たり判定用に、頭とそれ以外（胴・腕・脚）のおおよその範囲を返す。
+  // group が原点・回転なしのときに呼ぶと、group のローカル座標での範囲になる。
+  const headMeshes = new Set();
+  head.traverse(o => { if (o.isMesh) headMeshes.add(o); });
+  const _bpart = new THREE.Box3(), _bbody = new THREE.Box3(), _bhead = new THREE.Box3();
+  function vaultBoxes(){
+    root.updateMatrixWorld(true);
+    _bbody.makeEmpty(); _bhead.makeEmpty();
+    root.traverse(o => {
+      if (!o.isMesh) return;
+      _bpart.setFromObject(o);
+      (headMeshes.has(o) ? _bhead : _bbody).union(_bpart);
+    });
+    return { body:_bbody, head:_bhead };
+  }
+  function setFlash(on){ solids.forEach(m => m.emissive.set(on ? 0xffe9e2 : 0x000000)); }
+  function dispose(){ root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); [...solids, mEye].forEach(m => m.dispose()); }
+  setPose('stand');
+  return { group:root, setPose, setVault, vaultBoxes, setFlash, dispose };
 }
 
-/* ============ state ============ */
-const P = { x:1.5, y:1.5, dx:1, dy:0, px:0, py:0.66, hp:100, ammo:12, mag:12, reload:0,
-            bob:0, flash:0, kick:0, aim:{x:0,y:0}, kills:0, hurt:0, tracer:null,
-            jumpZ:0, jumpVel:0, onGround:true,
-            crouch:false, crouchZ:0, sliding:false, slideT:0, slideDx:1, slideDy:0 };
-// 複数の対戦相手を id -> state で管理する
-const REMOTES = new Map();
-function createRemote(id){
-  return { id, x:5, y:5, dx:1, dy:0, hp:100, ammo:12, dead:false, kills:0, flash:0, kind: idToKind(id),
-    jumpZ:0, crouchZ:0, crouch:false, sliding:false, mmT:0,
-    _p0x:5, _p0y:5, _p1x:5, _p1y:5, _p0jz:0, _p1jz:0, _p0cz:0, _p1cz:0, _p0dx:1, _p0dy:0, _p1dx:1, _p1dy:0, _t0:0, _dur:60, _lastMsgT:0 };
+function buildRemoteMesh(id){
+  const kind = idToKind(id);
+  const group = new THREE.Group();
+  // 3Dモデル（ステージと同じMeshStandardMaterialのボックス組み）。正面は-Z向き。
+  const model = buildCharacter3D(KIND_COLORS[kind]);
+  group.add(model.group);
+  // 射撃の当たり判定用の透明な箱。見た目には表示しないが、レイキャストの対象にはなる。
+  const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), hitMat);
+  const head  = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), hitMat);
+  group.add(torso, head);
+  scene.add(group);
+  return { group, model, torso, head, kind };
 }
-function updateAllRemoteInterp(){
-  if (CFG.mode !== 'online') return;
+function disposeRemoteMesh(m){
+  scene.remove(m.group);
+  m.model.dispose();
+  m.torso.geometry.dispose(); m.torso.material.dispose();
+  m.head.geometry.dispose();  m.head.material.dispose();
+}
+const remoteMeshes = new Map();
+function clearRemoteMeshes(){
+  for (const m of remoteMeshes.values()) disposeRemoteMesh(m);
+  remoteMeshes.clear();
+}
+function syncRemoteMeshes(){
+  for (const id of REMOTES.keys()){
+    if (!remoteMeshes.has(id)) remoteMeshes.set(id, buildRemoteMesh(id));
+  }
+  for (const [id, m] of remoteMeshes){
+    if (!REMOTES.has(id)){ disposeRemoteMesh(m); remoteMeshes.delete(id); }
+  }
+}
+const smooth01 = x => x * x * (3 - 2 * x);
+const _fbSize = new THREE.Vector3(), _fbCenter = new THREE.Vector3();
+function fitHitBox(mesh, box){                          // 当たり判定用の透明な箱を、指定の範囲に合わせる
+  if (box.isEmpty()) return;
+  box.getSize(_fbSize); box.getCenter(_fbCenter);
+  mesh.scale.copy(_fbSize); mesh.position.copy(_fbCenter);
+}
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const _remoteFwd = new THREE.Vector3();
+function updateRemoteMeshes(dt){
   const now = performance.now();
-  for (const r of REMOTES.values()){
-    const t = r._dur > 0 ? Math.min(1, (now - r._t0) / r._dur) : 1;
-    r.x = r._p0x + (r._p1x - r._p0x) * t;
-    r.y = r._p0y + (r._p1y - r._p0y) * t;
-    r.jumpZ = r._p0jz + (r._p1jz - r._p0jz) * t;
-    r.crouchZ = r._p0cz + (r._p1cz - r._p0cz) * t;
-    const dx = r._p0dx + (r._p1dx - r._p0dx) * t;
-    const dy = r._p0dy + (r._p1dy - r._p0dy) * t;
-    const dlen = Math.hypot(dx, dy) || 1;
-    r.dx = dx / dlen; r.dy = dy / dlen;
+  for (const [id, r] of REMOTES){
+    const m = remoteMeshes.get(id);
+    if (!m) continue;
+    const pose = r.sliding ? 'slide' : (r.crouch ? 'crouch' : 'stand');
+    m.model.setFlash(now < (r.flashUntil || 0));        // 自分が当てた瞬間だけ白く光る（発砲では光らない）
+
+    // 窓の乗り越え中：ダイブの姿勢にして、越える向きへ体を向ける。当たり判定も体の実際の位置に合わせる。
+    const vu = r.vaultU || 0;
+    if (vu > 0 && vu < 1){
+      m.model.setVault(vu);
+      m.group.position.set(0, 0, 0); m.group.rotation.set(0, 0, 0); m.group.updateMatrixWorld(true);
+      const bx = m.model.vaultBoxes();                  // group を原点に置いた状態で測る＝group ローカルの範囲
+      fitHitBox(m.torso, bx.body); fitHitBox(m.head, bx.head);
+      const f = smooth01(Math.min(1, vu / 0.12)) * smooth01(Math.min(1, (1 - vu) / 0.12)); // 前後は元の向きへ滑らかに戻す
+      m.group.rotation.y = -lerpAngle(r.yaw, r.vyaw, f);
+      m.group.position.set(r.x, r.z, r.y);
+      m.group.visible = !r.dead;
+      continue;
+    }
+    m.model.setPose(pose);                              // 立ち／しゃがみ／スライディング
+    m.group.rotation.y = -r.yaw;                        // 3Dなのでビルボードではなく、向きに合わせて回すだけ
+
+    // 当たり判定の箱もモデルと一緒に回る。ポーズに合わせて高さ（スライディングは横幅）を変える。
+    const h = pose === 'slide' ? REMOTE_STAND_H * SLIDE_VIS_SCALE
+      : pose === 'crouch' ? REMOTE_STAND_H * CROUCH_VIS_SCALE
+      : REMOTE_STAND_H;
+    const headH = h * (REMOTE_HEAD_H / REMOTE_STAND_H);
+    const bodyH = h - headH;
+    const wid = pose === 'slide' ? 0.95 : 0.5, depth = pose === 'slide' ? 0.5 : 0.36; // スライディングは体が横に長い
+    m.head.scale.set(0.5, headH, 0.5);
+    m.head.position.set(0, h - headH / 2, 0);
+    m.torso.scale.set(wid, bodyH, depth);
+    m.torso.position.set(0, bodyH / 2, 0);
+
+    m.group.position.set(r.x, r.z, r.y);
+    m.group.visible = !r.dead;
   }
 }
-// Net vertical eye-offset from normal standing height: up while jumping, down while crouched/sliding.
-function eyeZ(o){ return (o.jumpZ || 0) - (o.crouchZ || 0); }
-// How high up a wall/body the camera sits, as a fraction of its on-screen height (0 = feet, 1 = top).
-// 0.5 (the old value) puts the camera at dead-centre — chest height. Raising this toward 1 moves the
-// eye up near the head, so a wall stretches much further below the horizon than above it, matching
-// where a person's eyes actually are, instead of splitting the wall evenly top/bottom.
-const EYE_RATIO = 0.82;
-// 壁の高さ（ワールド単位）。1 が今までのデフォルト。
-// 大きくすると壁が高くなり、ジャンプしても頂上が見えにくくなる。
-// 小さくすると壁が低くなり、ジャンプで簡単に上が見えるようになる。
-const WALL_HEIGHT = 2.0;
-let pitch = 0;
-let foes = [], wave = 1, pts = 0, alive = false, best = 0, hovered = null;
-const zbuf = new Float32Array(8192);
-
-function resize(){
-  W = Math.max(160, Math.floor(innerWidth * SCALE));
-  H = Math.max(120, Math.floor(innerHeight * SCALE));
-  cv.width = W; cv.height = H;
-  ctx.imageSmoothingEnabled = false;
-  P.aim.x = W/2; P.aim.y = H/2;
-  const maxP = H * 0.5;
-  pitch = Math.max(-maxP, Math.min(maxP, pitch || 0));
-}
-resize();
-addEventListener('resize', resize);
-
-/* ============ solo flow ============ */
-function spawnWave(){
-  const n = 3 + wave * 2;
-  foes = [];
-  for (let i=0; i<n; i++){
-    const s = freeSpot(Math.random, [P]);
-    const tough = wave > 2 && Math.random() < 0.3;
-    foes.push({ x:s.x, y:s.y, hp: tough?5:3, max: tough?5:3, kind: tough?'b':'a',
-                spd: (tough?0.95:1.25) + wave*0.05, flash:0, atk:0 });
-  }
-}
-function placePlayer(spot){
-  P.x = spot.x; P.y = spot.y;
-  const a = Math.random()*6.283;
-  P.dx = Math.cos(a); P.dy = Math.sin(a);
-  P.px = -P.dy*0.66; P.py = P.dx*0.66;
-  P.hp = 100; P.ammo = P.mag; P.reload = 0;
-  P.jumpZ = 0; P.jumpVel = 0; P.onGround = true;
-  P.crouch = false; P.crouchZ = 0; P.sliding = false; P.slideT = 0;
-  pitch = 0;
-}
-function resetSolo(){
-  buildMaze(Math.random);
-  placePlayer({x:1.5, y:1.5});
-  wave = 1; pts = 0; P.kills = 0; spawnWave();
-  alive = true;
-}
-
-/* ============ online flow ============ */
 let socket = null, netState = 'idle', myId = null, hostId = null, isHost = false, roomMax = 8, room = '';
 function send(obj){ if (socket && socket.readyState === 1) socket.send(JSON.stringify(obj)); }
 function netStatus(t){ el('netstatus').textContent = t; }
@@ -618,15 +1661,15 @@ function connect(){
   room = el('room').value.trim();
   const max = Math.max(2, Math.min(8, parseInt(el('maxp').value, 10) || 8));
   if (!addr || !room){ netStatus('サーバーアドレスとルームコードを入力する'); return; }
-  if (socket){ try{ socket.close(); }catch(e){} }
-  REMOTES.clear(); myId = null; hostId = null; isHost = false;
+  if (socket){ try { socket.close(); } catch(e){} }
+  REMOTES.clear(); clearRemoteMeshes(); myId = null; hostId = null; isHost = false;
   netState = 'connecting'; netStatus('接続中…');
   el('lobby').style.display = 'none';
-  try { socket = new WebSocket(addr); } catch(e){ netState='idle'; netStatus('接続できません'); return; }
-  socket.onopen = () => send({type:'join', room, max});
-  socket.onclose = () => { if (netState !== 'idle' && netState !== 'playing'){ netState='idle'; netStatus('切断されました'); el('lobby').style.display='none'; } };
+  try { socket = new WebSocket(addr); } catch(e){ netState = 'idle'; netStatus('接続できません'); return; }
+  socket.onopen = () => send({ type:'join', room, max });
+  socket.onclose = () => { if (netState !== 'idle' && netState !== 'playing'){ netState = 'idle'; netStatus('切断されました'); el('lobby').style.display = 'none'; } };
   socket.onerror = () => netStatus('接続エラー：アドレスを確認する');
-  socket.onmessage = ev => { let m; try{ m = JSON.parse(ev.data); }catch(e){ return; } handleNet(m); };
+  socket.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch(e){ return; } handleNet(m); };
 }
 function handleNet(m){
   if (m.type === 'joined'){
@@ -651,68 +1694,73 @@ function handleNet(m){
     return;
   }
   if (m.type === 'start'){
-    // ホスト自身は startBtn クリック時に既にローカルで開始済みなので、
-    // 他プレイヤーから見た場合のみここで開始する。
+    // ホスト自身はstartBtnクリック時に既にローカルで開始済みなので、他プレイヤーから見た場合のみ開始する
     if (m.from === myId) return;
-    beginMatchLocal(m.seed, m.spawns);
+    beginMatchLocal(m.cells, m.spawns);
+    return;
+  }
+  if (m.type === 'peer_left'){
+    REMOTES.delete(m.id);
+    if (netState === 'playing'){
+      if (REMOTES.size === 0) leaveOnline('対戦相手が全員切断した。');
+    } else if (netState === 'waiting'){
+      updateLobbyUI();
+    }
     return;
   }
   if (m.type === 'state'){
     let r = REMOTES.get(m.from);
     if (!r){ r = createRemote(m.from); REMOTES.set(m.from, r); }
     const now = performance.now();
-    r._p0x = r.x; r._p0y = r.y; r._p0jz = r.jumpZ; r._p0cz = r.crouchZ; r._p0dx = r.dx; r._p0dy = r.dy;
-    r._p1x = m.x; r._p1y = m.y;
-    r._p1jz = m.jumpZ || 0; r._p1cz = m.crouchZ || 0;
-    r._p1dx = typeof m.dx === 'number' ? m.dx : 1;
-    r._p1dy = typeof m.dy === 'number' ? m.dy : 0;
+    r._p0x = r.x; r._p0y = r.y; r._p0z = r.z; r._p0yaw = r.yaw; r._p0ce = r.crouchEase;
+    r._p1x = m.x; r._p1y = m.y; r._p1z = m.z || 0;
+    r._p1yaw = typeof m.yaw === 'number' ? m.yaw : 0;
+    r._p1ce = m.crouchEase || 0;
     r._dur = r._lastMsgT ? Math.min(220, Math.max(30, now - r._lastMsgT)) : 60;
     r._lastMsgT = now; r._t0 = now;
-    r.hp = m.hp; r.ammo = m.ammo;
-    r.dead = m.dead; r.kills = m.kills; r.crouch = !!m.crouch; r.sliding = !!m.sliding;
+    r.hp = m.hp; r.ammo = m.ammo; r.kills = m.kills; r.crouch = !!m.crouch; r.sliding = !!m.sliding;
+    // 窓の乗り越え：進行度は位置と同じ区間補間で滑らかに動かす。0 が届いたら即座に通常ポーズへ戻す。
+    let vu = typeof m.vu === 'number' ? m.vu : 0;
+    if (vu >= 1 && !(r.vaultU > 0)) vu = 0;   // 途中を見ていない「終了」だけが届いた場合は無視
+    if (vu > 0){ r._p0vu = r.vaultU; r._p1vu = vu; r.vyaw = typeof m.vyaw === 'number' ? m.vyaw : r.yaw; }
+    else { r._p0vu = r._p1vu = r.vaultU = 0; }
+    // 歩行アニメーション用に、今回届いた座標がどれだけ動いたかから移動速度を概算しておく
+    // （足の速さの実測値は送っていないので、区間の移動距離 ÷ 区間時間で近似する）。
+    r.speed = Math.hypot(r._p1x - r._p0x, r._p1y - r._p0y) / (r._dur / 1000);
     return;
   }
   if (m.type === 'shoot'){
     const r = REMOTES.get(m.from);
-    if (r){ r.flash = 0.06; r.mmT = 3; }
+    if (r) r.mmT = 3;                   // 撃った相手は、ミニマップに数秒だけ映る
     return;
   }
   if (m.type === 'hit'){
     if (!alive) return;
+    P.hp -= m.dmg;
     const attacker = REMOTES.get(m.from);
-    P.hp -= m.dmg; P.hurt = 1;
-    P.hurtAngle = attacker ? hitDirFrom(attacker.x, attacker.y) : 0;
-    beep(90,.2,'sawtooth',.1);
-    if (P.hp <= 0){
-      P.hp = 0; respawnSelf(); send({type:'died', to: m.from});
-    }
+    if (attacker) addHitMark(m.from, attacker.x, attacker.y);   // 撃ってきた位置を覚えて矢印を出す
+    flashHurt();
+    beep(90, .2, 'sawtooth', .1);
+    // HPが尽きたら再出現させつつ、撃った相手(m.from)にだけ「died」を送って
+    // キルを付けてもらう（宛先(to)を付けているので、他の人には転送されない）。
+    if (P.hp <= 0){ P.hp = 0; respawnSelf(); send({ type:'died', to: m.from }); }
     updHUD();
     return;
   }
   if (m.type === 'died'){
+    // to が付いている「自分を倒した」通知だけを拾う（他人へのdiedは無視）
     if (m.to && m.to !== myId) return;
-    P.kills++; pts += 100; beep(120,.35,'sawtooth',.09); updHUD();
-    if (P.kills >= CFG.target){ send({type:'matchover', winnerId: myId}); finishOnline(myId); }
+    P.kills++;
+    beep(120, .35, 'sawtooth', .09);
+    updHUD();
+    if (P.kills >= CFG.target){ send({ type:'matchover', winnerId: myId }); finishOnline(myId); }
     return;
   }
   if (m.type === 'matchover'){ finishOnline(m.winnerId); return; }
-  if (m.type === 'peer_left'){
-    REMOTES.delete(m.id);
-    if (netState === 'playing'){
-      if (REMOTES.size === 0){
-        alive = false; document.exitPointerLock?.();
-        over('接続切れ', 'DISCONNECTED', '対戦相手が全員切断した。', 'メニューへ', `あなた ${P.kills} キル`, backToMenu);
-      }
-    } else if (netState === 'waiting'){
-      updateLobbyUI();
-    }
-    return;
-  }
 }
 function hostBeginMatch(){
   if (!isHost || REMOTES.size < 1) return;
-  const seed = (Math.random()*1e9) | 0;
-  buildMaze(mulberry32(seed));
+  const cells = currentStageCells();
   const ids = [myId, ...REMOTES.keys()];
   const placed = [];
   const spawns = {};
@@ -720,566 +1768,49 @@ function hostBeginMatch(){
     const s = freeSpot(Math.random, placed);
     spawns[id] = s; placed.push(s);
   }
-  send({ type:'start', seed, spawns });
-  beginMatchLocal(seed, spawns);
+  send({ type:'start', cells, spawns });
+  beginMatchLocal(cells, spawns);
 }
-function beginMatchLocal(seed, spawns){
-  buildMaze(mulberry32(seed));
+function beginMatchLocal(cells, spawns){
+  grid = cells;
+  buildScene();
   const mySpot = spawns[myId] || freeSpot(Math.random, null);
-  placePlayer(mySpot);
+  player.x = mySpot.x; player.y = mySpot.y; player.z = heightAt(mySpot.x, mySpot.y); player.vz = 0; player.onGround = true;
+  yaw = 0; pitch = 0;
+  P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
+  P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
   for (const [id, r] of REMOTES){
     if (!spawns[id]){ REMOTES.delete(id); continue; }
     const fresh = createRemote(id);
     const s = spawns[id];
+    const z0 = heightAt(s.x, s.y);
     fresh.x = fresh._p0x = fresh._p1x = s.x;
     fresh.y = fresh._p0y = fresh._p1y = s.y;
+    fresh.z = fresh._p0z = fresh._p1z = z0;
     fresh._t0 = performance.now(); fresh._dur = 60; fresh._lastMsgT = 0;
     REMOTES.set(id, fresh);
   }
-  P.kills = 0; pts = 0;
-  netState = 'playing';
-  alive = true;
-  veil.classList.add('gone');
-  if (!isTouch) cv.requestPointerLock?.();
-}
-function respawnSelf(){
-  const spot = freeSpot(Math.random, [...REMOTES.values()]);
-  placePlayer(spot);
-}
-let netTick = 0;
-function netLoop(dt){
-  if (CFG.mode !== 'online' || netState !== 'playing') return;
-  netTick += dt;
-  if (netTick > 0.06){
-    netTick = 0;
-    send({ type:'state', x:P.x, y:P.y, dx:P.dx, dy:P.dy, hp:P.hp, ammo:P.ammo, dead:false, kills:P.kills, jumpZ:P.jumpZ, crouchZ:P.crouchZ, crouch:P.crouch, sliding:P.sliding });
-  }
-}
-
-/* ============ input ============ */
-const keys = {};
-addEventListener('keydown', e => {
-  if (!e.repeat){
-    if (e.code === 'Space') doJump();
-    if (e.code === 'KeyR') doReload();
-    if (e.code === 'ControlLeft' || e.code === 'KeyC') toggleCrouch();
-  }
-  keys[e.code] = true;
-  if (e.code === 'Escape' && alive) pause();
-  if (['Space','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
-});
-addEventListener('keyup', e => keys[e.code] = false);
-
-function rotate(a){
-  const c = Math.cos(a), s = Math.sin(a);
-  const dx = P.dx*c - P.dy*s; P.dy = P.dx*s + P.dy*c; P.dx = dx;
-  const px = P.px*c - P.py*s; P.py = P.px*s + P.py*c; P.px = px;
-}
-function addPitch(dy){
-  const maxP = H * 0.5;
-  pitch = Math.max(-maxP, Math.min(maxP, pitch - dy));
-}
-addEventListener('mousemove', e => {
-  if (document.pointerLockElement === cv){
-    rotate(e.movementX * 0.0022 * CFG.sens);
-    addPitch(e.movementY * 1.1 * CFG.sens);
-  }
-});
-cv.addEventListener('mousedown', e => { if (e.button === 0) shoot(); });
-document.addEventListener('pointerlockchange', () => {
-  if (alive && !isTouch && document.pointerLockElement !== cv) pause();
-});
-
-// touch
-let move = {x:0, y:0}, lookId = null, stickId = null, firing = false;
-const stick = el('stick'), knob = el('knob');
-stick.addEventListener('touchstart', e => { stickId = e.changedTouches[0].identifier; e.preventDefault(); }, {passive:false});
-el('fire').addEventListener('touchstart', e => { firing = true; shoot(); e.preventDefault(); }, {passive:false});
-el('fire').addEventListener('touchend', () => firing = false);
-addEventListener('touchmove', e => {
-  for (const t of e.changedTouches){
-    if (t.identifier === stickId){
-      const r = stick.getBoundingClientRect();
-      const dx = t.clientX - (r.left + r.width/2), dy = t.clientY - (r.top + r.height/2);
-      const d = Math.hypot(dx,dy) || 1, m = Math.min(1, d/52);
-      move.x = dx/d*m; move.y = -dy/d*m;
-      knob.style.transform = `translate(${dx/d*m*38}px,${dy/d*m*38}px)`;
-    } else if (t.identifier === lookId){
-      rotate((t.clientX - t._px) * 0.006 * CFG.sens);
-      addPitch((t.clientY - t._py) * 0.9 * CFG.sens);
-      t._px = t.clientX; t._py = t.clientY;
-    }
-  }
-  e.preventDefault();
-}, {passive:false});
-addEventListener('touchstart', e => {
-  for (const t of e.changedTouches)
-    if (lookId === null && stickId !== t.identifier && t.clientX > innerWidth*0.35){ lookId = t.identifier; t._px = t.clientX; t._py = t.clientY; }
-}, {passive:true});
-addEventListener('touchend', e => {
-  for (const t of e.changedTouches){
-    if (t.identifier === stickId){ stickId = null; move.x = move.y = 0; knob.style.transform = ''; }
-    if (t.identifier === lookId) lookId = null;
-  }
-});
-
-/* ============ aiming / targets ============ */
-function targetsFor(){ return CFG.mode === 'online' ? [...REMOTES.values()].filter(r => !r.dead) : foes; }
-function project(f){
-  const inv = 1 / (P.px*P.dy - P.dx*P.py);
-  const rx = f.x - P.x, ry = f.y - P.y;
-  const tx = inv * (P.dy*rx - P.dx*ry);
-  const ty = inv * (-P.py*rx + P.px*ry);
-  if (ty <= 0.2) return null;
-  const scale = Math.abs(H/ty);
-  const hFull = scale * 0.92 * WALL_HEIGHT;
-  const pose = getPose(f);
-  const w = hFull * (pose === 'slide' ? SLIDE_WIDTH_MULT : 0.6);
-  const h = pose === 'slide' ? hFull * SLIDE_VIS_SCALE : pose === 'crouch' ? hFull * CROUCH_VIS_SCALE : hFull;
-  // Jumping actually lifts the whole body off the ground, so it still shifts the sprite
-  // (mine and theirs). Crouching/sliding do NOT move anyone's feet — they only shrink how
-  // tall the target is drawn (below), with the bottom (feet) anchored to the same ground line.
-  // scale (WALL_HEIGHT抜き)を使うことで、壁を高くしてもジャンプの見た目の移動量自体は変わらない。
-  const jShift = (eyeZ(P) - (f.jumpZ || 0)) * scale * JUMP_SHIFT;
-  const yBottom = H/2 + pitch + hFull*EYE_RATIO + hFull*0.04 + jShift;
-  const { view, mirror } = facingView(f);
-  return { ty, h, w, x0: (W/2) * (1 + tx/ty) - w/2, y0: yBottom - h, pose, view, mirror };
-}
-const HEAD_V0 = 4, HEAD_V1 = 20;         // head rows in the standing sprite texture
-const HEAD_V0_C = 15, HEAD_V1_C = 30;    // head rows in the crouching sprite texture
-const HEAD_V0_S = 8, HEAD_V1_S = 22;     // head rows in the sliding sprite texture
-function pickTargetDetail(){
-  let hit = null, headshot = false, bestD = 1e9;
-  for (const f of targetsFor()){
-    const s = project(f); if (!s) continue;
-    const u = ((P.aim.x - s.x0) * 64 / s.w) | 0;
-    const v = ((P.aim.y - s.y0) * 64 / s.h) | 0;
-    if (u < 0 || u > 63 || v < 0 || v > 63) continue;
-    const mask = s.pose === 'slide' ? MASK_SLIDE[f.kind] : s.pose === 'crouch' ? MASK_CROUCH[f.kind] : MASK[f.kind];
-    if (!mask[v*64 + u]) continue;
-    const col = Math.max(0, Math.min(W-1, P.aim.x|0));
-    if (s.ty > zbuf[col]) continue;
-    if (s.ty < bestD){
-      bestD = s.ty; hit = f;
-      headshot = s.pose === 'slide' ? (v >= HEAD_V0_S && v < HEAD_V1_S)
-        : s.pose === 'crouch' ? (v >= HEAD_V0_C && v < HEAD_V1_C)
-        : (v >= HEAD_V0 && v < HEAD_V1);
-    }
-  }
-  return { target: hit, headshot };
-}
-function pickTarget(){ return pickTargetDetail().target; }
-
-/* ============ actions ============ */
-const JUMP_V = 9.75, GRAVITY = 27.87, JUMP_SHIFT = 0.2;
-const CROUCH_SPEED_MULT = 0.5, CROUCH_DUCK = 0.9, CROUCH_EASE = 10;
-const SLIDE_SPEED = 6.5, SLIDE_DURATION = 0.5;
-function hitDirFrom(sx, sy){
-  const rx = sx - P.x, ry = sy - P.y;
-  const rel = Math.atan2(ry, rx), fwd = Math.atan2(P.dy, P.dx);
-  return (rel - fwd) * 180 / Math.PI;
-}
-function doJump(){
-  if (!alive || !P.onGround || P.sliding) return;
-  P.jumpVel = JUMP_V;
-  P.onGround = false;
-  P.crouch = false;    // jumping while crouched stands you back up
-  beep(200, .08, 'square', .04);
-}
-function isRunningNow(){
-  const shift = keys.ShiftLeft || keys.ShiftRight;
-  const moving = keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD ||
-                 keys.ArrowUp || keys.ArrowDown || move.x || move.y;
-  return !!(shift && moving);
-}
-function toggleCrouch(){
-  if (!alive || P.sliding) return;
-  if (P.crouch){ P.crouch = false; return; } // press again to stand back up
-  if (isRunningNow()) startSlide(); else P.crouch = true;
-}
-function startSlide(){
-  P.crouch = false; // sliding is a separate temporary state, not the held crouch
-  P.sliding = true;
-  P.slideT = SLIDE_DURATION;
-  let fwd = 0, str = 0;
-  if (keys.KeyW || keys.ArrowUp) fwd += 1;
-  if (keys.KeyS || keys.ArrowDown) fwd -= 1;
-  if (keys.KeyD) str += 1;
-  if (keys.KeyA) str -= 1;
-  fwd += move.y; str += move.x;
-  let dx = P.dx*fwd + P.px*str, dy = P.dy*fwd + P.py*str;
-  const len = Math.hypot(dx, dy);
-  if (len < 0.001){ dx = P.dx; dy = P.dy; } else { dx /= len; dy /= len; }
-  P.slideDx = dx; P.slideDy = dy;
-  beep(150, .18, 'sawtooth', .06);
-}
-function doReload(){
-  if (!alive || P.reload > 0 || P.ammo === P.mag) return;
-  P.reload = 1.0; beep(160, .12, 'square', .05);
-}
-function shoot(){
-  if (!alive || P.reload > 0) return;
-  if (P.ammo <= 0){ doReload(); return; }
-  P.ammo--; P.flash = 0.06; P.kick = 1;
-  P.tracer = { x: P.aim.x, y: P.aim.y, t: 0.09 };
-  beep(320, .16, 'square', .11);
-  if (CFG.mode === 'online') send({type:'shoot'});
-
-  const { target: t, headshot } = pickTargetDetail();
-  if (t){
-    const mult = headshot ? 2 : 1;
-    if (CFG.mode === 'online'){
-      t.flash = 0.12; beep(headshot ? 700 : 520, .07, 'triangle', .07);
-      send({ type:'hit', to: t.id, dmg: Math.round(12 * mult) });
-    } else {
-      t.hp -= mult; t.flash = 0.12;
-      beep(headshot ? 700 : 520, .07, 'triangle', .07);
-      if (t.hp <= 0){
-        foes.splice(foes.indexOf(t), 1);
-        pts += t.max * 25; beep(120, .3, 'sawtooth', .09);
-        if (!foes.length){
-          wave++; P.hp = Math.min(100, P.hp + 25); pts += 150;
-          setTimeout(() => { if (alive) spawnWave(); }, 900);
-        }
-      }
-    }
-  }
   updHUD();
-  if (P.ammo === 0) doReload();
-}
-
-/* ============ update ============ */
-function step(dt){
-  if (!alive) return;
-  if (firing && P.flash <= 0 && P.ammo > 0 && P.reload <= 0) shoot();
-
-  if (P.reload > 0){
-    P.reload -= dt;
-    if (P.reload <= 0){ P.reload = 0; P.ammo = P.mag; beep(280,.09,'square',.05); updHUD(); }
-  }
-
-  let fwd = 0, str = 0;
-  if (keys.KeyW || keys.ArrowUp) fwd += 1;
-  if (keys.KeyS || keys.ArrowDown) fwd -= 1;
-  if (keys.KeyD) str += 1;
-  if (keys.KeyA) str -= 1;
-  if (keys.ArrowLeft) rotate(-1.9*dt*CFG.sens);
-  if (keys.ArrowRight) rotate(1.9*dt*CFG.sens);
-  fwd += move.y; str += move.x;
-  const run = (keys.ShiftLeft || keys.ShiftRight) ? 1.3 : 1;
-
-  let vx, vy, bobRate;
-  if (P.sliding){
-    P.slideT -= dt;
-    const k = Math.sqrt(Math.max(0, P.slideT / SLIDE_DURATION));
-    const spd = SLIDE_SPEED * k;
-    vx = P.slideDx * spd; vy = P.slideDy * spd;
-    bobRate = 14;
-    if (P.slideT <= 0) P.sliding = false;
-  } else {
-    const spdMul = P.crouch ? CROUCH_SPEED_MULT : run;
-    const sp = 2.1 * spdMul;
-    vx = (P.dx*fwd + P.px*str) * sp;
-    vy = (P.dy*fwd + P.py*str) * sp;
-    bobRate = 9 * (P.crouch ? 0.6 : run);
-  }
-  const nx = P.x + vx*dt;
-  const ny = P.y + vy*dt;
-  const r = 0.26;
-  if (!solid(nx + Math.sign(nx-P.x)*r, P.y)) P.x = nx;
-  if (!solid(P.x, ny + Math.sign(ny-P.y)*r)) P.y = ny;
-  if (fwd || str || P.sliding) P.bob += dt * bobRate;
-
-  // ease the visible crouch/slide height toward its target each frame
-  const duckTarget = (P.crouch || P.sliding) ? CROUCH_DUCK : 0;
-  P.crouchZ += (duckTarget - P.crouchZ) * Math.min(1, dt * CROUCH_EASE);
-
-  // jump arc — visual only, walls stay just as solid mid-air
-  P.jumpZ += P.jumpVel * dt;
-  P.jumpVel -= GRAVITY * dt;
-  if (P.jumpZ <= 0){ P.jumpZ = 0; P.jumpVel = 0; P.onGround = true; }
-
-  if (CFG.mode === 'solo'){
-    for (const f of foes){
-      if (f.flash > 0) f.flash -= dt;
-      const dx = P.x - f.x, dy = P.y - f.y;
-      const d = Math.hypot(dx, dy) || 1;
-      if (d > 0.85){
-        const s = f.spd * dt, ux = dx/d*s, uy = dy/d*s;
-        if (!solid(f.x + ux*3, f.y)) f.x += ux;
-        if (!solid(f.x, f.y + uy*3)) f.y += uy;
-      } else {
-        f.atk -= dt;
-        if (f.atk <= 0){
-          f.atk = 0.8; P.hp -= 7 + wave; P.hurt = 1; P.hurtAngle = hitDirFrom(f.x, f.y);
-          beep(90, .2, 'sawtooth', .1); updHUD();
-          if (P.hp <= 0){ P.hp = 0; die(); }
-        }
-      }
-    }
-  } else {
-    for (const r of REMOTES.values()){
-      if (r.flash > 0) r.flash -= dt;
-      if (r.mmT > 0) r.mmT -= dt;
-    }
-    netLoop(dt);
-  }
-  if (P.hurt > 0){
-    P.hurt -= dt*2.2;
-    const k = Math.max(0, P.hurt);
-    el('hit').style.opacity = k*0.9;
-    el('hitdir').style.opacity = Math.min(1, k*1.8)*0.95;
-    el('hitdir').style.transform = `rotate(${P.hurtAngle||0}deg)`;
-    el('hitdirArrow').style.setProperty('--pop', (0.85 + Math.min(1,k*1.8)*0.35).toFixed(2));
-    el('hitdirArrow').style.transform =
-      `translateX(-50%) perspective(38vmin) rotateX(58deg) scale(var(--pop))`;
-  }
-  if (P.flash > 0) P.flash -= dt;
-  if (P.kick > 0) P.kick -= dt*5;
-  if (P.tracer){ P.tracer.t -= dt; if (P.tracer.t <= 0) P.tracer = null; }
-}
-
-/* ============ render ============ */
-function render(){
-  updateAllRemoteInterp();
-  const horizon = H/2 + pitch;
-  const g = ctx.createLinearGradient(0,0,0,horizon);
-  g.addColorStop(0,'#1c2530'); g.addColorStop(1,'#3a4652');
-  ctx.fillStyle = g; ctx.fillRect(0,0,W,Math.max(0,horizon));
-  const g2 = ctx.createLinearGradient(0,horizon,0,H);
-  g2.addColorStop(0,'#3a3226'); g2.addColorStop(1,'#211f1c');
-  ctx.fillStyle = g2; ctx.fillRect(0,Math.max(0,horizon),W,H-Math.max(0,horizon));
-
-  for (let x=0; x<W; x++){
-    const cx = 2*x/W - 1;
-    const rdx = P.dx + P.px*cx, rdy = P.dy + P.py*cx;
-    let mx = P.x|0, my = P.y|0;
-    const ddx = Math.abs(1/rdx), ddy = Math.abs(1/rdy);
-    let sx, sy, sdx, sdy, side = 0;
-    if (rdx < 0){ sx = -1; sdx = (P.x - mx) * ddx; } else { sx = 1; sdx = (mx + 1 - P.x) * ddx; }
-    if (rdy < 0){ sy = -1; sdy = (P.y - my) * ddy; } else { sy = 1; sdy = (my + 1 - P.y) * ddy; }
-    let tile = 0, guard = 0;
-    while (guard++ < 200){
-      if (sdx < sdy){ sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
-      if (mx<0||my<0||mx>=N||my>=N){ tile = 1; break; }
-      if (grid[my][mx] > 0){ tile = grid[my][mx]; break; }
-    }
-    const dist = side === 0 ? (sdx - ddx) : (sdy - ddy);
-    zbuf[x] = Math.max(0.01, dist);
-    // scale = 距離だけで決まる純粋な投影スケール（壁の高さには依存しない）。
-    // ジャンプによる視点のずれは物理的な移動量なので scale を使い、
-    // 壁の見た目の高さ(h)には WALL_HEIGHT を掛ける。こうすることで
-    // WALL_HEIGHT を上げるほど「壁の高さに対するずれの割合」が小さくなり、
-    // 高い壁ほどジャンプしても上が見えにくくなる。
-    const scale = H / dist;
-    const h = Math.min(H*6, WALL_HEIGHT * scale);
-    const y0 = H/2 + pitch - h * (1 - EYE_RATIO) + eyeZ(P) * scale * JUMP_SHIFT;
-    const c = WALLC[tile] || WALLC[1];
-    let sh = Math.min(1, 1.7 / (1 + dist*0.22));
-    if (side === 1) sh *= 0.8;
-    ctx.fillStyle = `rgb(${c[0]*sh|0},${c[1]*sh|0},${c[2]*sh|0})`;
-    ctx.fillRect(x, y0, 1, h);
-    ctx.fillStyle = `rgba(0,0,0,${Math.min(.32, dist*0.035)})`;
-    ctx.fillRect(x, y0, 1, h);
-  }
-
-  const list = targetsFor().map(f => ({f, d:(f.x-P.x)**2 + (f.y-P.y)**2})).sort((a,b) => b.d - a.d);
-  for (const {f} of list){
-    const s = project(f); if (!s) continue;
-    const img = spriteSet(s.pose, s.view, f.flash > 0)[f.kind];
-    const start = Math.max(0, Math.floor(s.x0)), end = Math.min(W, Math.ceil(s.x0 + s.w));
-    for (let x=start; x<end; x++){
-      if (s.ty >= zbuf[x]) continue;
-      let u = ((x - s.x0) * 64 / s.w) | 0;
-      if (u < 0 || u > 63) continue;
-      if (s.mirror) u = 63 - u;
-      ctx.drawImage(img, u, 0, 1, 64, x, s.y0, 1, s.h);
-    }
-  }
-
-  drawGun();
-  drawCross();
-}
-
-function gunPos(){
-  const bob = Math.sin(P.bob)*4*SCALE, bob2 = Math.abs(Math.cos(P.bob))*3*SCALE;
-  const k = Math.max(0, P.kick) * 9 * SCALE;
-  const j = eyeZ(P) * 10 * SCALE;
-  return { gx: W*0.56 + bob, gy: H - 2 + bob2 + k - j, u: H * 0.055 };
-}
-function drawGun(){
-  const { gx, gy, u } = gunPos();
-  if (P.tracer){
-    ctx.strokeStyle = `rgba(242,181,68,${P.tracer.t/0.09*0.7})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(gx, gy - u*4.9); ctx.lineTo(P.tracer.x, P.tracer.y); ctx.stroke();
-  }
-  ctx.fillStyle = '#20282e'; ctx.fillRect(gx - u*0.9, gy - u*2.6, u*1.8, u*2.8);
-  ctx.fillStyle = '#39454d'; ctx.fillRect(gx - u*0.45, gy - u*4.6, u*0.9, u*2.2);
-  ctx.fillStyle = '#161c21'; ctx.fillRect(gx - u*0.2, gy - u*4.8, u*0.4, u*0.5);
-  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(gx - u*0.9, gy - u*2.6, u*0.5, u*2.8);
-  if (P.flash > 0){
-    ctx.fillStyle = 'rgba(242,181,68,.92)';
-    ctx.beginPath(); ctx.arc(gx, gy - u*4.9, u*(1.1 + Math.random()*0.5), 0, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(0,0,W,H);
-  }
-}
-function drawCross(){
-  const cx = P.aim.x, cy = P.aim.y, s = Math.max(3, H*0.012), g = s*0.8;
-  ctx.fillStyle = P.reload > 0 ? 'rgba(196,70,44,.9)'
-                : hovered ? 'rgba(127,176,105,.95)' : 'rgba(200,203,196,.85)';
-  ctx.fillRect(cx-1, cy-g-s, 2, s); ctx.fillRect(cx-1, cy+g, 2, s);
-  ctx.fillRect(cx-g-s, cy-1, s, 2); ctx.fillRect(cx+g, cy-1, s, 2);
-  if (hovered) ctx.fillRect(cx-1, cy-1, 2, 2);
-}
-
-/* minimap: own position always; opponent only flashes in briefly after they fire (online mode) */
-const mm = el('map'), mc = mm.getContext('2d');
-function drawMap(){
-  const t = 132 / N;
-  mc.clearRect(0,0,132,132);
-  mc.fillStyle = 'rgba(10,14,18,.55)'; mc.fillRect(0,0,132,132);
-  mc.fillStyle = '#39454d';
-  for (let y=0; y<N; y++) for (let x=0; x<N; x++)
-    if (grid[y][x] > 0) mc.fillRect(x*t, y*t, t, t);
-  if (CFG.mode === 'online'){
-    for (const r of REMOTES.values()){
-      if (r.mmT > 0 && !r.dead){
-        mc.fillStyle = KIND_COLORS[r.kind][0];
-        mc.beginPath(); mc.arc(r.x*t, r.y*t, 2.6, 0, 7); mc.fill();
-      }
-    }
-  }
-  mc.fillStyle = '#f2b544';
-  mc.beginPath(); mc.arc(P.x*t, P.y*t, 2.6, 0, 7); mc.fill();
-  mc.strokeStyle = '#f2b544'; mc.lineWidth = 1.4; mc.beginPath();
-  mc.moveTo(P.x*t, P.y*t); mc.lineTo((P.x+P.dx*1.6)*t, (P.y+P.dy*1.6)*t); mc.stroke();
-}
-
-/* ============ HUD ============ */
-function updHUD(){
-  el('hpnum').textContent = Math.max(0, Math.round(P.hp));
-  el('hpnum').classList.toggle('hurt', P.hp <= 30);
-  el('hpfill').style.height = Math.max(0, P.hp) + '%';
-  el('hpfill').style.background = P.hp <= 30 ? '#c4462c' : '#f2b544';
-  el('ammonum').textContent = P.reload > 0 ? '—' : P.ammo;
-  el('ammonum').classList.toggle('empty', P.ammo === 0);
-  if (CFG.mode === 'online'){
-    el('top').innerHTML = `あなた <b>${P.kills}</b> キル &nbsp;·&nbsp; ${REMOTES.size + 1}人対戦 &nbsp;·&nbsp; ${CFG.target}キル先取`;
-    const rows = [{ id:null, label:'あなた', kills:P.kills }];
-    for (const r of REMOTES.values()) rows.push({ id:r.id, label:callsign(r.id), kills:r.kills });
-    rows.sort((a,b) => b.kills - a.kills);
-    el('scoreboard').innerHTML = rows.map(r =>
-      `<div${r.id===null?' class="me"':''}>${r.label} ${r.kills}</div>`).join('');
-  } else {
-    el('top').innerHTML = `区画 <b>${wave}</b> &nbsp;·&nbsp; 残り <b>${foes.length}</b> &nbsp;·&nbsp; <b>${pts}</b>`;
-    el('scoreboard').innerHTML = '';
-  }
-}
-
-/* ============ settings ============ */
-const sSens = el('s_sens');
-function applySens(){
-  CFG.sens = parseFloat(sSens.value);
-  el('v_sens').textContent = CFG.sens.toFixed(2);
-}
-function applyCfg(){
-  applySens();
-  el('g_solo').setAttribute('aria-pressed', CFG.mode === 'solo');
-  el('g_online').setAttribute('aria-pressed', CFG.mode === 'online');
-  el('modefield').style.display = '';
-  el('sensfield').style.display = '';
-  el('netfield').style.display = CFG.mode === 'online' ? '' : 'none';
-  el('go').style.display = CFG.mode === 'online' ? 'none' : '';
-  el('go').textContent = '進入する'; el('go').onclick = start;
-  el('quit').style.display = 'none';
-  document.body.classList.toggle('online', CFG.mode === 'online');
-  document.body.classList.toggle('solo', CFG.mode === 'solo');
-  el('blurb').innerHTML = CFG.mode === 'online'
-    ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。人数がそろったらホストが対戦を開始する。'
-    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ <kbd>クリック</kbd> 射撃<br><kbd>Space</kbd> ジャンプ ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>R</kbd> リロード ／ <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 設定';
-  cv.style.cursor = 'none';
-}
-sSens.oninput = applySens;
-el('g_solo').onclick = () => { CFG.mode = 'solo'; applyCfg(); };
-el('g_online').onclick = () => { CFG.mode = 'online'; applyCfg(); };
-el('connectBtn').onclick = connect;
-el('startBtn').onclick = hostBeginMatch;
-applyCfg();
-
-// サーバーから配信されている(file://ではなくhttp/httpsで開いている)場合は、
-// そのサーバー自身のアドレスを候補として自動入力しておく。
-if (location.protocol === 'http:' || location.protocol === 'https:'){
-  const wsProto = location.protocol === 'https:' ? 'wss://' : 'ws://';
-  el('srv').value = wsProto + location.host;
-}
-
-/* ============ flow ============ */
-const veil = el('veil');
-function backToMenu(){
-  veil.classList.remove('gone');
-  el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
-  el('score').textContent = '';
-  applyCfg();
-  netState = 'idle';
-  el('lobby').style.display = 'none';
-  el('scoreboard').innerHTML = '';
-  REMOTES.clear();
-  if (socket){ try{ socket.close(); }catch(e){} socket = null; }
-}
-function resume(){ alive = true; veil.classList.add('gone'); if (!isTouch) cv.requestPointerLock?.(); }
-function resumeOnline(){
+  netState = 'playing';
+  started = true;
   alive = true;
   veil.classList.add('gone');
-  el('quit').style.display = 'none';
-  if (!isTouch) cv.requestPointerLock?.();
+  el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
+  refreshGoVisibility();
+  if (!isTouch) canvas.requestPointerLock?.();
 }
-function start(){
-  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
-  resetSolo(); updHUD();
-  veil.classList.add('gone');
-  if (!isTouch) cv.requestPointerLock?.();
+// 相手からの被弾でHPが尽きた時、他プレイヤーから離れた場所に体力満タンで再出現させる。
+// キルの加算・撃破した相手への通知は呼び出し元（'hit'受信時）で行う。
+function respawnSelf(){
+  clearHitMarks();
+  const spot = freeSpot(Math.random, [...REMOTES.values()]);
+  player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
+  P.hp = 100; P.ammo = MAG; P.reload = 0;
+  P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
 }
-function over(titleJa, titleEn, text, btn, sub, next){
-  alive = false;
-  document.exitPointerLock?.();
-  el('title').innerHTML = `<span>${titleJa}</span>${titleEn}`;
-  el('blurb').innerHTML = text;
-  el('go').textContent = btn; el('go').style.display = '';
-  el('score').textContent = sub;
-  veil.classList.remove('gone');
-  el('go').onclick = next;
-  el('hit').style.opacity = 0;
-  el('hitdir').style.opacity = 0;
-}
-function pause(){
-  if (!alive) return;
-  if (CFG.mode === 'online'){
-    alive = false;
-    document.exitPointerLock?.();
-    el('title').innerHTML = '<span>一時停止</span>PAUSED';
-    el('blurb').innerHTML = '対戦を一時停止した。感度はここで調整できる。';
-    el('score').textContent = scoreboardText();
-    el('modefield').style.display = 'none';
-    el('netfield').style.display = 'none';
-    el('sensfield').style.display = '';
-    el('go').textContent = '続ける';
-    el('go').style.display = '';
-    el('go').onclick = resumeOnline;
-    el('quit').style.display = '';
-    el('quit').onclick = () => { backToMenu(); };
-    veil.classList.remove('gone');
-    el('hit').style.opacity = 0;
-    el('hitdir').style.opacity = 0;
-    return;
-  }
-  over('一時停止', 'PAUSED', '手を止めた。設定はここで変えられる。', '続ける', `区画 ${wave} ／ ${pts} 点`, resume);
-}
-function die(){
-  foes = [];
-  best = Math.max(best, pts);
-  over('信号途絶', 'GAME OVER', `区画 ${wave} で倒れた。`, 'もう一度', `${pts} 点 ／ 最高 ${best} 点`, start);
-}
+/* ============ 勝敗判定（ステップ5-5） ============ */
+// 誰かが規定キル数（CFG.target）に先に到達したら、その時点でそのプレイヤーの
+// クライアントが matchover をブロードキャストし、全員が同じ決着画面を表示する。
 function scoreboardText(){
   const rows = [{ label:'あなた', kills:P.kills }];
   for (const r of REMOTES.values()) rows.push({ label:callsign(r.id), kills:r.kills });
@@ -1287,26 +1818,122 @@ function scoreboardText(){
   return rows.map(r => `${r.label} ${r.kills}`).join(' ／ ');
 }
 function finishOnline(winnerId){
-  alive = false; document.exitPointerLock?.();
+  netState = 'idle';
+  alive = false;
+  document.exitPointerLock?.();
   const iwon = winnerId === myId;
-  if (iwon) over('決着', 'YOU WIN', `${CFG.target} キル先取した。`, 'メニューへ', scoreboardText(), backToMenu);
-  else over('決着', 'YOU LOSE', `${callsign(winnerId)} に ${CFG.target} キル先取された。`, 'メニューへ', scoreboardText(), backToMenu);
+  el('title').innerHTML = iwon ? '<span>決着</span>YOU WIN' : '<span>決着</span>YOU LOSE';
+  el('blurb').innerHTML = iwon
+    ? `${CFG.target} キル先取した。`
+    : `${callsign(winnerId)} に ${CFG.target} キル先取された。`;
+  el('score').textContent = scoreboardText();
+  el('go').style.display = 'none';
+  el('quit').style.display = '';
+  el('quit').textContent = 'メニューへ';
+  el('lobby').style.display = 'none';
+  veil.classList.remove('gone'); clearHitMarks();
+}
+function leaveOnline(msg){
+  if (socket){ try { socket.close(); } catch(e){} socket = null; }
+  netState = 'idle'; alive = false; started = false;
+  document.exitPointerLock?.();
+  REMOTES.clear(); clearRemoteMeshes();
+  el('lobby').style.display = 'none';
+  netStatus(msg || '未接続');
+  veil.classList.remove('gone'); clearHitMarks();
+  el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
+  el('score').textContent = '';
+  applyMode(); // blurb・quitボタンの表記・go/quitの表示状態をすべて通常メニューの状態に戻す
+}
+function refreshGoVisibility(){
+  const showGo = CFG.mode === 'solo' || netState === 'playing';
+  el('go').style.display = showGo ? '' : 'none';
+  el('quit').style.display = (CFG.mode === 'online' && netState !== 'idle') ? '' : 'none';
+}
+function applyMode(){
+  el('g_solo').setAttribute('aria-pressed', String(CFG.mode === 'solo'));
+  el('g_online').setAttribute('aria-pressed', String(CFG.mode === 'online'));
+  el('netfield').style.display = CFG.mode === 'online' ? '' : 'none';
+  el('quit').textContent = '切断する';
+  el('blurb').innerHTML = CFG.mode === 'online'
+    ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。最初に入室した人がホストとなり、ステージを選んで人数がそろったら対戦を開始する。'
+    : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ<br>'
+    + '<kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>Esc</kbd> 設定<br>'
+    + '左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br><br>'
+    + '窓は普段は薄い壁と同じく通れないが、窓枠に触れた状態で<kbd>Space</kbd>を押すと乗り越えて反対側へ抜けられる。';
+  refreshGoVisibility();
+}
+el('g_solo').onclick = () => {
+  if (CFG.mode === 'online' && netState !== 'idle') leaveOnline('未接続');
+  CFG.mode = 'solo'; applyMode();
+};
+el('g_online').onclick = () => { CFG.mode = 'online'; applyMode(); };
+el('connectBtn').onclick = connect;
+el('startBtn').onclick = hostBeginMatch;
+el('quit').onclick = () => leaveOnline('未接続');
+applyMode();
+
+// サーバーから配信されている（file://ではなくhttp/httpsで開いている）場合は、
+// そのサーバー自身のアドレスを候補として自動入力しておく。
+if (location.protocol === 'http:' || location.protocol === 'https:'){
+  const wsProto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+  el('srv').value = wsProto + location.host;
+}
+
+/* ============ 画面フロー ============ */
+const veil = el('veil');
+function resetLevel(){
+  grid = currentStageCells();
+  buildScene();
+  const spot = freeSpot(Math.random);
+  player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
+  yaw = 0; pitch = 0;
+  P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
+  P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0;
+  updHUD();
+}
+function start(){
+  if (!stagesReady) return;
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+  if (!started){ resetLevel(); started = true; }
+  alive = true;
+  veil.classList.add('gone');
+  el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
+  if (!isTouch) canvas.requestPointerLock?.();
+}
+function pause(){
+  if (!alive) return;
+  alive = false; mouseFire = false; firing = false; P.vault = null;
+  document.exitPointerLock?.();
+  el('title').innerHTML = '<span>一時停止</span>PAUSED';
+  el('go').textContent = '続ける';
+  veil.classList.remove('gone'); clearHitMarks();
 }
 el('go').onclick = start;
 el('gear').onclick = () => { if (alive) pause(); };
+loadStages();
 
-/* ============ loop ============ */
-let last = performance.now(), mapT = 0;
+function resize(){
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', resize);
+resize();
+
+/* ============ ループ ============ */
+let last = performance.now();
 function frame(now){
-  const dt = Math.min(0.05, (now - last)/1000); last = now;
+  const dt = Math.min(0.05, (now-last)/1000); last = now;
   step(dt);
-  render();
-  hovered = alive ? pickTarget() : null;
-  mapT += dt;
-  if (mapT > 0.08){ mapT = 0; drawMap(); if (alive) updHUD(); }
+  updateHitMarks(dt);
+  tickMap(dt);
+  renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-buildMaze(Math.random); drawMap();
+// stages.json の読み込みが終わるまでの仮表示（内蔵の練習ステージ）
+grid = buildDefaultStage();
+buildScene();
+camera.position.set(player.x, EYE_HEIGHT, player.y);
 requestAnimationFrame(frame);
 </script>
 </body>

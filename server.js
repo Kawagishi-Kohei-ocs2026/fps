@@ -17,10 +17,18 @@ const PORT = process.env.PORT || 8080;
 const DEFAULT_MAX = 8;
 const HARD_MAX = 8; // これ以上は同時対戦に対応しない
 
-// ブラウザでこのURLを開いたら、ゲーム本体(fps.html)をそのまま返す。
-// WebSocketの相手を探すときはリレー処理へ回る。
+// ブラウザでこのURLを開いたら、基本はゲーム本体(fps.html)を返す。
+// ただし stages.json のような、同じフォルダにある他の静的ファイルへの
+// リクエストが来た場合は、そのファイルの中身をそのまま返す。
+// （WebSocketの相手を探すときはリレー処理へ回る。）
 const GAME_HTML = path.join(__dirname, 'fps.html');
-const httpServer = http.createServer((req, res) => {
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.js':   'text/javascript; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+};
+function sendGameHtml(res){
   fs.readFile(GAME_HTML, (err, data) => {
     if (err) {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -28,6 +36,21 @@ const httpServer = http.createServer((req, res) => {
       return;
     }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(data);
+  });
+}
+const httpServer = http.createServer((req, res) => {
+  let reqPath = decodeURIComponent((req.url || '/').split('?')[0]);
+  if (reqPath === '/' || reqPath === '') reqPath = '/fps.html';
+  // ディレクトリ脱出（../ など）を防ぎ、サーバーのフォルダ内だけを対象にする
+  const safe = path.normalize(reqPath).replace(/^(\.\.[/\\])+/, '');
+  const filePath = path.join(__dirname, safe);
+  if (!filePath.startsWith(__dirname)) { sendGameHtml(res); return; }
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) { sendGameHtml(res); return; } // 見つからない時は従来通りゲーム本体を返す
+    const ext = path.extname(filePath);
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
     res.end(data);
   });
 });
