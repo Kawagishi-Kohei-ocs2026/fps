@@ -13,8 +13,12 @@
     color:var(--dust);-webkit-user-select:none;user-select:none;touch-action:none}
   #view{display:block;width:100vw;height:100vh;cursor:none}
 
-  #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;
-    border-radius:50%;background:var(--sodium);pointer-events:none;box-shadow:0 0 4px rgba(242,181,68,.8)}
+  #cross{position:fixed;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;
+    pointer-events:none}
+  #cross::before,#cross::after{content:"";position:absolute;background:rgba(255,255,255,.75);
+    box-shadow:0 0 3px rgba(255,255,255,.5)}
+  #cross::before{left:50%;top:0;width:2px;height:100%;margin-left:-1px}
+  #cross::after{top:50%;left:0;height:2px;width:100%;margin-top:-1px}
 
   #hud{position:fixed;inset:0;pointer-events:none}
   #top{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.28em;color:#b4bcc1;text-shadow:0 0 4px rgba(0,0,0,.55)}
