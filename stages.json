@@ -3,6 +3,8 @@
     {
       "id": "practice-a",
       "name": "練習場 A",
+      "w": 25,
+      "h": 25,
       "n": 25,
       "grid": [
         [{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"}],
@@ -35,6 +37,8 @@
     {
       "id": "ring-hall",
       "name": "円環ホール",
+      "w": 25,
+      "h": 25,
       "n": 25,
       "grid": [
         [{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"}],
@@ -67,6 +71,8 @@
     {
       "id": "stage-3",
       "name": "ステージ 3",
+      "w": 50,
+      "h": 50,
       "n": 50,
       "grid": [
         [{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"},{"t":"wall"}],

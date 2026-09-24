@@ -25,6 +25,13 @@
   button:disabled:hover{background:#5a6068}
   #tag{position:fixed;top:14px;left:18px;font-size:11px;letter-spacing:.14em;color:#b4bcc1;text-shadow:0 0 4px rgba(0,0,0,.55);pointer-events:none}
 
+  /* ステージサイズ（横×縦）の入力 */
+  #sizeRow{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:22px;font-size:12px;color:#9aa4ab;letter-spacing:.06em}
+  #sizeRow label{display:flex;align-items:center;gap:6px}
+  #sizeRow input{width:64px;background:#12171b;border:1px solid #2a333a;color:#c8cbc4;padding:7px 8px;font:inherit;font-size:13px;text-align:right}
+  #sizeRow button{margin:0;padding:8px 14px;font-size:12px;letter-spacing:.08em;background:#1b242c;color:#c8cbc4;border:1px solid #2a333a;cursor:pointer}
+  #sizeRow button:hover{background:#2a333a;color:#fff}
+
   /* 複数人で編集（オンライン接続）まわりのUI */
   #cfg{margin-top:22px;width:min(360px,88vw);text-align:left}
   #modeRow{display:flex;gap:8px}
@@ -93,6 +100,14 @@
      クロスヘアの先に、置こうとしているブロックが薄く表示されます（置けない場所は赤色）。
      画面右上から、作ったステージをJSONファイルとして書き出し・読み込みできます。</p>
 
+  <div id="sizeRow">
+    <span>ステージサイズ</span>
+    <label>横 <input id="sizeW" type="number" min="8" max="200" step="1" value="50"></label>
+    <span>×</span>
+    <label>縦 <input id="sizeH" type="number" min="8" max="200" step="1" value="50"></label>
+    <button type="button" id="sizeBtn">変更</button>
+  </div>
+
   <div id="cfg">
     <div id="modeRow">
       <button type="button" id="g_solo" aria-pressed="true">一人で作る</button>
@@ -119,7 +134,8 @@ function el(id){ return document.getElementById(id); }
 const CFG = { mode:'solo' }; // 'solo'＝一人で編集 ／ 'online'＝サーバー経由でルームの全員と共有編集
 
 /* ============ 地形パラメータ ============ */
-const N = 50;                // グリッドの一辺
+let W = 50, H = 50;          // グリッドの横(x方向)・縦(y方向)のマス数。UI・読み込み・ステージデータから変えられる
+const MIN_SIZE = 8, MAX_SIZE = 200;   // 変更できるサイズの範囲
 const WALL_H = 2.3;          // 壁の高さ（登れない）
 const PLATFORM_H = 1.05;     // 箱・高台の高さ（ジャンプ頂点よりわずかに低い＝直接ジャンプで乗れる）
 const THIN_WALL_T = 0.14;    // 薄い壁の厚み
@@ -135,8 +151,8 @@ const PLAYER_R = 0.28;        // プレイヤーの当たり判定の半径
 // 見た目通りマスの端に寄せた薄い板になる（dir で東西南北どちらの辺に沿わせるか指定）。
 let grid = [];
 function initFlatLevel(){
-  grid = Array.from({length:N}, (_, y) => Array.from({length:N}, (_, x) => {
-    if (x===0 || y===0 || x===N-1 || y===N-1) return {type:'wall'};
+  grid = Array.from({length:H}, (_, y) => Array.from({length:W}, (_, x) => {
+    if (x===0 || y===0 || x===W-1 || y===H-1) return {type:'wall'};
     return {type:'floor'};
   }));
 }
@@ -150,13 +166,36 @@ function deserializeCell(c){
   return (c.t==='ramp' || c.t==='thinwall' || c.t==='window') ? {type:c.t, dir:c.d||'E'} : {type:c.t||'floor'};
 }
 function serializeGrid(){ return grid.map(row => row.map(serializeCell)); }
-function applyGrid(data){ grid = data.map(row => row.map(deserializeCell)); buildScene(); }
+// 渡されたグリッドの大きさに W・H を合わせて差し替える（読み込み／ネットワーク同期／サイズ変更で共通）
+function applyGrid(data){
+  grid = data.map(row => row.map(deserializeCell));
+  H = grid.length; W = grid[0].length;
+  buildScene();
+  syncSizeInputs();
+  // 縮めたときにプレイヤーが範囲外に残らないようにする
+  player.x = Math.min(Math.max(player.x, 1.5), W - 1.5);
+  player.y = Math.min(Math.max(player.y, 1.5), H - 1.5);
+  player.z = heightAt(player.x, player.y); player.vz = 0; player.onGround = true;
+}
+// 今のステージの内容をできるだけ残したまま、サイズだけ変える（外周は新しいサイズで壁に張り直す）
+function resizeGrid(nw, nh){
+  const old = grid, ow = W, oh = H;
+  W = nw; H = nh;
+  initFlatLevel();
+  for (let y=1; y<Math.min(oh, nh)-1; y++) for (let x=1; x<Math.min(ow, nw)-1; x++) grid[y][x] = old[y][x];
+  const g = serializeGrid();
+  applyGrid(g);
+}
+function syncSizeInputs(){
+  const a = document.getElementById('sizeW'), b = document.getElementById('sizeH');
+  if (a) a.value = W; if (b) b.value = H;
+}
 
 // 座標(x,y)の「地面の高さ」。薄い壁は板そのものが薄いので、床の高さとしては通常の床(0)のまま扱い、
 // 板による通行止めは collidesSolid() 側の水平方向の当たり判定だけで行う。
 function heightAt(x, y){
   const cx = Math.floor(x), cy = Math.floor(y);
-  if (cx<0 || cy<0 || cx>=N || cy>=N) return WALL_H;
+  if (cx<0 || cy<0 || cx>=W || cy>=H) return WALL_H;
   const cell = grid[cy][cx];
   if (cell.type === 'wall') return WALL_H;
   if (cell.type === 'platform') return PLATFORM_H;
@@ -177,7 +216,7 @@ function blocksProjectile(type){ return type === 'wall' || type === 'thinwall'; 
 // (x,y)を含むマスのセル情報。範囲外は壁扱い。
 function cellAt(x, y){
   const cx = Math.floor(x), cy = Math.floor(y);
-  if (cx<0 || cy<0 || cx>=N || cy>=N) return {type:'wall'};
+  if (cx<0 || cy<0 || cx>=W || cy>=H) return {type:'wall'};
   return grid[cy][cx];
 }
 
@@ -422,15 +461,17 @@ const keyOf = (x,y) => x+','+y;
 
 function buildScene(){
   mapDirty = true;
+  camera.far = Math.max(100, Math.hypot(W, H) + 10);   // 大きいステージでも奥の壁が切れないように
+  camera.updateProjectionMatrix();
   levelGroup.clear();
   cellMeshes.clear();
-  for (let y=0; y<N; y++) for (let x=0; x<N; x++){
+  for (let y=0; y<H; y++) for (let x=0; x<W; x++){
     const m = meshForCell(grid[y][x], x, y);
     if (m){ levelGroup.add(m); cellMeshes.set(keyOf(x,y), m); }
   }
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(N, N), floorMat);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H), floorMat);
   floor.rotation.x = -Math.PI/2;
-  floor.position.set(N/2, 0, N/2);
+  floor.position.set(W/2, 0, H/2);
   levelGroup.add(floor);
 }
 
@@ -467,7 +508,7 @@ outlineMesh.visible = false;
 scene.add(outlineMesh);
 
 /* ============ プレイヤー ============ */
-const player = { x:N/2, y:N/2, z:0, vz:0, onGround:true };
+const player = { x:W/2, y:H/2, z:0, vz:0, onGround:true };
 let yaw = 0, pitch = 0;
 const maxPitch = Math.PI*0.47;
 const keys = {};
@@ -475,7 +516,7 @@ let alive = false, started = false;
 
 function freeSpot(rng){
   let x,y,t=0;
-  do { x = 1+rng()*(N-2); y = 1+rng()*(N-2); t++; }
+  do { x = 1+rng()*(W-2); y = 1+rng()*(H-2); t++; }
   while (t<400 && (heightAt(x,y) > 0.05 || collidesSolid(x,y,PLAYER_R)));
   return {x,y};
 }
@@ -584,7 +625,7 @@ function cellFromHit(hit, into){
   return { x: Math.floor(hit.point.x + n.x*nudge), y: Math.floor(hit.point.z + n.z*nudge) };
 }
 
-function inEditableBounds(x, y){ return x>0 && y>0 && x<N-1 && y<N-1; }
+function inEditableBounds(x, y){ return x>0 && y>0 && x<W-1 && y<H-1; }
 
 function breakBlock(){
   const hit = castTarget();
@@ -667,8 +708,8 @@ function idColor(id){
   return new THREE.Color(`hsl(${h % 360}, 62%, 56%)`);
 }
 function createRemote(id){
-  return { id, x:N/2, y:N/2, z:0, yaw:0,
-    _p0x:N/2, _p0y:N/2, _p0z:0, _p0yaw:0, _p1x:N/2, _p1y:N/2, _p1z:0, _p1yaw:0,
+  return { id, x:W/2, y:H/2, z:0, yaw:0,
+    _p0x:W/2, _p0y:H/2, _p0z:0, _p0yaw:0, _p1x:W/2, _p1y:H/2, _p1z:0, _p1yaw:0,
     _t0:performance.now(), _dur:80, _lastMsgT:0 };
 }
 function buildRemoteMesh(id){
@@ -849,6 +890,7 @@ updateInviteLink();
 
 /* ============ 入力 ============ */
 addEventListener('keydown', e => {
+  if (e.target instanceof HTMLInputElement) return;   // 入力欄に打っている間はゲーム操作にしない
   keys[e.code] = true;
   if (e.code === 'Space'){ if (!tryClimbThrough()) doJump(); e.preventDefault(); }
   if (e.code === 'Escape' && alive) pause();
@@ -886,10 +928,10 @@ const mapBaseCtx = mapBase.getContext('2d');
 let mapDirty = true;
 const MAP_COL = { wall:'#7a848c', platform:'#b39468', thin:'#c3cad0', window:'#6fd0d6' };
 function redrawMapBase(){
-  const c = mapBaseCtx, S = mapBase.width, t = S / N;
+  const c = mapBaseCtx, S = mapBase.width, t = S / Math.max(W, H);
   const th = Math.max(2 * MAP_DPR, t * 0.3);        // 薄い壁・窓の線の太さ
   c.clearRect(0, 0, S, S);
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
     const cell = grid[y][x], X = x * t, Y = y * t;
     if (cell.type === 'wall'){ c.fillStyle = MAP_COL.wall; c.fillRect(X, Y, t, t); }
     else if (cell.type === 'platform'){ c.fillStyle = MAP_COL.platform; c.fillRect(X, Y, t, t); }
@@ -914,7 +956,7 @@ function redrawMapBase(){
 }
 function drawMap(){
   if (mapDirty){ redrawMapBase(); mapDirty = false; }
-  const c = mapCtx, S = mapEl.width, t = S / N, px = player.x * t, py = player.y * t;
+  const c = mapCtx, S = mapEl.width, t = S / Math.max(W, H), px = player.x * t, py = player.y * t;
   c.clearRect(0, 0, S, S);
   c.drawImage(mapBase, 0, 0);
   if (CFG.mode === 'online'){
@@ -931,7 +973,7 @@ function drawMap(){
 const veil = document.getElementById('veil');
 function start(){
   if (!started){
-    const s = { x:N/2, y:N/2 };
+    const s = { x:W/2, y:H/2 };
     player.x = s.x; player.y = s.y; player.z = heightAt(s.x,s.y); player.vz = 0; player.onGround = true;
     yaw = 0; pitch = 0;
     started = true;
@@ -943,7 +985,8 @@ function pause(){ alive = false; document.exitPointerLock?.(); veil.classList.re
 document.getElementById('go').onclick = start;
 
 document.getElementById('exportBtn').onclick = () => {
-  const data = { n:N, grid: serializeGrid() };
+  const data = { w:W, h:H, grid: serializeGrid() };
+  if (W === H) data.n = W;   // 旧形式(n=一辺)しか読めないプログラム向け。正方形のときだけ付ける
   const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -958,7 +1001,14 @@ document.getElementById('importFile').addEventListener('change', async (e) => {
   if (!file) return;
   try {
     const data = JSON.parse(await file.text());
-    if (!data || !Array.isArray(data.grid) || data.grid.length !== N) throw new Error('グリッドサイズが一致しません(N=' + N + ')');
+    if (!data || !Array.isArray(data.grid) || !data.grid.length) throw new Error('grid がありません');
+    // サイズは w/h があればそれを、無ければ旧形式の n（正方形）を、それも無ければ grid の実寸を使う
+    const h = data.h ?? data.n ?? data.grid.length;
+    const w = data.w ?? data.n ?? (data.grid[0] && data.grid[0].length);
+    if (data.grid.length !== h || !data.grid.every(r => Array.isArray(r) && r.length === w))
+      throw new Error('grid の大きさが w×h(' + w + '×' + h + ') と合っていません');
+    if (w < MIN_SIZE || h < MIN_SIZE || w > MAX_SIZE || h > MAX_SIZE)
+      throw new Error('サイズは ' + MIN_SIZE + '〜' + MAX_SIZE + ' の範囲にしてください(' + w + '×' + h + ')');
     applyGrid(data.grid);
     const s = freeSpot(Math.random);
     player.x = s.x; player.y = s.y; player.z = heightAt(s.x,s.y); player.vz = 0; player.onGround = true;
@@ -967,11 +1017,24 @@ document.getElementById('importFile').addEventListener('change', async (e) => {
     alert('読み込みに失敗しました: ' + err.message);
   }
 });
+document.getElementById('sizeBtn').onclick = () => {
+  const nw = parseInt(document.getElementById('sizeW').value, 10);
+  const nh = parseInt(document.getElementById('sizeH').value, 10);
+  if (!(nw >= MIN_SIZE && nw <= MAX_SIZE && nh >= MIN_SIZE && nh <= MAX_SIZE)){
+    alert('横・縦とも ' + MIN_SIZE + '〜' + MAX_SIZE + ' の整数で入力してください');
+    syncSizeInputs();
+    return;
+  }
+  if (nw === W && nh === H) return;
+  if ((nw < W || nh < H) && !confirm('サイズを縮めると、はみ出た部分の建物は消えます。よろしいですか？')){ syncSizeInputs(); return; }
+  resizeGrid(nw, nh);
+  broadcastFullGrid(); // みんなで編集中なら、新しいサイズのステージを全員に配る
+};
 document.getElementById('clearBtn').onclick = () => {
   if (!confirm('編集中のステージを更地に戻します。よろしいですか？')) return;
   initFlatLevel();
   buildScene();
-  const s = { x:N/2, y:N/2 };
+  const s = { x:W/2, y:H/2 };
   player.x = s.x; player.y = s.y; player.z = heightAt(s.x,s.y); player.vz = 0; player.onGround = true;
   broadcastClear();
 };
@@ -999,7 +1062,7 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 initFlatLevel(); buildScene();
-camera.position.set(N/2, EYE_HEIGHT, N/2);
+camera.position.set(W/2, EYE_HEIGHT, H/2);
 requestAnimationFrame(frame);
 </script>
 </body>

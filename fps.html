@@ -204,8 +204,6 @@
     </div>
   </div>
   <button type="button" id="quit">切断する</button>
-
-  <p id="note">※ このビルドは3D移植の途中段階（ステップ5：オンライン対戦の3D対応、5-5まで完了）。ロビー・接続・対戦開始・状態同期・射撃判定（体／頭）とダメージ（本体12／頭部24、2D版と同じ数値）・被弾時の画面フラッシュ・HP0での自動リスポーンに加えて、キル数のカウント、相手を倒した際の通知、既定キル数（5キル）先取での勝敗判定と決着画面まで実装済み。相手プレイヤーの見た目は2D版(fps.html)と同じドット絵スプライトをビルボードとして貼る方式に変更し、しゃがみ・スライディングのポーズと見ている向き（正面／斜め前／横／斜め後ろ／背面）で絵を描き分ける。プレイヤーの見分けも2D版と同じく配色ごと変えて行う。次はステップ6（ミニマップ、被弾エフェクト、パフォーマンス調整などの仕上げ）を予定。ステージは <kbd>stages.json</kbd> から読み込まれ、それが読めない環境（file://で直接開いた場合など）では内蔵の練習ステージのみになる。</p>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
@@ -218,7 +216,11 @@ if (isTouch) document.body.classList.add('touch');
 const CFG = { sens: 1, mode: 'solo', target: 5 }; // target: 対戦の決着に必要なキル数（2D版と同じ既定値）
 
 /* ============ 地形パラメータ（fps3d_prototype.htmlより） ============ */
-const N = 50;
+// 現在のステージの横(W)・縦(H)のマス数。固定値ではなく、ステージを読み込む／受け取るたびに
+// setGrid() がステージデータ（stages.json の w/h → grid の実寸）から決め直す。
+let W = 50, H = 50;
+const DEFAULT_W = 50, DEFAULT_H = 50;   // 内蔵の練習ステージ・ランダムステージを作るときの大きさ
+const MIN_SIZE = 8, MAX_SIZE = 200;     // stages.json から読み込めるステージの大きさの範囲
 const WALL_H = 2.3;
 const PLATFORM_H = 1.05;
 const THIN_WALL_T = 0.14;
@@ -247,9 +249,15 @@ const DMG_BODY = 12, DMG_HEAD = 24;
 // 次のステップでstages.json化する前提の、手作りの練習用ステージ。
 // 通常の壁の区画に加えて、薄い壁／窓／坂＋箱を一通り試せるように配置してある。
 let grid = [];
+// ステージ（セルの2次元配列）を差し替え、その大きさに W・H を合わせる。grid を直接代入せず必ずこれを通す。
+function setGrid(cells){
+  grid = cells;
+  H = cells.length; W = cells[0].length;
+}
 function buildDefaultStage(){
-  const g = Array.from({length:N}, (_, y) => Array.from({length:N}, (_, x) => {
-    if (x===0 || y===0 || x===N-1 || y===N-1) return {type:'wall'};
+  const w = DEFAULT_W, h = DEFAULT_H;
+  const g = Array.from({length:h}, (_, y) => Array.from({length:w}, (_, x) => {
+    if (x===0 || y===0 || x===w-1 || y===h-1) return {type:'wall'};
     return {type:'floor'};
   }));
   const wallRow = (y, x0, x1) => { for (let x=x0; x<=x1; x++) g[y][x] = {type:'wall'}; };
@@ -284,9 +292,9 @@ function mulberry32(seed){
 
 // ランダムステージ：まず迷路の骨格（壁/床のみ）を掘り、通路を分ける壁の一部を
 // 薄い壁・窓に差し替え、開けた床にジャンプ台（坂＋箱）を点在させる。
-function generateRandomStage(rng){
-  const g = Array.from({length:N}, () => Array.from({length:N}, () => ({type:'wall'})));
-  const passable = Array.from({length:N}, () => Array(N).fill(false));
+function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
+  const g = Array.from({length:h}, () => Array.from({length:w}, () => ({type:'wall'})));
+  const passable = Array.from({length:h}, () => Array(w).fill(false));
   const setFloor = (x,y) => { g[y][x] = {type:'floor'}; passable[y][x] = true; };
   setFloor(1,1);
   const stack = [[1,1]];
@@ -294,16 +302,16 @@ function generateRandomStage(rng){
     const [x,y] = stack[stack.length-1];
     const opts = [[2,0],[-2,0],[0,2],[0,-2]]
       .map(([dx,dy]) => [x+dx, y+dy, x+dx/2, y+dy/2])
-      .filter(([nx,ny]) => nx>0 && ny>0 && nx<N-1 && ny<N-1 && !passable[ny][nx]);
+      .filter(([nx,ny]) => nx>0 && ny>0 && nx<w-1 && ny<h-1 && !passable[ny][nx]);
     if (!opts.length){ stack.pop(); continue; }
     const [nx,ny,mx,my] = opts[(rng()*opts.length)|0];
     setFloor(mx,my); setFloor(nx,ny); stack.push([nx,ny]);
   }
-  for (let y=2; y<N-2; y++) for (let x=2; x<N-2; x++)
+  for (let y=2; y<h-2; y++) for (let x=2; x<w-2; x++)
     if (!passable[y][x] && rng() < 0.4) setFloor(x,y);
 
   // 通路を分ける壁のうち、向かい合う2方向だけが床のものを薄い壁／窓に差し替える
-  for (let y=1; y<N-1; y++) for (let x=1; x<N-1; x++){
+  for (let y=1; y<h-1; y++) for (let x=1; x<w-1; x++){
     if (g[y][x].type !== 'wall') continue;
     const nF = passable[y-1][x], sF = passable[y+1][x], wF = passable[y][x-1], eF = passable[y][x+1];
     if (nF && sF && !wF && !eF){
@@ -322,11 +330,11 @@ function generateRandomStage(rng){
   const dirs = ['E','W','S','N'];
   while (placed < 3 && tries < 300){
     tries++;
-    const x = 2 + ((rng()*(N-5))|0), y = 2 + ((rng()*(N-5))|0);
+    const x = 2 + ((rng()*(w-5))|0), y = 2 + ((rng()*(h-5))|0);
     const dir = dirs[(rng()*4)|0];
     const [dx,dy] = dir==='E' ? [1,0] : dir==='W' ? [-1,0] : dir==='S' ? [0,1] : [0,-1];
     const px = x+dx, py = y+dy;
-    if (px<=0 || py<=0 || px>=N-1 || py>=N-1) continue;
+    if (px<=0 || py<=0 || px>=w-1 || py>=h-1) continue;
     if (g[y][x].type !== 'floor' || g[py][px].type !== 'floor') continue;
     g[y][x] = {type:'ramp', dir};
     g[py][px] = {type:'platform'};
@@ -341,7 +349,7 @@ function generateRandomStage(rng){
 function freeSpot(rng, minFrom){
   let x, y, t = 0;
   do {
-    x = 2 + rng()*(N-4); y = 2 + rng()*(N-4); t++;
+    x = 2 + rng()*(W-4); y = 2 + rng()*(H-4); t++;
   } while (t < 400 && (heightAt(x,y) > 0.05 || collidesSolid(x,y,PLAYER_R) ||
     (minFrom && t < 300 && minFrom.some(p => Math.hypot(x-p.x, y-p.y) < 5))));
   return {x, y};
@@ -349,7 +357,7 @@ function freeSpot(rng, minFrom){
 
 function heightAt(x, y){
   const cx = Math.floor(x), cy = Math.floor(y);
-  if (cx<0 || cy<0 || cx>=N || cy>=N) return WALL_H;
+  if (cx<0 || cy<0 || cx>=W || cy>=H) return WALL_H;
   const cell = grid[cy][cx];
   if (cell.type === 'wall') return WALL_H;
   if (cell.type === 'platform') return PLATFORM_H;
@@ -366,7 +374,7 @@ function heightAt(x, y){
 function blocksProjectile(type){ return type === 'wall' || type === 'thinwall'; }
 function cellAt(x, y){
   const cx = Math.floor(x), cy = Math.floor(y);
-  if (cx<0 || cy<0 || cx>=N || cy>=N) return {type:'wall'};
+  if (cx<0 || cy<0 || cx>=W || cy>=H) return {type:'wall'};
   return grid[cy][cx];
 }
 function circleRectOverlap(px, py, r, x0, y0, x1, y1){
@@ -571,7 +579,7 @@ const attackBlockers = [];
 function buildScene(){
   levelGroup.clear();
   attackBlockers.length = 0;
-  for (let y=0; y<N; y++) for (let x=0; x<N; x++){
+  for (let y=0; y<H; y++) for (let x=0; x<W; x++){
     const cell = grid[y][x];
     const m = meshForCell(cell, x, y);
     if (!m) continue;
@@ -581,9 +589,9 @@ function buildScene(){
       attackBlockers.push(m);
     }
   }
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(N, N), floorMat);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H), floorMat);
   floor.rotation.x = -Math.PI/2;
-  floor.position.set(N/2, 0, N/2);
+  floor.position.set(W/2, 0, H/2);
   levelGroup.add(floor);
 }
 
@@ -695,10 +703,10 @@ const mm = el('map'), mc = mm.getContext('2d'), MAP_PX = 132;
 let mapT = 0;
 function drawMap(){
   if (!grid.length) return;
-  const t = MAP_PX / N, th = Math.max(1.6, t * 0.28);
+  const t = MAP_PX / Math.max(W, H), th = Math.max(1.6, t * 0.28);
   mc.clearRect(0, 0, MAP_PX, MAP_PX);
   mc.fillStyle = 'rgba(10,14,18,.55)'; mc.fillRect(0, 0, MAP_PX, MAP_PX);
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++){
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
     const c = grid[y][x], X = x * t, Y = y * t;
     if (c.type === 'wall'){ mc.fillStyle = '#39454d'; mc.fillRect(X, Y, t, t); }
     else if (c.type === 'platform'){ mc.fillStyle = '#5a5140'; mc.fillRect(X, Y, t, t); }
@@ -1019,7 +1027,7 @@ applySens();
 // stages.json の {t,d} 形式を内部で使う {type,dir} 形式に変換する
 function cellFromJSON(c){ return (c.d !== undefined) ? {type:c.t, dir:c.d} : {type:c.t}; }
 
-let STAGES = [];               // [{id, name, cells}]
+let STAGES = [];               // [{id, name, w, h, cells}]
 let selectedStageId = 'random';
 let stagesReady = false;
 
@@ -1028,14 +1036,25 @@ async function loadStages(){
     const res = await fetch('stages.json', { cache:'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    STAGES = (data.stages || []).map(s => ({
-      id: s.id, name: s.name,
-      cells: s.grid.map(row => row.map(cellFromJSON)),
-    }));
+    // ステージの大きさは stages.json の各ステージの w(横)・h(縦) から決まる。
+    // w/h が無い旧形式は n（一辺）、それも無ければ grid の実寸を使う。
+    STAGES = [];
+    for (const s of (data.stages || [])){
+      const rows = s.grid;
+      const h = s.h ?? s.n ?? (rows && rows.length);
+      const w = s.w ?? s.n ?? (rows && rows[0] && rows[0].length);
+      const ok = Array.isArray(rows) && rows.length === h && rows.every(r => Array.isArray(r) && r.length === w)
+        && w >= MIN_SIZE && h >= MIN_SIZE && w <= MAX_SIZE && h <= MAX_SIZE;
+      if (!ok){
+        console.warn('stages.json の「' + (s.name || s.id) + '」は、w×h(' + w + '×' + h + ') と grid の大きさが合わないか範囲外のため読み込みません。');
+        continue;
+      }
+      STAGES.push({ id: s.id, name: s.name, w, h, cells: rows.map(row => row.map(cellFromJSON)) });
+    }
   } catch (err){
     // file:// で直接開いた場合などfetchできない時は、内蔵の練習ステージだけで動かす
     console.warn('stages.json を読み込めなかったため、内蔵ステージのみ使用します。', err);
-    STAGES = [{ id:'practice-a', name:'練習場（内蔵）', cells: buildDefaultStage() }];
+    STAGES = [{ id:'practice-a', name:'練習場（内蔵）', w:DEFAULT_W, h:DEFAULT_H, cells: buildDefaultStage() }];
   }
   selectedStageId = STAGES[0] ? STAGES[0].id : 'random';
   stagesReady = true;
@@ -1776,7 +1795,7 @@ function hostBeginMatch(){
   beginMatchLocal(cells, spawns);
 }
 function beginMatchLocal(cells, spawns){
-  grid = cells;
+  setGrid(cells);
   buildScene();
   const mySpot = spawns[myId] || freeSpot(Math.random, null);
   player.x = mySpot.x; player.y = mySpot.y; player.z = heightAt(mySpot.x, mySpot.y); player.vz = 0; player.onGround = true;
@@ -1887,7 +1906,7 @@ if (location.protocol === 'http:' || location.protocol === 'https:'){
 /* ============ 画面フロー ============ */
 const veil = el('veil');
 function resetLevel(){
-  grid = currentStageCells();
+  setGrid(currentStageCells());
   buildScene();
   const spot = freeSpot(Math.random);
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
@@ -1935,7 +1954,7 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 // stages.json の読み込みが終わるまでの仮表示（内蔵の練習ステージ）
-grid = buildDefaultStage();
+setGrid(buildDefaultStage());
 buildScene();
 camera.position.set(player.x, EYE_HEIGHT, player.y);
 requestAnimationFrame(frame);
