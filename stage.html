@@ -35,6 +35,12 @@
   #netfield input{display:block;width:100%;margin-top:8px;background:#12171b;border:1px solid #2a333a;
     color:#c8cbc4;padding:9px 10px;font:inherit;font-size:13px}
   #netfield #connectBtn{margin:10px 0 0;width:100%;padding:10px;font-size:12px}
+  #inviteRow{display:flex;gap:8px;margin-top:10px}
+  #inviteRow input{margin-top:0;cursor:text}
+  #inviteRow button{flex:none;margin:0;border:1px solid var(--sodium,#f2b544);background:none;color:#f2b544;
+    font:inherit;font-size:12px;padding:0 14px;cursor:pointer;letter-spacing:.08em}
+  #inviteRow button:hover{background:#f2b544;color:#0a0e12}
+  #inviteRow button.copied{border-color:#7fb069;color:#7fb069;background:none}
   #netstatus{margin-top:10px;font-size:12px;color:#9aa4ab;min-height:1.3em;line-height:1.6}
 
   #hotbar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:8px;z-index:5}
@@ -96,6 +102,10 @@
       <input id="srv" type="text" placeholder="ws://192.168.1.5:8080" autocomplete="off">
       <input id="room" type="text" placeholder="ルームコード" autocomplete="off">
       <button type="button" id="connectBtn">接続する</button>
+      <div id="inviteRow">
+        <input id="inviteLink" type="text" placeholder="ルームコードを入力すると招待リンクが出ます" readonly>
+        <button type="button" id="copyLinkBtn">コピー</button>
+      </div>
       <div id="netstatus"></div>
     </div>
   </div>
@@ -799,6 +809,43 @@ if (location.protocol === 'http:' || location.protocol === 'https:'){
   const wsProto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   el('srv').value = wsProto + location.host;
 }
+
+/* ============ 招待リンク ============
+   サーバーごと公開している場合、ルームコード入りのURLを表示する。友達がそのリンクを
+   開くだけでサーバーアドレスとルームコードが自動で入り、「接続する」を押すだけで
+   同じステージを一緒に編集できる。 */
+function updateInviteLink(){
+  if (location.protocol !== 'http:' && location.protocol !== 'https:'){
+    el('inviteRow').style.display = 'none'; return; // file://ではURLが共有できないので隠す
+  }
+  const roomVal = el('room').value.trim();
+  if (!roomVal){ el('inviteLink').value = ''; return; }
+  const url = new URL(location.href);
+  url.hash = '';
+  url.searchParams.set('room', roomVal);
+  el('inviteLink').value = url.toString();
+}
+el('room').addEventListener('input', updateInviteLink);
+el('copyLinkBtn').onclick = async () => {
+  const link = el('inviteLink').value;
+  if (!link) return;
+  try { await navigator.clipboard.writeText(link); }
+  catch(e){ el('inviteLink').select(); document.execCommand('copy'); }
+  const btn = el('copyLinkBtn');
+  const orig = btn.textContent;
+  btn.textContent = 'コピー済み'; btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+};
+// URLに ?room=xxxx が付いていたら（招待リンクから開かれた場合）ルームコードを自動で入れておく
+{
+  const roomParam = new URLSearchParams(location.search).get('room');
+  if (roomParam){
+    el('room').value = roomParam;
+    CFG.mode = 'online';
+    applyMode();
+  }
+}
+updateInviteLink();
 
 /* ============ 入力 ============ */
 addEventListener('keydown', e => {
