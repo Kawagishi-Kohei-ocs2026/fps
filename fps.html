@@ -222,12 +222,8 @@ let W = 50, H = 50;
 const DEFAULT_W = 50, DEFAULT_H = 50;   // 内蔵の練習ステージ・ランダムステージを作るときの大きさ
 const MIN_SIZE = 8, MAX_SIZE = 200;     // stages.json から読み込めるステージの大きさの範囲
 const WALL_H = 2.3;
-const UP_LV = WALL_H - 0.3;
 const PLATFORM_H = 1.05;
 const THIN_WALL_T = 0.14;
-const SLAB_T = 0.2;          // 床(天井)ブロックの厚み。上面が WALL_H に揃う＝壁の上面と面一（2階の床の高さ）
-const RAMP_STEP = 2.3 / 4;   // 階段(坂)1マスぶんの上がり幅。4マスでちょうど2階の床の高さ(WALL_Hを直接使うと定義順の都合が悪いので数値で持つ)
-const PLAYER_H = 1.7;        // 天井にぶつかる判定に使う身長
 const EYE_HEIGHT = 1.55;
 const JUMP_V = 6.0, GRAVITY = 16.0;
 const MOVE_SPEED = 3.4, RUN_MULT = 1.35;
@@ -359,12 +355,10 @@ function freeSpot(rng, minFrom){
   return {x, y};
 }
 
-// zRef: 判定する人の足の高さ。2階にいる(zRef>=UP_LV)ときだけ、2階の床・壁の上面が地面になる。
-function heightAt(x, y, zRef = 0){
+function heightAt(x, y){
   const cx = Math.floor(x), cy = Math.floor(y);
   if (cx<0 || cy<0 || cx>=W || cy>=H) return WALL_H;
   const cell = grid[cy][cx];
-  if (cell.up && zRef >= UP_LV) return cell.up.type === 'wall' ? WALL_H*2 : WALL_H;
   if (cell.type === 'wall') return WALL_H;
   if (cell.type === 'platform') return PLATFORM_H;
   if (cell.type === 'ramp'){
@@ -372,19 +366,12 @@ function heightAt(x, y, zRef = 0){
     let t;
     if (cell.dir==='E') t=fx; else if (cell.dir==='W') t=1-fx;
     else if (cell.dir==='S') t=fy; else t=1-fy;
-    const base = cell.r === undefined ? 0 : cell.r * RAMP_STEP, rise = cell.r === undefined ? PLATFORM_H : RAMP_STEP;
-    return base + Math.max(0, Math.min(1,t)) * rise;
+    return Math.max(0, Math.min(1,t)) * PLATFORM_H;
   }
   return 0;
 }
-// 1階にいるときの頭上の天井の高さ（床ブロックの下面）。2階では天井なし。
-function ceilingAt(x, y, zRef){
-  if (zRef >= UP_LV) return Infinity;
-  const c = cellAt(x, y);
-  return (c.up && c.type !== 'wall') ? WALL_H - SLAB_T : Infinity;
-}
-// 弾を止めるか
-function blocksProjectile(type){ return type === 'wall' || type === 'thinwall' || type === 'slab'; }
+// 弾を止めるか（射撃はまだ無いが、後のステップでここを使う）
+function blocksProjectile(type){ return type === 'wall' || type === 'thinwall'; }
 function cellAt(x, y){
   const cx = Math.floor(x), cy = Math.floor(y);
   if (cx<0 || cy<0 || cx>=W || cy>=H) return {type:'wall'};
@@ -404,15 +391,12 @@ function thinWallRect(cell, cx, cy){
   /* E */                return { x0: cx+1-t, y0: cy,      x1: cx+1,   y1: cy+1   };
 }
 function isThinPanel(type){ return type === 'thinwall' || type === 'window'; }
-function collidesSolid(px, py, r, zRef = 0){
-  const lv1 = zRef >= UP_LV;   // 2階にいる間は2階側の壁だけが当たり判定（1階の壁の上は歩ける屋上）
+function collidesSolid(px, py, r){
   const gx0 = Math.floor(px-r), gx1 = Math.floor(px+r);
   const gy0 = Math.floor(py-r), gy1 = Math.floor(py+r);
   for (let gy = gy0; gy <= gy1; gy++){
     for (let gx = gx0; gx <= gx1; gx++){
-      if (lv1 && (gx<0 || gy<0 || gx>=W || gy>=H)) return true; // 屋上からマップ外へは出られない
-      const c0 = cellAt(gx, gy);
-      const cell = lv1 ? (c0.up || {type:'floor'}) : c0;
+      const cell = cellAt(gx, gy);
       if (cell.type === 'wall'){
         if (circleRectOverlap(px, py, r, gx, gy, gx+1, gy+1)) return true;
       } else if (isThinPanel(cell.type)){
@@ -423,16 +407,14 @@ function collidesSolid(px, py, r, zRef = 0){
   }
   return false;
 }
-function findTouchingWindow(px, py, r, zRef = 0){
+function findTouchingWindow(px, py, r){
   const pad = r + 0.08;
   const gx0 = Math.floor(px-pad), gx1 = Math.floor(px+pad);
   const gy0 = Math.floor(py-pad), gy1 = Math.floor(py+pad);
-  const lv1 = zRef >= UP_LV; // 2階にいる間は2階側(cell.up)の窓だけを対象にする
   for (let gy = gy0; gy <= gy1; gy++){
     for (let gx = gx0; gx <= gx1; gx++){
-      const c0 = cellAt(gx, gy);
-      const cell = lv1 ? c0.up : c0;
-      if (!cell || cell.type !== 'window') continue;
+      const cell = cellAt(gx, gy);
+      if (cell.type !== 'window') continue;
       const b = thinWallRect(cell, gx, gy);
       if (circleRectOverlap(px, py, pad, b.x0, b.y0, b.x1, b.y1)) return { cell, rect:b };
     }
@@ -442,7 +424,7 @@ function findTouchingWindow(px, py, r, zRef = 0){
 function tryClimbThrough(){
   if (!alive) return false;
   if (P.vault) return true; // 乗り越え中は再入力を受け付けない（ジャンプにも回さない）
-  const hit = findTouchingWindow(player.x, player.y, PLAYER_R, player.z);
+  const hit = findTouchingWindow(player.x, player.y, PLAYER_R);
   if (!hit) return false;
   const { cell, rect } = hit;
   const margin = PLAYER_R + 0.06;
@@ -454,13 +436,10 @@ function tryClimbThrough(){
     const mid = (rect.x0 + rect.x1) / 2;
     nx = player.x < mid ? rect.x1 + margin : rect.x0 - margin;
   }
-  if (collidesSolid(nx, ny, PLAYER_R, player.z)) return false;
-  // 反対側の位置を目標にして、step() の中で一定時間かけて移動させる。
-  // 高さは越える瞬間のまま(z1=z0)にしておき、乗り越え終了後は通常の重力処理に任せる。
-  // 同じ階の床同士ならすぐ着地するし、2階の窓の外が屋外(下に床が無い)場合は
-  // ここから自然に自由落下が始まる。
+  if (collidesSolid(nx, ny, PLAYER_R)) return false;
+  // 反対側の位置を目標にして、step() の中で一定時間かけて移動させる
   P.crouch = false; P.sliding = false;
-  P.vault = { t:0, x0:player.x, y0:player.y, z0:player.z, x1:nx, y1:ny, z1:player.z,
+  P.vault = { t:0, x0:player.x, y0:player.y, z0:player.z, x1:nx, y1:ny, z1:heightAt(nx, ny),
               side: (vaultSide = -vaultSide),
               yaw: Math.atan2(nx - player.x, -(ny - player.y)) };  // 越える向き（yaw と同じ定義）
   netTick = 1; // 開始をすぐ相手に伝える（次のフレームで状態を送る）
@@ -488,14 +467,14 @@ scene.add(sun);
 const levelGroup = new THREE.Group();
 scene.add(levelGroup);
 
-function makeRampGeometry(dir, r){
+function makeRampGeometry(dir){
   const corners = [[-0.5,-0.5],[0.5,-0.5],[0.5,0.5],[-0.5,0.5]];
   function h(x,z){
     const fx=x+0.5, fz=z+0.5;
     let t;
     if (dir==='E') t=fx; else if (dir==='W') t=1-fx;
     else if (dir==='S') t=fz; else t=1-fz;
-    return (r === undefined ? 0 : r*RAMP_STEP) + t*(r === undefined ? PLATFORM_H : RAMP_STEP);
+    return t*PLATFORM_H;
   }
   const top = corners.map(([x,z]) => [x, h(x,z), z]);
   const bot = corners.map(([x,z]) => [x, 0, z]);
@@ -522,10 +501,6 @@ const platGeo   = new THREE.BoxGeometry(1, PLATFORM_H, 1);
 const rampGeo   = { E: makeRampGeometry('E'), W: makeRampGeometry('W'), S: makeRampGeometry('S'), N: makeRampGeometry('N') };
 const thinGeoNS = new THREE.BoxGeometry(1, WALL_H, THIN_WALL_T);
 const thinGeoEW = new THREE.BoxGeometry(THIN_WALL_T, WALL_H, 1);
-const slabGeo   = new THREE.BoxGeometry(1, SLAB_T, 1);
-const slabMat   = new THREE.MeshStandardMaterial({ color:0x76818a, roughness:0.9 });
-const rampGeoCache = {};
-const rampGeoFor = (dir, r) => rampGeoCache[dir+r] || (rampGeoCache[dir+r] = makeRampGeometry(dir, r));
 
 const WIN_JAMB_W = 0.16, WIN_SILL_H = 0.95, WIN_LINTEL_H = 0.34;
 const windowFrameMat = new THREE.MeshStandardMaterial({ color:0x9aa3ab, roughness:0.8 });
@@ -572,8 +547,7 @@ function cellGeometry(cell, x, y){
   const cx = x+0.5, cz = y+0.5;
   if (cell.type === 'wall') return { geo: wallGeo, pos: [cx, WALL_H/2, cz] };
   if (cell.type === 'platform') return { geo: platGeo, pos: [cx, PLATFORM_H/2, cz] };
-  if (cell.type === 'slab') return { geo: slabGeo, pos: [cx, WALL_H - SLAB_T/2, cz] };
-  if (cell.type === 'ramp') return { geo: cell.r === undefined ? rampGeo[cell.dir] : rampGeoFor(cell.dir, cell.r), pos: [cx, 0, cz] };
+  if (cell.type === 'ramp') return { geo: rampGeo[cell.dir], pos: [cx, 0, cz] };
   if (cell.type === 'thinwall' || cell.type === 'window'){
     const off = 0.5 - THIN_WALL_T/2;
     if (cell.dir === 'N') return { geo: thinGeoNS, pos: [cx, WALL_H/2, cz - off] };
@@ -588,7 +562,6 @@ function matForType(type){
   if (type==='thinwall') return thinMat;
   if (type==='platform') return platMat;
   if (type==='ramp') return rampMat;
-  if (type==='slab') return slabMat;
   if (type==='window') return windowFrameMat;
   return null;
 }
@@ -603,32 +576,19 @@ function meshForCell(cell, x, y){
 // 射撃レイキャストの対象（弾を止めるセルのメッシュだけを集める）。
 // blocksProjectile()の定義と一致させる：wall/thinwallは止める、window/floor/ramp/platformは止めない。
 const attackBlockers = [];
-// 1マスぶんのメッシュを levelGroup / attackBlockers へ追加する（1階の中身 + 2階の床・壁など）。
-function addCellMeshes(cell, x, y){
-  const m = meshForCell(cell, x, y);
-  if (m){
-    levelGroup.add(m);
-    if (blocksProjectile(cell.type)){ m.userData.cellType = cell.type; attackBlockers.push(m); }
-  }
-  if (cell.up){
-    if (cell.type !== 'wall'){
-      const slab = meshForCell({type:'slab'}, x, y);
-      levelGroup.add(slab);
-      attackBlockers.push(slab); // 床(天井)ブロックは弾を止める
-    }
-    if (cell.up.type !== 'slab'){
-      const u = meshForCell(cell.up, x, y);
-      u.position.y += WALL_H; // ramp以外は cellGeometry の高さで作った後、床ブロック分だけ持ち上げる
-      // ramp を2階に置くことはエディタ側で禁止しているので、u.position.y はそのまま +WALL_H でよい
-      levelGroup.add(u);
-      if (blocksProjectile(cell.up.type)){ u.userData.cellType = cell.up.type; attackBlockers.push(u); }
-    }
-  }
-}
 function buildScene(){
   levelGroup.clear();
   attackBlockers.length = 0;
-  for (let y=0; y<H; y++) for (let x=0; x<W; x++) addCellMeshes(grid[y][x], x, y);
+  for (let y=0; y<H; y++) for (let x=0; x<W; x++){
+    const cell = grid[y][x];
+    const m = meshForCell(cell, x, y);
+    if (!m) continue;
+    levelGroup.add(m);
+    if (blocksProjectile(cell.type)){
+      m.userData.cellType = cell.type;
+      attackBlockers.push(m);
+    }
+  }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H), floorMat);
   floor.rotation.x = -Math.PI/2;
   floor.position.set(W/2, 0, H/2);
@@ -751,7 +711,6 @@ function drawMap(){
     if (c.type === 'wall'){ mc.fillStyle = '#39454d'; mc.fillRect(X, Y, t, t); }
     else if (c.type === 'platform'){ mc.fillStyle = '#5a5140'; mc.fillRect(X, Y, t, t); }
     else if (c.type === 'ramp'){ mc.fillStyle = '#3d5a55'; mc.fillRect(X, Y, t, t); }
-    else if (c.up && c.up.type === 'slab'){ mc.fillStyle = '#4a545c'; mc.fillRect(X, Y, t, t); } // 2階の床がある場所を薄く示す
     else if (c.type === 'thinwall' || c.type === 'window'){   // 薄い壁・窓はセルの縁に細く描く（dir=N/S/W/E）
       mc.fillStyle = c.type === 'window' ? '#4fa3a3' : '#7b858c';
       if (c.dir === 'N') mc.fillRect(X, Y, t, th);
@@ -959,24 +918,21 @@ function step(dt){
     const r = PLAYER_R;
     const stepOk = (cx, cy) => {
       const cell = cellAt(cx, cy);
-      if (cell.type === 'ramp' && cell.r === undefined) return true;
-      const h = heightAt(cx, cy, player.z);
-      return h <= player.z + STEP_TOL && h + PLAYER_H <= ceilingAt(cx, cy, player.z);
+      if (cell.type === 'ramp') return true;
+      return heightAt(cx, cy) <= player.z + STEP_TOL;
     };
     const nx = player.x + vx*dt;
     const ny = player.y + vz*dt;
-    if (stepOk(nx, player.y) && !collidesSolid(nx, player.y, r, player.z)) player.x = nx;
-    if (stepOk(player.x, ny) && !collidesSolid(player.x, ny, r, player.z)) player.y = ny;
+    if (stepOk(nx, player.y) && !collidesSolid(nx, player.y, r)) player.x = nx;
+    if (stepOk(player.x, ny) && !collidesSolid(player.x, ny, r)) player.y = ny;
 
     const standingCell = cellAt(player.x, player.y);
-    const groundH = heightAt(player.x, player.y, player.z);
+    const groundH = heightAt(player.x, player.y);
     if (player.onGround && standingCell.type === 'ramp'){
       player.z = groundH; player.vz = 0;
     } else {
       player.vz -= GRAVITY*dt;
       let nz = player.z + player.vz*dt;
-      const cl = ceilingAt(player.x, player.y, player.z);
-      if (nz + PLAYER_H > cl){ nz = cl - PLAYER_H; if (player.vz > 0) player.vz = 0; }
       if (nz <= groundH){ nz = groundH; player.vz = 0; player.onGround = true; } else player.onGround = false;
       player.z = nz;
     }
@@ -1069,13 +1025,7 @@ applySens();
 
 /* ============ ステージ選択 ============ */
 // stages.json の {t,d} 形式を内部で使う {type,dir} 形式に変換する
-const hasDir = t => t==='ramp' || t==='thinwall' || t==='window';
-function cellFromJSON(c){
-  const o = hasDir(c.t) ? {type:c.t, dir:c.d} : {type:c.t};
-  if (c.t==='ramp' && c.r!==undefined) o.r = c.r;
-  if (c.u) o.up = hasDir(c.u.t) ? {type:c.u.t, dir:c.u.d||'E'} : {type:c.u.t};
-  return o;
-}
+function cellFromJSON(c){ return (c.d !== undefined) ? {type:c.t, dir:c.d} : {type:c.t}; }
 
 let STAGES = [];               // [{id, name, w, h, cells}]
 let selectedStageId = 'random';
