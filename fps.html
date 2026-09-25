@@ -423,14 +423,16 @@ function collidesSolid(px, py, r, zRef = 0){
   }
   return false;
 }
-function findTouchingWindow(px, py, r){
+function findTouchingWindow(px, py, r, zRef = 0){
   const pad = r + 0.08;
   const gx0 = Math.floor(px-pad), gx1 = Math.floor(px+pad);
   const gy0 = Math.floor(py-pad), gy1 = Math.floor(py+pad);
+  const lv1 = zRef >= UP_LV; // 2階にいる間は2階側(cell.up)の窓だけを対象にする
   for (let gy = gy0; gy <= gy1; gy++){
     for (let gx = gx0; gx <= gx1; gx++){
-      const cell = cellAt(gx, gy);
-      if (cell.type !== 'window') continue;
+      const c0 = cellAt(gx, gy);
+      const cell = lv1 ? c0.up : c0;
+      if (!cell || cell.type !== 'window') continue;
       const b = thinWallRect(cell, gx, gy);
       if (circleRectOverlap(px, py, pad, b.x0, b.y0, b.x1, b.y1)) return { cell, rect:b };
     }
@@ -440,7 +442,7 @@ function findTouchingWindow(px, py, r){
 function tryClimbThrough(){
   if (!alive) return false;
   if (P.vault) return true; // 乗り越え中は再入力を受け付けない（ジャンプにも回さない）
-  const hit = findTouchingWindow(player.x, player.y, PLAYER_R);
+  const hit = findTouchingWindow(player.x, player.y, PLAYER_R, player.z);
   if (!hit) return false;
   const { cell, rect } = hit;
   const margin = PLAYER_R + 0.06;
@@ -452,10 +454,13 @@ function tryClimbThrough(){
     const mid = (rect.x0 + rect.x1) / 2;
     nx = player.x < mid ? rect.x1 + margin : rect.x0 - margin;
   }
-  if (collidesSolid(nx, ny, PLAYER_R)) return false;
-  // 反対側の位置を目標にして、step() の中で一定時間かけて移動させる
+  if (collidesSolid(nx, ny, PLAYER_R, player.z)) return false;
+  // 反対側の位置を目標にして、step() の中で一定時間かけて移動させる。
+  // 高さは越える瞬間のまま(z1=z0)にしておき、乗り越え終了後は通常の重力処理に任せる。
+  // 同じ階の床同士ならすぐ着地するし、2階の窓の外が屋外(下に床が無い)場合は
+  // ここから自然に自由落下が始まる。
   P.crouch = false; P.sliding = false;
-  P.vault = { t:0, x0:player.x, y0:player.y, z0:player.z, x1:nx, y1:ny, z1:heightAt(nx, ny),
+  P.vault = { t:0, x0:player.x, y0:player.y, z0:player.z, x1:nx, y1:ny, z1:player.z,
               side: (vaultSide = -vaultSide),
               yaw: Math.atan2(nx - player.x, -(ny - player.y)) };  // 越える向き（yaw と同じ定義）
   netTick = 1; // 開始をすぐ相手に伝える（次のフレームで状態を送る）
