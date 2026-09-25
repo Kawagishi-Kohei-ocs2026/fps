@@ -1861,6 +1861,9 @@ function handleNet(m){
 function hostBeginMatch(){
   if (!isHost || REMOTES.size < 1) return;
   const cells = currentStageCells();
+  // 出現位置は「これから使うステージ」の上で決める。先に切り替えておかないと、直前まで使っていた
+  // 別ステージ（ランダムなら別の迷路）のgridで座標を決めてしまい、新しいステージでは壁の上などになる。
+  setGrid(cells);
   const ids = [myId, ...REMOTES.keys()];
   const placed = [];
   const spawns = {};
