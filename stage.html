@@ -156,7 +156,7 @@ const CFG = { mode:'solo' }; // 'solo'＝一人で編集 ／ 'online'＝サー�
 /* ============ 地形パラメータ ============ */
 let W = 50, H = 50;          // グリッドの横(x方向)・縦(y方向)のマス数。UI・読み込み・ステージデータから変えられる
 const MIN_SIZE = 8, MAX_SIZE = 200;   // 変更できるサイズの範囲
-const WALL_H = 2.3;          // 壁の高さ（登れない）
+const WALL_H = 3.6;          // 壁の高さ（登れない）
 const PLATFORM_H = 1.05;     // 箱・高台の高さ（ジャンプ頂点よりわずかに低い＝直接ジャンプで乗れる）
 const THIN_WALL_T = 0.14;    // 薄い壁の厚み
 const EYE_HEIGHT = 1.55;
@@ -397,8 +397,8 @@ function makeRampGeometry(dir){
 }
 
 /* ---- 素材・ジオメトリ（使い回す） ---- */
-const wallMat  = new THREE.MeshStandardMaterial({ color:0x8e969e, roughness:0.9 });
-const thinMat  = new THREE.MeshStandardMaterial({ color:0xa7afb5, roughness:0.88 });
+const wallMat  = new THREE.MeshStandardMaterial({ color:0x9aa3ab, roughness:0.9 });
+const thinMat  = new THREE.MeshStandardMaterial({ color:0x9aa3ab, roughness:0.88 });
 const platMat  = new THREE.MeshStandardMaterial({ color:0xc4a37a, roughness:0.85 });
 const rampMat  = new THREE.MeshStandardMaterial({ color:0x7fb0a3, roughness:0.85, side:THREE.DoubleSide });
 const floorMat = new THREE.MeshStandardMaterial({ color:0x232b31, roughness:1 });
@@ -419,6 +419,7 @@ const thinEWEdges = new THREE.EdgesGeometry(thinGeoEW);
 const WIN_JAMB_W = 0.16;    // 左右の柱の太さ
 const WIN_SILL_H = 0.95;    // 下枠の高さ＝乗り越える目安の高さ
 const WIN_LINTEL_H = 0.34;  // 上枠の高さ
+const WINDOW_REF_H = 2.3;   // 窓枠のサイズはこの高さを基準に固定し、壁が高い分は窓の上に無地の壁を足して伸ばす
 const windowFrameMat = new THREE.MeshStandardMaterial({ color:0x9aa3ab, roughness:0.8 });
 const windowGlassMat = new THREE.MeshStandardMaterial({
   color:0xbfe6f0, roughness:0.1, metalness:0.05, transparent:true, opacity:0.25,
@@ -430,17 +431,21 @@ function windowPartDefs(orientNS){
   const key = orientNS ? 'ns' : 'ew';
   if (windowGeoCache[key]) return windowGeoCache[key];
   const innerLo = WIN_JAMB_W, innerHi = 1-WIN_JAMB_W, innerW = innerHi-innerLo;
-  const glassH = WALL_H - WIN_SILL_H - WIN_LINTEL_H;
+  const glassH = WINDOW_REF_H - WIN_SILL_H - WIN_LINTEL_H;
+  const extraH = Math.max(0, WALL_H - WINDOW_REF_H); // 壁がWINDOW_REF_Hより高い分は窓の上に無地の壁として足す
   const mk = orientNS
     ? (w,h) => new THREE.BoxGeometry(w, h, THIN_WALL_T)
     : (w,h) => new THREE.BoxGeometry(THIN_WALL_T, h, w);
   const defs = [
-    { mat:'frame', geo: mk(WIN_JAMB_W, WALL_H),   off: WIN_JAMB_W/2,        h: WALL_H/2 },
-    { mat:'frame', geo: mk(WIN_JAMB_W, WALL_H),   off: 1-WIN_JAMB_W/2,      h: WALL_H/2 },
-    { mat:'frame', geo: mk(innerW, WIN_SILL_H),   off: 0.5,                 h: WIN_SILL_H/2 },
-    { mat:'frame', geo: mk(innerW, WIN_LINTEL_H), off: 0.5,                 h: WALL_H-WIN_LINTEL_H/2 },
-    { mat:'glass', geo: mk(innerW, glassH),       off: 0.5,                 h: WIN_SILL_H+glassH/2 },
+    { mat:'frame', geo: mk(WIN_JAMB_W, WINDOW_REF_H), off: WIN_JAMB_W/2,        h: WINDOW_REF_H/2 },
+    { mat:'frame', geo: mk(WIN_JAMB_W, WINDOW_REF_H), off: 1-WIN_JAMB_W/2,      h: WINDOW_REF_H/2 },
+    { mat:'frame', geo: mk(innerW, WIN_SILL_H),       off: 0.5,                 h: WIN_SILL_H/2 },
+    { mat:'frame', geo: mk(innerW, WIN_LINTEL_H),     off: 0.5,                 h: WINDOW_REF_H-WIN_LINTEL_H/2 },
+    { mat:'glass', geo: mk(innerW, glassH),           off: 0.5,                 h: WIN_SILL_H+glassH/2 },
   ];
+  if (extraH > 0){
+    defs.push({ mat:'wall', geo: mk(1, extraH), off: 0.5, h: WINDOW_REF_H + extraH/2 });
+  }
   windowGeoCache[key] = defs;
   return defs;
 }
@@ -454,7 +459,7 @@ function buildWindowGroup(cell, x, y){
     : (cell.dir==='W' ? x+0.5-off : x+0.5+off);
   const group = new THREE.Group();
   for (const d of defs){
-    const mesh = new THREE.Mesh(d.geo, d.mat==='glass' ? windowGlassMat : windowFrameMat);
+    const mesh = new THREE.Mesh(d.geo, d.mat==='glass' ? windowGlassMat : (d.mat==='wall' ? wallMat : windowFrameMat));
     if (orientNS) mesh.position.set(x + d.off, d.h, planeCoord);
     else mesh.position.set(planeCoord, d.h, y + d.off);
     group.add(mesh);
@@ -1122,15 +1127,51 @@ function start(){
 function pause(){ alive = false; document.exitPointerLock?.(); veil.classList.remove('gone'); syncSizeInputs(); }
 document.getElementById('go').onclick = start;
 
-document.getElementById('exportBtn').onclick = () => {
-  const data = { w:W, h:H, grid: serializeGrid() };
-  if (W === H) data.n = W;   // 旧形式(n=一辺)しか読めないプログラム向け。正方形のときだけ付ける
-  const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+// stages.json の stages 配列に入れる1ステージぶんを、既存の書式（インデント・1行1列）そのままの文字列にする。
+// 4スペース字下げの { ... } なので、stages.json の最後のステージの「}」の直後へ貼るだけで入る。
+function stageEntryText(id, name){
+  const rows = serializeGrid().map(row => '        [' + row.map(c => JSON.stringify(c)).join(',') + ']');
+  const lines = [
+    '    {',
+    '      "id": ' + JSON.stringify(id) + ',',
+    '      "name": ' + JSON.stringify(name) + ',',
+    '      "w": ' + W + ',',
+    '      "h": ' + H + ',',
+  ];
+  if (W === H) lines.push('      "n": ' + W + ',');   // 旧形式(n=一辺)しか読めないプログラム向け。正方形のときだけ付ける
+  lines.push('      "grid": [', rows.join(',\n'), '      ]', '    }');
+  return lines.join('\n');
+}
+async function copyText(text){
+  try { await navigator.clipboard.writeText(text); return true; } catch(e){}
+  // file:// などで clipboard API が使えないときの代替
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch(e){}
+  ta.remove();
+  return ok;
+}
+document.getElementById('exportBtn').onclick = async () => {
+  const name = prompt('ステージ名（stages.json の "name" になります）', '新しいステージ');
+  if (name === null) return;   // キャンセル
+  const id = 'stage-' + Math.random().toString(36).slice(2, 6);
+  const entry = stageEntryText(id, name.trim() || '新しいステージ');
+
+  // ① クリップボード：stages.json の最後の「}」の直後にカーソルを置いて貼ると、そのまま入る（先頭のカンマ付き）。
+  const copied = await copyText(',\n' + entry);
+
+  // ② ファイル：カンマ無しの1ステージ分（単体でも正しいJSON。「読み込む」でも読める）。
+  const blob = new Blob([entry + '\n'], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'sublevel7-stage.json';
+  a.href = url; a.download = id + '.json';
   a.click();
   URL.revokeObjectURL(url);
+
+  const btn = document.getElementById('exportBtn'), orig = '書き出す';
+  btn.textContent = copied ? 'コピーしました' : 'コピー失敗（ファイルを使ってください）';
+  setTimeout(() => { btn.textContent = orig; }, 2200);
 };
 document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
 document.getElementById('importFile').addEventListener('change', async (e) => {
