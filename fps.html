@@ -349,7 +349,10 @@ function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
 // 今は、ステージごとに「地上を歩いて行ける一番大きな連結領域」を一度だけ求めてキャッシュし、
 // その中の、壁から余裕のある平らな床だけを候補にする。
 // minFrom（{x,y}の配列）を渡すと、それらから離れた場所を優先する（対戦で出現位置が重ならないように）。
+const SPAWN_PROTECT_MS = 1500;          // 再出現・開始直後の無敵時間
 const SPAWN_MARGIN = PLAYER_R + 0.17;   // 壁・薄い壁からこれ以上離れた場所だけを出現候補にする
+const SPAWN_MIN_DIST = 10;              // 他プレイヤーからこの距離(マス)以上離れた場所に出るのが理想
+const SPAWN_DIST_STEPS = [SPAWN_MIN_DIST, SPAWN_MIN_DIST*0.75, SPAWN_MIN_DIST*0.5]; // 満たせない時に下げていく基準
 const SPAWN_RES = 0.25;                 // 到達可能領域を調べる格子の細かさ
 let _spawnCache = { grid: null, pts: [] };
 function computeSpawnPoints(){
@@ -419,10 +422,17 @@ function freeSpot(rng, minFrom){
     console.warn('出現できる場所が見つかりません（ステージが狭すぎる可能性）');
     return { x: W/2, y: H/2 };
   }
-  // 他プレイヤーから離れた場所を優先（5 → 2.5 → 制限なし の順に緩める）
-  for (const minD of (minFrom && minFrom.length ? [5, 2.5] : [])){
-    const far = pts.filter(p => minFrom.every(q => Math.hypot(p.x-q.x, p.y-q.y) >= minD));
-    if (far.length) return far[(rng()*far.length)|0];
+  // 他プレイヤー（minFrom）から SPAWN_MIN_DIST 以上離れた場所だけから選ぶ。
+  // 人数が多くて満たせない時は、距離の基準を段階的に下げ、それでも無理なら
+  // 「一番近い相手までの距離が最大の地点」を選ぶ（近くに湧くことはなるべく避ける）。
+  if (minFrom && minFrom.length){
+    const dist = p => Math.min(...minFrom.map(q => Math.hypot(p.x-q.x, p.y-q.y)));
+    const ds = pts.map(dist);
+    for (const minD of SPAWN_DIST_STEPS){
+      const far = pts.filter((p,i) => ds[i] >= minD);
+      if (far.length) return far[(rng()*far.length)|0];
+    }
+    return pts[ds.indexOf(Math.max(...ds))];
   }
   return pts[(rng()*pts.length)|0];
 }
@@ -697,6 +707,7 @@ const P = {
   vault:null, // 窓の乗り越え中は {t,x0,y0,z0,x1,y1,z1,side,yaw}
   vaultEnd:false, // 乗り越えが終わった直後（相手へ完了を1回だけ伝えるため）
   hp:100, ammo:MAG, reload:0, flash:0, kick:0, kills:0,
+  invulnUntil:0, // この時刻(performance.now)まで被弾を無効にする（再出現直後の保護）
 };
 // 対戦相手の表示名。コールサインなどの管理はしないので、idの先頭4文字だけを使う。
 function callsign(id){ return id ? ('P-' + id.slice(0,4).toUpperCase()) : '？'; }
@@ -1836,6 +1847,9 @@ function handleNet(m){
   }
   if (m.type === 'hit'){
     if (!alive) return;
+    // 再出現・開始直後の短い無敵時間。撃破の瞬間に「飛んでいる途中」だった別の人の弾が、
+    // 再出現した直後の体力満タンの自分に当たってダメージが残るのを防ぐ。
+    if (performance.now() < P.invulnUntil) return;
     P.hp -= m.dmg;
     const attacker = REMOTES.get(m.from);
     if (attacker) addHitMark(m.from, attacker.x, attacker.y);   // 撃ってきた位置を覚えて矢印を出す
@@ -1882,6 +1896,7 @@ function beginMatchLocal(cells, spawns){
   yaw = 0; pitch = 0;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
   P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
+  P.invulnUntil = performance.now() + SPAWN_PROTECT_MS;
   for (const [id, r] of REMOTES){
     if (!spawns[id]){ REMOTES.delete(id); continue; }
     const fresh = createRemote(id);
@@ -1908,7 +1923,8 @@ function respawnSelf(){
   clearHitMarks();
   const spot = freeSpot(Math.random, [...REMOTES.values()]);
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
-  P.hp = 100; P.ammo = MAG; P.reload = 0;
+  P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0;
+  P.invulnUntil = performance.now() + SPAWN_PROTECT_MS;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
 }
 /* ============ 勝敗判定（ステップ5-5） ============ */
