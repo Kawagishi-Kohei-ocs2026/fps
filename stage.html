@@ -788,7 +788,8 @@ function canPlaceAt(x, y, lv = 0){
   }
   if (selectedBlock === 'platform' || selectedBlock === 'ramp' || selectedBlock === 'stair') return false;
   if (selectedBlock === 'slab') return cell.type === 'floor' && !cell.up;   // 何も無い地面の上に床(天井)を張る
-  return cell.up ? cell.up.type === 'slab' : cell.type === 'wall';          // 壁は「1階の壁」か「床ブロック」の上に重ねる
+  // 壁・薄い壁・窓は「1階の同種の壁(壁/薄い壁/窓のどれでも)」か「床ブロック」の上に重ねる
+  return cell.up ? cell.up.type === 'slab' : (cell.type === 'wall' || isThinPanel(cell.type));
 }
 
 function placeBlock(){
