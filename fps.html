@@ -343,16 +343,88 @@ function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
   return g;
 }
 
-// 現在のgridに対して、当たらない床の1点を探す（プレイヤーの出現位置決めに使う）。
-// minFrom（{x,y}の配列）を渡すと、それらから一定距離離れた場所を優先して探す
-// （オンライン対戦で複数人の出現位置が重ならないようにするため）。
+// 現在のgridに対して、出現できる床の1点を探す（プレイヤーの出現位置決めに使う）。
+// 以前は「ランダムに400回試して全部だめなら最後の候補をそのまま返す」ため、壁の中や、
+// 壁・薄い壁・箱で囲まれて外から来られない閉じた区画（=マップ外に見える場所）に出ることがあった。
+// 今は、ステージごとに「地上を歩いて行ける一番大きな連結領域」を一度だけ求めてキャッシュし、
+// その中の、壁から余裕のある平らな床だけを候補にする。
+// minFrom（{x,y}の配列）を渡すと、それらから離れた場所を優先する（対戦で出現位置が重ならないように）。
+const SPAWN_MARGIN = PLAYER_R + 0.17;   // 壁・薄い壁からこれ以上離れた場所だけを出現候補にする
+const SPAWN_RES = 0.25;                 // 到達可能領域を調べる格子の細かさ
+let _spawnCache = { grid: null, pts: [] };
+function computeSpawnPoints(){
+  const res = SPAWN_RES, nx = Math.floor(W/res), ny = Math.floor(H/res);
+  const idx = (i,j) => j*nx + i;
+  const px = i => (i+0.5)*res, py = j => (j+0.5)*res;
+  // 歩ける点か：壁・薄い壁に当たらない（窓は乗り越えられるので通行可として扱う）
+  const walkable = (x,y) => {
+    const r = PLAYER_R;
+    for (let gy = Math.floor(y-r); gy <= Math.floor(y+r); gy++){
+      for (let gx = Math.floor(x-r); gx <= Math.floor(x+r); gx++){
+        const c = cellAt(gx, gy);
+        if (c.type === 'wall'){ if (circleRectOverlap(x, y, r, gx, gy, gx+1, gy+1)) return false; }
+        else if (c.type === 'thinwall'){
+          const b = thinWallRect(c, gx, gy);
+          if (circleRectOverlap(x, y, r, b.x0, b.y0, b.x1, b.y1)) return false;
+        }
+      }
+    }
+    return true;
+  };
+  const ok = new Uint8Array(nx*ny);
+  for (let j=0; j<ny; j++) for (let i=0; i<nx; i++) ok[idx(i,j)] = walkable(px(i), py(j)) ? 1 : 0;
+  // 連結成分に分け、一番大きいものを本体とする（ジャンプで乗れる箱=PLATFORM_Hまでの段差は越えられる扱い）
+  const comp = new Int32Array(nx*ny).fill(-1);
+  const sizes = [];
+  const stack = [];
+  for (let j0=0; j0<ny; j0++) for (let i0=0; i0<nx; i0++){
+    if (!ok[idx(i0,j0)] || comp[idx(i0,j0)] >= 0) continue;
+    const id = sizes.length; let n = 0;
+    comp[idx(i0,j0)] = id; stack.push(i0, j0);
+    while (stack.length){
+      const j = stack.pop(), i = stack.pop(); n++;
+      const h0 = heightAt(px(i), py(j));
+      for (const [di,dj] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const a = i+di, b = j+dj;
+        if (a<0 || b<0 || a>=nx || b>=ny) continue;
+        const k = idx(a,b);
+        if (!ok[k] || comp[k] >= 0) continue;
+        if (Math.abs(heightAt(px(a), py(b)) - h0) > PLATFORM_H + 0.05) continue;
+        comp[k] = id; stack.push(a, b);
+      }
+    }
+    sizes.push(n);
+  }
+  if (!sizes.length) return [];
+  const main = sizes.indexOf(Math.max(...sizes));
+  const pts = [];
+  for (let j=0; j<ny; j++) for (let i=0; i<nx; i++){
+    if (comp[idx(i,j)] !== main) continue;
+    const x = px(i), y = py(j);
+    if (x < 1 || y < 1 || x > W-1 || y > H-1) continue;
+    // 地面（高さ0）で、周囲も平らで、壁・薄い壁・窓から余裕がある場所だけ
+    let good = true;
+    for (const [dx,dy] of [[0,0],[1,0],[-1,0],[0,1],[0,-1],[.7,.7],[-.7,.7],[.7,-.7],[-.7,-.7]]){
+      const qx = x + dx*SPAWN_MARGIN, qy = y + dy*SPAWN_MARGIN;
+      if (heightAt(qx, qy) > 0.05 || collidesSolid(qx, qy, PLAYER_R)){ good = false; break; }
+    }
+    if (good) pts.push({x, y});
+  }
+  return pts;
+}
 function freeSpot(rng, minFrom){
-  let x, y, t = 0;
-  do {
-    x = 2 + rng()*(W-4); y = 2 + rng()*(H-4); t++;
-  } while (t < 400 && (heightAt(x,y) > 0.05 || collidesSolid(x,y,PLAYER_R) ||
-    (minFrom && t < 300 && minFrom.some(p => Math.hypot(x-p.x, y-p.y) < 5))));
-  return {x, y};
+  if (_spawnCache.grid !== grid) _spawnCache = { grid, pts: computeSpawnPoints() };
+  const pts = _spawnCache.pts;
+  if (!pts.length){
+    console.warn('出現できる場所が見つかりません（ステージが狭すぎる可能性）');
+    return { x: W/2, y: H/2 };
+  }
+  // 他プレイヤーから離れた場所を優先（5 → 2.5 → 制限なし の順に緩める）
+  for (const minD of (minFrom && minFrom.length ? [5, 2.5] : [])){
+    const far = pts.filter(p => minFrom.every(q => Math.hypot(p.x-q.x, p.y-q.y) >= minD));
+    if (far.length) return far[(rng()*far.length)|0];
+  }
+  return pts[(rng()*pts.length)|0];
 }
 
 function heightAt(x, y){
