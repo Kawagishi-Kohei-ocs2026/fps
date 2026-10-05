@@ -512,6 +512,7 @@ function findTouchingWindow(px, py, r){
 }
 function tryClimbThrough(){
   if (!alive) return false;
+  if (P.deadUntil) return true; // 観戦中は窓の乗り越えもジャンプも受け付けない
   if (P.vault) return true; // 乗り越え中は再入力を受け付けない（ジャンプにも回さない）
   const hit = findTouchingWindow(player.x, player.y, PLAYER_R);
   if (!hit) return false;
@@ -860,7 +861,7 @@ function updHUD(){
   }
 }
 function doReload(){
-  if (!alive || P.reload > 0 || P.ammo === MAG) return;
+  if (!alive || P.deadUntil || P.reload > 0 || P.ammo === MAG) return;
   P.reload = RELOAD_TIME;
   beep(160, .12, 'square', .05);
   updHUD();
@@ -970,7 +971,7 @@ function remoteHitMeshes(){
   return list;
 }
 function shoot(){
-  if (!alive || P.reload > 0) return;
+  if (!alive || P.deadUntil || P.reload > 0) return;   // 観戦中（再出現待ち）は撃てない
   if (P.ammo <= 0){ doReload(); return; }
   P.ammo--; P.flash = FIRE_COOLDOWN; P.kick = 1; fireCd = AUTO_FIRE_INTERVAL;
   beep(320, .16, 'square', .11);
@@ -1018,7 +1019,7 @@ function shoot(){
 }
 
 function doJump(){
-  if (!alive || !player.onGround || P.sliding || P.vault) return;
+  if (!alive || P.deadUntil || !player.onGround || P.sliding || P.vault) return;
   player.vz = JUMP_V; player.onGround = false;
   P.crouch = false; // ジャンプすると立ち上がる
 }
@@ -1029,7 +1030,7 @@ function isRunningNow(){
   return !!(shift && moving);
 }
 function toggleCrouch(){
-  if (!alive || P.sliding || P.vault) return;
+  if (!alive || P.deadUntil || P.sliding || P.vault) return;
   if (P.crouch){ P.crouch = false; return; }
   if (isRunningNow()) startSlide(); else P.crouch = true;
 }
@@ -1176,7 +1177,7 @@ addEventListener('mousemove', e => {
 });
 canvas.addEventListener('click', () => { if (alive && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); });
 canvas.addEventListener('mousedown', e => {
-  if (e.button === 0 && alive && document.pointerLockElement === canvas){ mouseFire = true; shoot(); }
+  if (e.button === 0 && alive && !P.deadUntil && document.pointerLockElement === canvas){ mouseFire = true; shoot(); }
 });
 // ボタンを離したら連射停止（キャンバス外で離した場合も拾うため window で受ける）
 addEventListener('mouseup', e => { if (e.button === 0) mouseFire = false; });
@@ -1194,7 +1195,7 @@ jumpBtn.addEventListener('touchstart', e => { if (!tryClimbThrough()) doJump(); 
 crouchBtn.addEventListener('touchstart', e => { toggleCrouch(); crouchBtn.classList.toggle('active', P.crouch); e.preventDefault(); }, {passive:false});
 runBtn.addEventListener('touchstart', e => { touchRun = true; runBtn.classList.add('active'); e.preventDefault(); }, {passive:false});
 runBtn.addEventListener('touchend', () => { touchRun = false; runBtn.classList.remove('active'); });
-fireBtn.addEventListener('touchstart', e => { firing = true; shoot(); fireBtn.classList.add('active'); e.preventDefault(); }, {passive:false});
+fireBtn.addEventListener('touchstart', e => { if (!P.deadUntil){ firing = true; shoot(); } fireBtn.classList.add('active'); e.preventDefault(); }, {passive:false});
 fireBtn.addEventListener('touchend', () => { firing = false; fireBtn.classList.remove('active'); });
 addEventListener('touchmove', e => {
   for (const t of e.changedTouches){
