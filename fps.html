@@ -355,7 +355,7 @@ function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
 // 今は、ステージごとに「地上を歩いて行ける一番大きな連結領域」を一度だけ求めてキャッシュし、
 // その中の、壁から余裕のある平らな床だけを候補にする。
 // minFrom（{x,y}の配列）を渡すと、それらから離れた場所を優先する（対戦で出現位置が重ならないように）。
-const RESPAWN_DELAY_MS = 5000;          // 撃破されてから再出現するまでの待ち時間。この間は自分を倒した相手の方を向いて映す（キルカム）
+const RESPAWN_DELAY_MS = 5000;          // 撃破されてから再出現するまでの待ち時間。この間は自分を倒した相手を三人称視点で追って映す（キルカム）
 const SPAWN_PROTECT_MS = 1500;          // 再出現・開始直後の無敵時間
 const SPAWN_MARGIN = PLAYER_R + 0.17;   // 壁・薄い壁からこれ以上離れた場所だけを出現候補にする
 const SPAWN_MIN_DIST = 10;              // 他プレイヤーからこの距離(マス)以上離れた場所に出るのが理想
@@ -1056,7 +1056,7 @@ function step(dt){
   updateAllRemoteInterp();
   updateTargets(dt);
   if (P.deadUntil){
-    if (performance.now() < P.deadUntil){ updateKillcam(dt); return; }   // 移動・射撃は止め、視点だけ相手へ向ける（位置とHP0は送信され続ける）
+    if (performance.now() < P.deadUntil){ updateKillcam(dt); return; }   // 移動・射撃は止め、視点は倒した相手を追従する（位置とHP0は送信され続ける）
     respawnSelf();
   }
   if (fireCd > 0) fireCd -= dt;
@@ -2045,25 +2045,42 @@ function beginMatchLocal(cells, spawns){
 }
 // 相手からの被弾でHPが尽きた時、他プレイヤーから離れた場所に体力満タンで再出現させる。
 // キルの加算・撃破した相手への通知は呼び出し元（'hit'受信時）で行う。
-// ===== キルカム：再出現待ちの間、自分を倒した相手の方へ視点を向けて映す =====
+// ===== キルカム：再出現待ちの間、自分を倒した相手を三人称視点で追いかけて映す =====
 const killcamEl = document.createElement('div');
 killcamEl.style.cssText = 'position:fixed;left:0;right:0;bottom:14%;text-align:center;pointer-events:none;display:none;'
   + 'color:#e8ecee;font-size:15px;letter-spacing:.28em;text-shadow:0 0 6px rgba(0,0,0,.8);z-index:5';
 document.body.appendChild(killcamEl);
 function clearDeathView(){ killcamEl.style.display = 'none'; killcamEl.textContent = ''; P.killerId = null; }
-function angDiff(a, b){ let d = (b - a) % (Math.PI*2); if (d > Math.PI) d -= Math.PI*2; if (d < -Math.PI) d += Math.PI*2; return d; }
+// 三人称の追従視点。倒した相手の背後やや上にカメラを置き、相手の動き（移動・ジャンプ・
+// しゃがみ・射撃・窓の乗り越えなど）をそのまま映し続ける。相手の向きに合わせて回り込む。
+// 壁の裏に入り込まないよう、相手→カメラの線上で壁にぶつかったらその手前まで寄せる。
+const KILLCAM_DIST = 2.6;        // 相手からカメラまでの距離（背後）
+const KILLCAM_UP = 0.6;          // 相手の胸の高さからさらに持ち上げる量
+const KILLCAM_FOLLOW = 7;        // カメラ位置の追従の速さ（大きいほどきびきび）
+const killcamRay = new THREE.Raycaster();
+const _kcTarget = new THREE.Vector3(), _kcWant = new THREE.Vector3(), _kcDir = new THREE.Vector3();
 function updateKillcam(dt){
   const r = REMOTES.get(P.killerId);
   if (r){
-    const dx = r.x - player.x, dz = r.y - player.y;
-    const ty = (r.z || 0) + 1.2, cy = player.z + EYE_HEIGHT;
-    const wantYaw = Math.atan2(dx, -dz);                 // 前方向は (sin yaw, -cos yaw)
-    const wantPitch = Math.atan2(ty - cy, Math.max(0.5, Math.hypot(dx, dz)));
-    const k = Math.min(1, dt * 6);                        // なめらかに追従
-    yaw += angDiff(yaw, wantYaw) * k;
-    pitch += (Math.max(-maxPitch, Math.min(maxPitch, wantPitch)) - pitch) * k;
+    _kcTarget.set(r.x, (r.z || 0) + 1.05, r.y);                       // 相手の胸あたり
+    const fx = Math.sin(r.yaw), fz = -Math.cos(r.yaw);                 // 相手の前方向（x, z）
+    _kcWant.set(_kcTarget.x - fx * KILLCAM_DIST, _kcTarget.y + KILLCAM_UP, _kcTarget.z - fz * KILLCAM_DIST);
+    camera.position.lerp(_kcWant, Math.min(1, dt * KILLCAM_FOLLOW));  // 倒れた位置からなめらかに移る
+    // 壁めり込み防止：相手からカメラへの線上で壁に当たったら、その手前に置く
+    _kcDir.copy(camera.position).sub(_kcTarget);
+    const dist = _kcDir.length();
+    if (dist > 0.01){
+      _kcDir.divideScalar(dist);
+      killcamRay.set(_kcTarget, _kcDir); killcamRay.far = dist;
+      const h = killcamRay.intersectObjects(attackBlockers, false)[0];
+      if (h) camera.position.copy(_kcTarget).addScaledVector(_kcDir, Math.max(0.35, h.distance - 0.2));
+    }
+    camera.lookAt(_kcTarget);
+    // 再出現後に急に視点が飛ばないよう、今の向きを yaw/pitch に反映しておく
+    yaw = -camera.rotation.y;
+    pitch = Math.max(-maxPitch, Math.min(maxPitch, camera.rotation.x));
   }
-  camera.rotation.y = -yaw; camera.rotation.x = pitch; camera.rotation.z = 0;
+  camera.rotation.z = 0;
   const sec = Math.max(1, Math.ceil((P.deadUntil - performance.now()) / 1000));
   const txt = `${callsign(P.killerId)} に倒された ・ 再出現まで ${sec}`;
   if (killcamEl.textContent !== txt) killcamEl.textContent = txt;
