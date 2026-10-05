@@ -55,7 +55,7 @@
   #go{margin-top:24px;pointer-events:auto;border:0;background:var(--sodium);color:#0a0e12;
     font:inherit;font-size:15px;font-weight:700;letter-spacing:.18em;padding:15px 40px;cursor:pointer}
   #go:hover{background:#fff}
-  #rematch{display:none;margin-top:24px;pointer-events:auto;border:0;background:var(--sodium);color:#0a0e12;
+  #rematch{margin-top:24px;pointer-events:auto;border:0;background:var(--sodium);color:#0a0e12;
     font:inherit;font-size:15px;font-weight:700;letter-spacing:.18em;padding:15px 40px;cursor:pointer}
   #rematch:hover:not(:disabled){background:#fff}
   #rematch:disabled{opacity:.45;cursor:default}
@@ -96,7 +96,7 @@
     font-weight:700;letter-spacing:.14em;padding:11px 26px;cursor:pointer}
   #startBtn:hover{background:#fff}
   #startBtn:disabled{background:#39454d;color:#6d7880;cursor:default}
-  #quit{display:none;margin-top:14px;pointer-events:auto;border:1px solid var(--rust);background:none;color:var(--rust);
+  #quit{margin-top:14px;pointer-events:auto;border:1px solid var(--rust);background:none;color:var(--rust);
     font:inherit;font-size:13px;font-weight:600;letter-spacing:.16em;padding:12px 34px;cursor:pointer}
   #quit:hover{background:var(--rust);color:#0a0e12}
   #quit:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
@@ -208,8 +208,8 @@
       </div>
     </div>
   </div>
-  <button type="button" id="rematch">再戦</button>
-  <button type="button" id="quit">切断する</button>
+  <button type="button" id="rematch" style="display:none">再戦</button>
+  <button type="button" id="quit" style="display:none">切断する</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
@@ -355,7 +355,7 @@ function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
 // 今は、ステージごとに「地上を歩いて行ける一番大きな連結領域」を一度だけ求めてキャッシュし、
 // その中の、壁から余裕のある平らな床だけを候補にする。
 // minFrom（{x,y}の配列）を渡すと、それらから離れた場所を優先する（対戦で出現位置が重ならないように）。
-const RESPAWN_DELAY_MS = 5000;          // 撃破されてから再出現するまでの待ち時間。この間は自分を倒した相手を頭上から見下ろして追って映す（キルカム）
+const RESPAWN_DELAY_MS = 5000;          // 撃破されてから再出現するまでの待ち時間。この間は自分を倒した相手を正面から観戦する（キルカム）
 const SPAWN_PROTECT_MS = 1500;          // 再出現・開始直後の無敵時間
 const SPAWN_MARGIN = PLAYER_R + 0.17;   // 壁・薄い壁からこれ以上離れた場所だけを出現候補にする
 const SPAWN_MIN_DIST = 10;              // 他プレイヤーからこの距離(マス)以上離れた場所に出るのが理想
@@ -2051,30 +2051,67 @@ function beginMatchLocal(cells, spawns){
 }
 // 相手からの被弾でHPが尽きた時、他プレイヤーから離れた場所に体力満タンで再出現させる。
 // キルの加算・撃破した相手への通知は呼び出し元（'hit'受信時）で行う。
-// ===== キルカム：再出現待ちの間、自分を倒した相手を頭上から見下ろして追いかける =====
+// ===== キルカム：再出現待ちの間、自分を倒した相手を正面から観戦する =====
 const killcamEl = document.createElement('div');
 killcamEl.style.cssText = 'position:fixed;left:0;right:0;bottom:14%;text-align:center;pointer-events:none;display:none;'
   + 'color:#e8ecee;font-size:15px;letter-spacing:.28em;text-shadow:0 0 6px rgba(0,0,0,.8);z-index:5';
 document.body.appendChild(killcamEl);
-function clearDeathView(){ killcamEl.style.display = 'none'; killcamEl.textContent = ''; P.killerId = null; }
-// 俯瞰の追従視点。倒した相手の頭上から相手を見下ろし、相手を常に画面の中央に映す。
-// 相手の動き（移動・ジャンプ・しゃがみ・射撃・窓の乗り越えなど）はそのまま映し続ける。
-// カメラは壁（WALL_H）より高い位置に置くので、壁に遮られたりめり込んだりしない。
-// 真上から見下ろすと向きが定まらないため、相手の背後へ少しだけずらして斜め上から見る。
-// 相手が向きを変えると一緒に回り込み、画面の「上」が常に相手の前方になる。
-const KILLCAM_HEIGHT = 5.0;      // 相手の足元からカメラまでの高さ（WALL_H=3.6 より高く）
-const KILLCAM_BACK = 1.0;        // 相手の背後へずらす量（大きいほど斜めから、0に近いほど真上から）
-const KILLCAM_FOLLOW = 8;        // カメラ位置の追従の速さ（大きいほどきびきび）
-const _kcTarget = new THREE.Vector3(), _kcWant = new THREE.Vector3();
+function clearDeathView(){ killcamEl.style.display = 'none'; killcamEl.textContent = ''; P.killerId = null; restoreGhostWalls(); }
+// 観戦カメラ：倒した相手を正面から全身が入る距離で映し、相手を画面の中央に据える。
+// 相手が向きを変えるとカメラも正面へ回り込み、相手の動き（移動・しゃがみ・射撃など）はそのまま映る。
+// カメラと相手の間にある壁は、元のマテリアルを半透明の複製に差し替えて透かす（壁が消えるのではなく薄く見える）。
+// 壁をどかすので、カメラを壁の手前に寄せる必要はない。観戦が終わったら元のマテリアルに戻す。
+const KILLCAM_DIST = 3.2;        // 相手の正面から離れる距離（全身が収まる程度）
+const KILLCAM_CAM_H = 1.5;       // カメラの高さ（相手の足元から）。目線よりやや高いと全身が見やすい
+const KILLCAM_FOLLOW = 6;        // カメラ位置の追従の速さ（大きいほどきびきび）
+const KILLCAM_GHOST_OPACITY = 0.16;  // 透けた壁の濃さ（0で完全に透明）
+const killcamRay = new THREE.Raycaster();
+const _kcTarget = new THREE.Vector3(), _kcWant = new THREE.Vector3(), _kcDir = new THREE.Vector3(), _kcFrom = new THREE.Vector3();
+const ghostOf = new Map();       // 元のマテリアル → 半透明の複製（壁ごとに作り直さないよう使い回す）
+const ghosted = new Set();       // いま透けさせている壁メッシュ
+function ghostMat(orig){
+  const conv = m => {
+    let g = ghostOf.get(m);
+    if (!g){ g = m.clone(); g.transparent = true; g.opacity = KILLCAM_GHOST_OPACITY; g.depthWrite = false; ghostOf.set(m, g); }
+    return g;
+  };
+  return Array.isArray(orig) ? orig.map(conv) : conv(orig);
+}
+function setWallGhost(mesh, on){
+  if (on){
+    if (mesh.userData.origMat) return;
+    mesh.userData.origMat = mesh.material; mesh.material = ghostMat(mesh.material); ghosted.add(mesh);
+  } else {
+    if (!mesh.userData.origMat) return;
+    mesh.material = mesh.userData.origMat; mesh.userData.origMat = null; ghosted.delete(mesh);
+  }
+}
+function restoreGhostWalls(){ for (const m of [...ghosted]) setWallGhost(m, false); }
+// カメラから相手の足元・体・頭へ線を引き、その途中にある壁を透かす。通り道から外れた壁は元に戻す。
+function updateGhostWalls(r){
+  const hit = new Set();
+  for (const dy of [0.1, 0.9, 1.6]){
+    _kcFrom.set(r.x, (r.z || 0) + dy, r.y);
+    _kcDir.copy(_kcFrom).sub(camera.position);
+    const d = _kcDir.length();
+    if (d < 0.05) continue;
+    _kcDir.divideScalar(d);
+    killcamRay.set(camera.position, _kcDir); killcamRay.far = Math.max(0, d - 0.05);
+    for (const h of killcamRay.intersectObjects(attackBlockers, false)) hit.add(h.object);
+  }
+  for (const m of [...ghosted]) if (!hit.has(m)) setWallGhost(m, false);
+  for (const m of hit) setWallGhost(m, true);
+}
 function updateKillcam(dt){
   const r = REMOTES.get(P.killerId);
   if (r){
     _kcTarget.set(r.x, (r.z || 0) + 0.9, r.y);                         // 相手の体の中心あたり
     const fx = Math.sin(r.yaw), fz = -Math.cos(r.yaw);                 // 相手の前方向（x, z）
-    _kcWant.set(r.x - fx * KILLCAM_BACK, (r.z || 0) + KILLCAM_HEIGHT, r.y - fz * KILLCAM_BACK);
-    camera.position.lerp(_kcWant, Math.min(1, dt * KILLCAM_FOLLOW));   // 倒れた位置からなめらかに上昇する
+    _kcWant.set(r.x + fx * KILLCAM_DIST, (r.z || 0) + KILLCAM_CAM_H, r.y + fz * KILLCAM_DIST);  // 相手の正面
+    camera.position.lerp(_kcWant, Math.min(1, dt * KILLCAM_FOLLOW));   // 倒れた位置からなめらかに移る
     camera.lookAt(_kcTarget);                                           // 相手を画面中央に据える
     yaw = -camera.rotation.y;                                           // 再出現後の向きに引き継ぐ
+    updateGhostWalls(r);
   }
   camera.rotation.z = 0;
   const sec = Math.max(1, Math.ceil((P.deadUntil - performance.now()) / 1000));
@@ -2085,7 +2122,7 @@ function updateKillcam(dt){
 function respawnSelf(){
   clearHitMarks();
   P.deadUntil = 0; clearDeathView();
-  pitch = 0;   // 見下ろしていた視線を水平に戻す
+  pitch = 0;   // 観戦中の視線を水平に戻す
   const spot = freeSpot(Math.random, [...REMOTES.values()]);
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
   P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0;
