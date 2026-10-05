@@ -55,6 +55,11 @@
   #go{margin-top:24px;pointer-events:auto;border:0;background:var(--sodium);color:#0a0e12;
     font:inherit;font-size:15px;font-weight:700;letter-spacing:.18em;padding:15px 40px;cursor:pointer}
   #go:hover{background:#fff}
+  #rematch{display:none;margin-top:24px;pointer-events:auto;border:0;background:var(--sodium);color:#0a0e12;
+    font:inherit;font-size:15px;font-weight:700;letter-spacing:.18em;padding:15px 40px;cursor:pointer}
+  #rematch:hover:not(:disabled){background:#fff}
+  #rematch:disabled{opacity:.45;cursor:default}
+  #rematch:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
   #go:focus-visible,#gear:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
   #score{margin-top:16px;font-size:13px;color:#5d6970;letter-spacing:.1em}
 
@@ -203,6 +208,7 @@
       </div>
     </div>
   </div>
+  <button type="button" id="rematch">再戦</button>
   <button type="button" id="quit">切断する</button>
 </div>
 
@@ -1884,7 +1890,7 @@ function connect(){
   el('lobby').style.display = 'none';
   try { socket = new WebSocket(addr); } catch(e){ netState = 'idle'; netStatus('接続できません'); return; }
   socket.onopen = () => send({ type:'join', room, max });
-  socket.onclose = () => { if (netState !== 'idle' && netState !== 'playing'){ netState = 'idle'; netStatus('切断されました'); el('lobby').style.display = 'none'; } };
+  socket.onclose = () => { if (netState === 'finished'){ leaveOnline('切断されました'); return; } if (netState !== 'idle' && netState !== 'playing'){ netState = 'idle'; netStatus('切断されました'); el('lobby').style.display = 'none'; } };
   socket.onerror = () => netStatus('接続エラー：アドレスを確認する');
   socket.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch(e){ return; } handleNet(m); };
 }
@@ -1908,6 +1914,7 @@ function handleNet(m){
   if (m.type === 'host'){
     hostId = m.id; isHost = (m.id === myId);
     if (netState === 'waiting') updateLobbyUI();
+    else if (netState === 'finished') updateRematchUI();
     return;
   }
   if (m.type === 'start'){
@@ -1922,6 +1929,8 @@ function handleNet(m){
       if (REMOTES.size === 0) leaveOnline('対戦相手が全員切断した。');
     } else if (netState === 'waiting'){
       updateLobbyUI();
+    } else if (netState === 'finished'){
+      updateRematchUI();
     }
     return;
   }
@@ -2027,6 +2036,8 @@ function beginMatchLocal(cells, spawns){
   netState = 'playing';
   started = true;
   alive = true;
+  clearHitMarks(); updateRematchUI();
+  el('score').textContent = ''; el('quit').textContent = '切断する';
   veil.classList.add('gone');
   el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
   refreshGoVisibility();
@@ -2076,14 +2087,31 @@ function scoreboardText(){
   rows.sort((a,b) => b.kills - a.kills);
   return rows.map(r => `${r.label} ${r.kills}`).join(' ／ ');
 }
+// 決着後の再戦。ソケットは繋いだままなので、ホストが「再戦」を押すと同じメンバーで
+// start を送り直す（サーバーは started 済みのルームでもホストの start を中継する）。
+// ホスト以外は、ホストの start を受け取った時点で自動的に次の試合が始まる。
+let finishBlurb = '';
+function updateRematchUI(){
+  const fin = netState === 'finished';
+  const btn = el('rematch');
+  btn.style.display = (fin && isHost) ? '' : 'none';
+  if (!fin) return;
+  const alone = REMOTES.size < 1;
+  btn.disabled = alone;
+  btn.textContent = alone ? '再戦（相手がいません）' : '再戦';
+  const hint = isHost
+    ? (alone ? '対戦相手が全員退出した。' : '「再戦」を押すと、同じメンバーでもう一度対戦する。')
+    : 'ホストが再戦を開始するのを待っている…（残る場合は何もしなくてよい）';
+  el('blurb').innerHTML = finishBlurb + '<br><br>' + hint;
+}
 function finishOnline(winnerId){
   clearDeathView();
-  netState = 'idle';
-  alive = false;
+  netState = 'finished';
+  alive = false; mouseFire = false; firing = false;
   document.exitPointerLock?.();
   const iwon = winnerId === myId;
   el('title').innerHTML = iwon ? '<span>決着</span>YOU WIN' : '<span>決着</span>YOU LOSE';
-  el('blurb').innerHTML = iwon
+  finishBlurb = iwon
     ? `${CFG.target} キル先取した。`
     : `${callsign(winnerId)} に ${CFG.target} キル先取された。`;
   el('score').textContent = scoreboardText();
@@ -2092,6 +2120,7 @@ function finishOnline(winnerId){
   el('quit').textContent = 'メニューへ';
   el('lobby').style.display = 'none';
   veil.classList.remove('gone'); clearHitMarks();
+  updateRematchUI();
 }
 function leaveOnline(msg){
   clearDeathView();
@@ -2107,6 +2136,7 @@ function leaveOnline(msg){
   applyMode(); // blurb・quitボタンの表記・go/quitの表示状態をすべて通常メニューの状態に戻す
 }
 function refreshGoVisibility(){
+  el('rematch').style.display = (netState === 'finished' && isHost) ? '' : 'none';
   const showGo = CFG.mode === 'solo' || netState === 'playing';
   el('go').style.display = showGo ? '' : 'none';
   el('quit').style.display = (CFG.mode === 'online' && netState !== 'idle') ? '' : 'none';
@@ -2132,6 +2162,7 @@ el('g_solo').onclick = () => {
 el('g_online').onclick = () => { CFG.mode = 'online'; applyMode(); };
 el('connectBtn').onclick = connect;
 el('startBtn').onclick = hostBeginMatch;
+el('rematch').onclick = hostBeginMatch;
 el('quit').onclick = () => leaveOnline('未接続');
 applyMode();
 
