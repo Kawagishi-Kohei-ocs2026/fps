@@ -1056,7 +1056,13 @@ function step(dt){
   updateAllRemoteInterp();
   updateTargets(dt);
   if (P.deadUntil){
-    if (performance.now() < P.deadUntil){ updateKillcam(dt); return; }   // 移動・射撃は止め、視点は倒した相手を追従する（位置とHP0は送信され続ける）
+    if (performance.now() < P.deadUntil){
+      // 観戦モード：自分の移動・射撃は止めるが、相手モデルの更新は続ける（しゃがみ・スライディング・
+      // 窓の乗り越え・歩行アニメなど相手の動きをそのまま映すため）。位置とHP0は送信され続ける。
+      syncRemoteMeshes(); updateRemoteMeshes(dt);
+      updateKillcam(dt);
+      return;
+    }
     respawnSelf();
   }
   if (fireCd > 0) fireCd -= dt;
