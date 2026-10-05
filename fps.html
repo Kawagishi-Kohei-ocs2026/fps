@@ -349,7 +349,7 @@ function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
 // 今は、ステージごとに「地上を歩いて行ける一番大きな連結領域」を一度だけ求めてキャッシュし、
 // その中の、壁から余裕のある平らな床だけを候補にする。
 // minFrom（{x,y}の配列）を渡すと、それらから離れた場所を優先する（対戦で出現位置が重ならないように）。
-const RESPAWN_DELAY_MS = 1500;          // 撃破されてから再出現するまでの待ち時間（この間に飛んでいる弾を出し切る）
+const RESPAWN_DELAY_MS = 5000;          // 撃破されてから再出現するまでの待ち時間。この間は自分を倒した相手の方を向いて映す（キルカム）
 const SPAWN_PROTECT_MS = 1500;          // 再出現・開始直後の無敵時間
 const SPAWN_MARGIN = PLAYER_R + 0.17;   // 壁・薄い壁からこれ以上離れた場所だけを出現候補にする
 const SPAWN_MIN_DIST = 10;              // 他プレイヤーからこの距離(マス)以上離れた場所に出るのが理想
@@ -708,6 +708,7 @@ const P = {
   vault:null, // 窓の乗り越え中は {t,x0,y0,z0,x1,y1,z1,side,yaw}
   vaultEnd:false, // 乗り越えが終わった直後（相手へ完了を1回だけ伝えるため）
   hp:100, ammo:MAG, reload:0, flash:0, kick:0, kills:0,
+  killerId:null, // 自分を倒した相手のid（再出現待ち中のキルカムで使う）
   deadUntil:0,   // 0以外：撃破されて再出現待ち中。この時刻(performance.now)に再出現する
   invulnUntil:0, // この時刻(performance.now)まで被弾を無効にする（再出現直後の保護）
 };
@@ -1049,7 +1050,7 @@ function step(dt){
   updateAllRemoteInterp();
   updateTargets(dt);
   if (P.deadUntil){
-    if (performance.now() < P.deadUntil) return;   // 視点・移動・射撃は止める（位置とHP0は送信され続ける）
+    if (performance.now() < P.deadUntil){ updateKillcam(dt); return; }   // 移動・射撃は止め、視点だけ相手へ向ける（位置とHP0は送信され続ける）
     respawnSelf();
   }
   if (fireCd > 0) fireCd -= dt;
@@ -1966,7 +1967,8 @@ function handleNet(m){
       P.hp = 0;
       P.deadUntil = performance.now() + RESPAWN_DELAY_MS;
       P.vault = null; P.sliding = false; mouseFire = false; firing = false;
-      clearTimeout(hurtTimer); el('hurtflash').classList.add('show');   // 待機中は赤い画面のまま
+      P.killerId = m.from;
+      flashHurt();
       send({ type:'died', to: m.from });
     }
     updHUD();
@@ -2008,7 +2010,7 @@ function beginMatchLocal(cells, spawns){
   yaw = 0; pitch = 0;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
   P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
-  P.deadUntil = 0; el('hurtflash').classList.remove('show');
+  P.deadUntil = 0; clearDeathView();
   P.invulnUntil = performance.now() + SPAWN_PROTECT_MS;
   for (const [id, r] of REMOTES){
     if (!spawns[id]){ REMOTES.delete(id); continue; }
@@ -2032,9 +2034,33 @@ function beginMatchLocal(cells, spawns){
 }
 // 相手からの被弾でHPが尽きた時、他プレイヤーから離れた場所に体力満タンで再出現させる。
 // キルの加算・撃破した相手への通知は呼び出し元（'hit'受信時）で行う。
+// ===== キルカム：再出現待ちの間、自分を倒した相手の方へ視点を向けて映す =====
+const killcamEl = document.createElement('div');
+killcamEl.style.cssText = 'position:fixed;left:0;right:0;bottom:14%;text-align:center;pointer-events:none;display:none;'
+  + 'color:#e8ecee;font-size:15px;letter-spacing:.28em;text-shadow:0 0 6px rgba(0,0,0,.8);z-index:5';
+document.body.appendChild(killcamEl);
+function clearDeathView(){ killcamEl.style.display = 'none'; killcamEl.textContent = ''; P.killerId = null; }
+function angDiff(a, b){ let d = (b - a) % (Math.PI*2); if (d > Math.PI) d -= Math.PI*2; if (d < -Math.PI) d += Math.PI*2; return d; }
+function updateKillcam(dt){
+  const r = REMOTES.get(P.killerId);
+  if (r){
+    const dx = r.x - player.x, dz = r.y - player.y;
+    const ty = (r.z || 0) + 1.2, cy = player.z + EYE_HEIGHT;
+    const wantYaw = Math.atan2(dx, -dz);                 // 前方向は (sin yaw, -cos yaw)
+    const wantPitch = Math.atan2(ty - cy, Math.max(0.5, Math.hypot(dx, dz)));
+    const k = Math.min(1, dt * 6);                        // なめらかに追従
+    yaw += angDiff(yaw, wantYaw) * k;
+    pitch += (Math.max(-maxPitch, Math.min(maxPitch, wantPitch)) - pitch) * k;
+  }
+  camera.rotation.y = -yaw; camera.rotation.x = pitch; camera.rotation.z = 0;
+  const sec = Math.max(1, Math.ceil((P.deadUntil - performance.now()) / 1000));
+  const txt = `${callsign(P.killerId)} に倒された ・ 再出現まで ${sec}`;
+  if (killcamEl.textContent !== txt) killcamEl.textContent = txt;
+  killcamEl.style.display = '';
+}
 function respawnSelf(){
   clearHitMarks();
-  P.deadUntil = 0; el('hurtflash').classList.remove('show');
+  P.deadUntil = 0; clearDeathView();
   const spot = freeSpot(Math.random, [...REMOTES.values()]);
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
   P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0;
@@ -2051,6 +2077,7 @@ function scoreboardText(){
   return rows.map(r => `${r.label} ${r.kills}`).join(' ／ ');
 }
 function finishOnline(winnerId){
+  clearDeathView();
   netState = 'idle';
   alive = false;
   document.exitPointerLock?.();
@@ -2067,6 +2094,7 @@ function finishOnline(winnerId){
   veil.classList.remove('gone'); clearHitMarks();
 }
 function leaveOnline(msg){
+  clearDeathView();
   if (socket){ try { socket.close(); } catch(e){} socket = null; }
   netState = 'idle'; alive = false; started = false;
   document.exitPointerLock?.();
@@ -2124,7 +2152,7 @@ function resetLevel(){
   yaw = 0; pitch = 0;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
   P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
-  P.deadUntil = 0;
+  P.deadUntil = 0; clearDeathView();
   spawnTargets();
   updHUD();
 }
