@@ -846,7 +846,7 @@ function updHUD(){
     el('scoreboard').innerHTML = rows.map(r =>
       `<div${r.id===null?' class="me"':''}>${r.label} ${r.kills}</div>`).join('');
   } else {
-    el('top').innerHTML = 'SUBLEVEL 7 &nbsp;·&nbsp; 移動練習';
+    el('top').innerHTML = `SUBLEVEL 7 &nbsp;·&nbsp; 的 <b>${P.kills}</b> 撃破`;
     el('scoreboard').innerHTML = '';
   }
 }
@@ -855,6 +855,96 @@ function doReload(){
   P.reload = RELOAD_TIME;
   beep(160, .12, 'square', .05);
   updHUD();
+}
+/* ============ ソロ練習の的 ============ */
+// ソロプレイ中だけ、ステージ上の歩ける平らな床（freeSpot）に的を立てる。
+// 胴体は DMG_BODY(12)、頭は DMG_HEAD(24) のダメージ。的のHPは TARGET_HP なので、
+// 頭なら1発、胴なら2発で倒れる。倒れた的は TARGET_RESPAWN 秒後に別の場所へ立て直す。
+const TARGET_HP = 24;
+const TARGET_RESPAWN = 2.5;   // 倒してから立て直すまでの秒数
+const TARGET_FALL = 0.3;      // 倒れる演出の長さ（秒）
+const TARGET_MIN_DIST = 6;    // 新しく立てる的は、プレイヤー・他の的からこの距離(マス)以上離す
+const targetGroup = new THREE.Group();
+scene.add(targetGroup);
+const TARGETS = [];
+const tMatBody = new THREE.MeshLambertMaterial({ color: 0xc4462c });
+const tMatRing = new THREE.MeshLambertMaterial({ color: 0xf2e6d0 });
+const tMatHead = new THREE.MeshLambertMaterial({ color: 0xf2b544 });
+const tMatPost = new THREE.MeshLambertMaterial({ color: 0x39454d });
+const tGeoBody = new THREE.CylinderGeometry(0.27, 0.27, 0.8, 16);
+const tGeoRing = new THREE.CylinderGeometry(0.275, 0.275, 0.1, 16);
+const tGeoHead = new THREE.SphereGeometry(0.17, 16, 12);
+const tGeoPost = new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8);
+function makeTarget(){
+  const g = new THREE.Group();
+  const post = new THREE.Mesh(tGeoPost, tMatPost); post.position.y = 0.25; g.add(post);
+  // 胴・頭だけ個別にマテリアルを複製しておく（被弾時に光らせるため）
+  const body = new THREE.Mesh(tGeoBody, tMatBody.clone()); body.position.y = 0.9; g.add(body);
+  const ring = new THREE.Mesh(tGeoRing, tMatRing); ring.position.y = 0.9; g.add(ring);
+  const head = new THREE.Mesh(tGeoHead, tMatHead.clone()); head.position.y = 1.5; g.add(head);
+  const t = { group: g, body, head, x: 0, y: 0, hp: TARGET_HP, state: 'up', timer: 0, flash: 0 };
+  body.userData.target = t; body.userData.isHead = false;
+  head.userData.target = t; head.userData.isHead = true;
+  targetGroup.add(g);
+  return t;
+}
+function placeTarget(t){
+  const others = [{ x: player.x, y: player.y }];
+  for (const o of TARGETS) if (o !== t && o.state === 'up') others.push({ x: o.x, y: o.y });
+  const spot = freeSpot(Math.random, others);
+  t.x = spot.x; t.y = spot.y; t.hp = TARGET_HP; t.state = 'up'; t.flash = 0;
+  t.group.position.set(spot.x, heightAt(spot.x, spot.y), spot.y);
+  t.group.rotation.set(0, Math.random() * Math.PI * 2, 0);
+  t.group.visible = true;
+  t.body.material.emissive.setHex(0); t.head.material.emissive.setHex(0);
+}
+function clearTargets(){
+  for (const t of TARGETS){
+    targetGroup.remove(t.group);
+    t.body.material.dispose(); t.head.material.dispose();
+  }
+  TARGETS.length = 0;
+}
+// ソロの開始・やり直し時に、ステージの広さに応じた数の的を立てる。ソロ以外では何も立てない。
+function spawnTargets(){
+  clearTargets();
+  if (CFG.mode !== 'solo') return;
+  const n = Math.max(4, Math.min(12, Math.round(W * H / 300)));
+  for (let i = 0; i < n; i++){
+    const t = makeTarget(); TARGETS.push(t); placeTarget(t);
+  }
+}
+function targetHitMeshes(){
+  const list = [];
+  for (const t of TARGETS) if (t.state === 'up') list.push(t.body, t.head);
+  return list;
+}
+function hitTarget(t, headshot){
+  t.hp -= headshot ? DMG_HEAD : DMG_BODY;
+  t.flash = 0.12;
+  if (t.hp > 0){ beep(headshot ? 700 : 520, .07, 'triangle', .07); return; }
+  t.state = 'falling'; t.timer = 0;
+  P.kills++;
+  beep(880, .12, 'triangle', .09);
+  updHUD();
+}
+function updateTargets(dt){
+  for (const t of TARGETS){
+    if (t.flash > 0){
+      t.flash -= dt;
+      const c = t.flash > 0 ? 0x886644 : 0;
+      t.body.material.emissive.setHex(c); t.head.material.emissive.setHex(c);
+    }
+    if (t.state === 'falling'){
+      t.timer += dt;
+      const u = Math.min(1, t.timer / TARGET_FALL);
+      t.group.rotation.x = -u * Math.PI / 2;              // 後ろへ倒れる
+      if (u >= 1){ t.group.visible = false; t.state = 'down'; t.timer = 0; }
+    } else if (t.state === 'down'){
+      t.timer += dt;
+      if (t.timer >= TARGET_RESPAWN) placeTarget(t);
+    }
+  }
 }
 // オンライン対戦中、今シューティングの対象にできる相手（死んでいない相手）の
 // 胴体／頭メッシュを毎回組み直す。userDataに相手id・頭かどうかを積んでおき、
@@ -885,16 +975,24 @@ function shoot(){
     const targets = remoteHitMeshes();
     if (targets.length) playerHit = raycaster.intersectObjects(targets, false)[0];
   }
-  let hit = wallHit, hitIsPlayer = false;
+  let targetHit = null;
+  if (CFG.mode === 'solo'){
+    const tms = targetHitMeshes();
+    if (tms.length) targetHit = raycaster.intersectObjects(tms, false)[0];
+  }
+  let hit = wallHit, hitIsPlayer = false, hitIsTarget = false;
   if (playerHit && (!wallHit || playerHit.distance < wallHit.distance)){ hit = playerHit; hitIsPlayer = true; }
+  if (targetHit && (!wallHit || targetHit.distance < wallHit.distance)){ hit = targetHit; hitIsPlayer = false; hitIsTarget = true; }
 
   if (hit && hit.distance <= MAX_SHOT_RANGE){
-    const normal = (!hitIsPlayer && hit.face)
+    const normal = (!hitIsPlayer && !hitIsTarget && hit.face)
       ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
       : null;
     spawnTracer(camera.position, hit.point);
     spawnImpact(hit.point, normal);
-    if (hitIsPlayer){
+    if (hitIsTarget){
+      hitTarget(hit.object.userData.target, hit.object.userData.isHead);
+    } else if (hitIsPlayer){
       const remoteId = hit.object.userData.remoteId;
       const headshot = hit.object.userData.isHead;
       const dmg = headshot ? DMG_HEAD : DMG_BODY;
@@ -947,6 +1045,7 @@ function step(dt){
   if (!alive) return;
   netLoop(dt);
   updateAllRemoteInterp();
+  updateTargets(dt);
   if (fireCd > 0) fireCd -= dt;
   if ((firing || mouseFire) && fireCd <= 0 && P.flash <= 0 && P.ammo > 0 && P.reload <= 0) shoot();
   if (P.reload > 0){
@@ -1891,6 +1990,7 @@ function hostBeginMatch(){
 function beginMatchLocal(cells, spawns){
   setGrid(cells);
   buildScene();
+  clearTargets();
   const mySpot = spawns[myId] || freeSpot(Math.random, null);
   player.x = mySpot.x; player.y = mySpot.y; player.z = heightAt(mySpot.x, mySpot.y); player.vz = 0; player.onGround = true;
   yaw = 0; pitch = 0;
@@ -1984,6 +2084,7 @@ function applyMode(){
 }
 el('g_solo').onclick = () => {
   if (CFG.mode === 'online' && netState !== 'idle') leaveOnline('未接続');
+  if (CFG.mode !== 'solo') started = false; // オンラインから戻った時は、次の開始で的ごと作り直す
   CFG.mode = 'solo'; applyMode();
 };
 el('g_online').onclick = () => { CFG.mode = 'online'; applyMode(); };
@@ -2008,7 +2109,8 @@ function resetLevel(){
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
   yaw = 0; pitch = 0;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
-  P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0;
+  P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
+  spawnTargets();
   updHUD();
 }
 function start(){
