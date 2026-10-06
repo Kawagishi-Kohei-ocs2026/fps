@@ -193,6 +193,13 @@
       <input type="range" id="s_sens" min="0.15" max="3" step="0.05" value="1">
     </div>
     <div class="field">
+      <div class="row"><em>武器</em></div>
+      <div class="seg">
+        <button type="button" id="w_rifle" aria-pressed="true">ライフル（18発・胴12／頭24）</button>
+        <button type="button" id="w_sniper" aria-pressed="false">スナイパー（1発ごとにリロード・胴50／頭100）</button>
+      </div>
+    </div>
+    <div class="field">
       <div class="row"><em>スコープ操作</em></div>
       <div class="seg">
         <button type="button" id="sc_toggle" aria-pressed="true">クリックで入/切</button>
@@ -229,7 +236,7 @@ const el = id => document.getElementById(id);
 const canvas = el('view');
 const isTouch = matchMedia('(hover:none)').matches || 'ontouchstart' in window;
 if (isTouch) document.body.classList.add('touch');
-const CFG = { sens: 1, mode: 'solo', target: 5, scopeMode: 'toggle' }; // scopeMode: 'toggle'=右クリックで入/切 ／ 'hold'=右ボタンを押している間だけ覗く // target: 対戦の決着に必要なキル数（2D版と同じ既定値）
+const CFG = { sens: 1, mode: 'solo', target: 5, scopeMode: 'toggle', weapon: 'rifle' }; // scopeMode: 'toggle'=右クリックで入/切 ／ 'hold'=右ボタンを押している間だけ覗く // target: 対戦の決着に必要なキル数（2D版と同じ既定値）
 
 /* ============ 地形パラメータ（fps3d_prototype.htmlより） ============ */
 // 現在のステージの横(W)・縦(H)のマス数。固定値ではなく、ステージを読み込む／受け取るたびに
@@ -264,6 +271,13 @@ const FIRE_COOLDOWN = 0.06;  // 発射間隔（連射レート上限）
 const KICK_DECAY = 5;        // 反動の減衰速度
 // 対プレイヤーへのダメージ量。2D版のオンライン対戦時の値（本体12／頭部24）を踏襲。
 const DMG_BODY = 12, DMG_HEAD = 24;
+// 武器テーブル。rifle は従来どおり。sniper は1発撃つたびに自動リロードが入る（装弾数1）高威力武器。
+// mag=装弾数 / reload=リロード秒 / interval=長押し連射間隔 / body・head=ダメージ / kick=反動 / tone=発射音の高さ
+const WEAPONS = {
+  rifle:  { name:'ライフル',   mag:MAG, reload:RELOAD_TIME, interval:AUTO_FIRE_INTERVAL, body:DMG_BODY, head:DMG_HEAD, kick:1,   tone:320, vol:.11 },
+  sniper: { name:'スナイパー', mag:1,   reload:1.8,         interval:AUTO_FIRE_INTERVAL, body:50,       head:100,      kick:2.2, tone:150, vol:.16 },
+};
+function curW(){ return WEAPONS[CFG.weapon] || WEAPONS.rifle; }
 
 /* ============ ステージ ============ */
 // 次のステップでstages.json化する前提の、手作りの練習用ステージ。
@@ -738,7 +752,7 @@ const P = {
   crouch:false, crouchEase:0, sliding:false, slideT:0, slideDir:new THREE.Vector3(),
   vault:null, // 窓の乗り越え中は {t,x0,y0,z0,x1,y1,z1,side,yaw}
   vaultEnd:false, // 乗り越えが終わった直後（相手へ完了を1回だけ伝えるため）
-  hp:100, ammo:MAG, reload:0, flash:0, kick:0, kills:0,
+  hp:100, ammo:curW().mag, reload:0, flash:0, kick:0, kills:0,
   killerId:null, // 自分を倒した相手のid（再出現待ち中のキルカムで使う）
   deadUntil:0,   // 0以外：撃破されて再出現待ち中。この時刻(performance.now)に再出現する
   invulnUntil:0, // この時刻(performance.now)まで被弾を無効にする（再出現直後の保護）
@@ -885,8 +899,8 @@ function updHUD(){
   }
 }
 function doReload(){
-  if (!alive || P.deadUntil || P.reload > 0 || P.ammo === MAG) return;
-  P.reload = RELOAD_TIME;
+  if (!alive || P.deadUntil || P.reload > 0 || P.ammo === curW().mag) return;
+  P.reload = curW().reload;
   beep(160, .12, 'square', .05);
   updHUD();
 }
@@ -954,7 +968,7 @@ function targetHitMeshes(){
   return list;
 }
 function hitTarget(t, headshot){
-  t.hp -= headshot ? DMG_HEAD : DMG_BODY;
+  t.hp -= headshot ? curW().head : curW().body;
   t.flash = 0.12;
   if (t.hp > 0){ beep(headshot ? 700 : 520, .07, 'triangle', .07); return; }
   t.state = 'falling'; t.timer = 0;
@@ -997,8 +1011,9 @@ function remoteHitMeshes(){
 function shoot(){
   if (!alive || P.deadUntil || P.reload > 0 || P.vault) return;   // 観戦中・窓の乗り越え中は撃てない
   if (P.ammo <= 0){ doReload(); return; }
-  P.ammo--; P.flash = FIRE_COOLDOWN; P.kick = 1; fireCd = AUTO_FIRE_INTERVAL;
-  beep(320, .16, 'square', .11);
+  const W = curW();
+  P.ammo--; P.flash = FIRE_COOLDOWN; P.kick = W.kick; fireCd = W.interval;
+  beep(W.tone, .16, 'square', W.vol);
   if (CFG.mode === 'online') send({ type:'shoot' });
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
@@ -1031,7 +1046,7 @@ function shoot(){
     } else if (hitIsPlayer){
       const remoteId = hit.object.userData.remoteId;
       const headshot = hit.object.userData.isHead;
-      const dmg = headshot ? DMG_HEAD : DMG_BODY;
+      const dmg = headshot ? W.head : W.body;
       const remote = REMOTES.get(remoteId);
       if (remote) remote.flashUntil = performance.now() + 150;
       send({ type:'hit', to: remoteId, dmg });
@@ -1097,7 +1112,7 @@ function step(dt){
   if ((firing || mouseFire) && fireCd <= 0 && P.flash <= 0 && P.ammo > 0 && P.reload <= 0) shoot();
   if (P.reload > 0){
     P.reload -= dt;
-    if (P.reload <= 0){ P.reload = 0; P.ammo = MAG; beep(280,.09,'square',.05); updHUD(); }
+    if (P.reload <= 0){ P.reload = 0; P.ammo = curW().mag; beep(280,.09,'square',.05); updHUD(); }
   }
   if (P.flash > 0) P.flash -= dt;
   if (P.kick > 0) P.kick -= dt*KICK_DECAY;
@@ -1284,6 +1299,19 @@ function setScopeMode(m, save){
   for (const k in scBtns) scBtns[k].setAttribute('aria-pressed', String(k === CFG.scopeMode));
   if (save){ try { localStorage.setItem('sublevel7.scopeMode', CFG.scopeMode); } catch(e){} }
 }
+// 武器選択。切り替えたら弾を満タンにしてリロード状態をリセットする
+const wBtns = { rifle: el('w_rifle'), sniper: el('w_sniper') };
+function setWeapon(w, save){
+  CFG.weapon = WEAPONS[w] ? w : 'rifle';
+  P.ammo = curW().mag; P.reload = 0;
+  for (const k in wBtns) wBtns[k].setAttribute('aria-pressed', String(k === CFG.weapon));
+  el('ammonum').textContent = P.ammo;
+  if (save){ try { localStorage.setItem('sublevel7.weapon', CFG.weapon); } catch(e){} }
+}
+wBtns.rifle.onclick  = () => setWeapon('rifle', true);
+wBtns.sniper.onclick = () => setWeapon('sniper', true);
+try { setWeapon(localStorage.getItem('sublevel7.weapon') || 'rifle', false); } catch(e){ setWeapon('rifle', false); }
+
 scBtns.toggle.onclick = () => setScopeMode('toggle', true);
 scBtns.hold.onclick   = () => setScopeMode('hold', true);
 try { setScopeMode(localStorage.getItem('sublevel7.scopeMode') || 'toggle', false); } catch(e){ setScopeMode('toggle', false); }
@@ -2084,7 +2112,7 @@ function beginMatchLocal(cells, spawns){
   player.x = mySpot.x; player.y = mySpot.y; player.z = heightAt(mySpot.x, mySpot.y); player.vz = 0; player.onGround = true;
   yaw = 0; pitch = 0;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
-  P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
+  P.hp = 100; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
   P.deadUntil = 0; clearDeathView();
   P.invulnUntil = performance.now() + SPAWN_PROTECT_MS;
   for (const [id, r] of REMOTES){
@@ -2185,7 +2213,7 @@ function respawnSelf(){
   pitch = 0;   // 観戦中の視線を水平に戻す
   const spot = freeSpot(Math.random, [...REMOTES.values()]);
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
-  P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0;
+  P.hp = 100; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0;
   P.invulnUntil = performance.now() + SPAWN_PROTECT_MS;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
 }
@@ -2293,7 +2321,7 @@ function resetLevel(){
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
   yaw = 0; pitch = 0;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
-  P.hp = 100; P.ammo = MAG; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
+  P.hp = 100; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
   P.deadUntil = 0; clearDeathView();
   spawnTargets();
   updHUD();
