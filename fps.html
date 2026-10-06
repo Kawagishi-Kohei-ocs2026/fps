@@ -15,6 +15,8 @@
 
   #scopeV{position:fixed;inset:0;pointer-events:none;opacity:0;
     background:radial-gradient(circle at 50% 50%,transparent 38%,rgba(0,0,0,.55) 100%)}
+  /* スナイパー用：中心の円の外側を真っ黒にして、円の中だけ見えるようにする（半径は画面の短辺基準） */
+  #scopeV.sniper{background:radial-gradient(circle at 50% 50%,transparent 36vmin,#000 36.6vmin)}
   #cross{position:fixed;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;
     pointer-events:none}
   #cross::before,#cross::after{content:"";position:absolute;background:rgba(255,255,255,.75);
@@ -324,55 +326,126 @@ function mulberry32(seed){
   };
 }
 
-// ランダムステージ：まず迷路の骨格（壁/床のみ）を掘り、通路を分ける壁の一部を
-// 薄い壁・窓に差し替え、開けた床にジャンプ台（坂＋箱）を点在させる。
+// ランダムステージ：開けた床に、壁・薄い壁・窓・坂＋箱をサンプルステージ(stages.json)と同じくらいの
+// 密度で散らす。左半分（中央列を含む）だけを作り、左右に鏡写しにコピーするので必ず左右対称になる。
+// 鏡写しでは E↔W を入れ替える（薄い壁・窓・坂の向き）。部屋・段差・壁どうしは1マス以上離して置くので、
+// 通路がふさがらない。部屋（薄い壁で囲った小部屋）は必ず出入口を1つ以上あける。
 function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
-  const g = Array.from({length:h}, () => Array.from({length:w}, () => ({type:'wall'})));
-  const passable = Array.from({length:h}, () => Array(w).fill(false));
-  const setFloor = (x,y) => { g[y][x] = {type:'floor'}; passable[y][x] = true; };
-  setFloor(1,1);
-  const stack = [[1,1]];
-  while (stack.length){
-    const [x,y] = stack[stack.length-1];
-    const opts = [[2,0],[-2,0],[0,2],[0,-2]]
-      .map(([dx,dy]) => [x+dx, y+dy, x+dx/2, y+dy/2])
-      .filter(([nx,ny]) => nx>0 && ny>0 && nx<w-1 && ny<h-1 && !passable[ny][nx]);
-    if (!opts.length){ stack.pop(); continue; }
-    const [nx,ny,mx,my] = opts[(rng()*opts.length)|0];
-    setFloor(mx,my); setFloor(nx,ny); stack.push([nx,ny]);
-  }
-  for (let y=2; y<h-2; y++) for (let x=2; x<w-2; x++)
-    if (!passable[y][x] && rng() < 0.4) setFloor(x,y);
+  const g = Array.from({length:h}, (_, y) => Array.from({length:w}, (_, x) =>
+    (x===0 || y===0 || x===w-1 || y===h-1) ? {type:'wall'} : {type:'floor'}));
+  const occ = Array.from({length:h}, () => Array(w).fill(false));
+  const mid = Math.floor((w-1)/2);                 // 左半分の最後の列（奇数幅なら中央列）
+  const FLIP = { E:'W', W:'E', N:'N', S:'S' };
+  const ri = (a,b) => a + ((rng()*(b-a+1))|0);     // a〜b の整数
+  const pick = arr => arr[(rng()*arr.length)|0];
+  const cnt = { wall:0, thin:0, win:0, ramp:0, plat:0 };
+  const area = (w-2)*(h-2), k = area / 1551;      // サンプル(35x49)の内側面積を基準にした倍率
+  const goal = { wall:64*k, thin:81*k, win:21*k, ramp:36*k, plat:21*k };
 
-  // 通路を分ける壁のうち、向かい合う2方向だけが床のものを薄い壁／窓に差し替える
-  for (let y=1; y<h-1; y++) for (let x=1; x<w-1; x++){
-    if (g[y][x].type !== 'wall') continue;
-    const nF = passable[y-1][x], sF = passable[y+1][x], wF = passable[y][x-1], eF = passable[y][x+1];
-    if (nF && sF && !wF && !eF){
-      const roll = rng();
-      if (roll < 0.10) g[y][x] = {type:'window', dir:'N'};
-      else if (roll < 0.22) g[y][x] = {type:'thinwall', dir:'N'};
-    } else if (eF && wF && !nF && !sF){
-      const roll = rng();
-      if (roll < 0.10) g[y][x] = {type:'window', dir:'W'};
-      else if (roll < 0.22) g[y][x] = {type:'thinwall', dir:'W'};
+  const cell = (type, dir) => dir ? {type, dir} : {type};
+  const tally = c => {
+    if (c.type==='wall') cnt.wall++; else if (c.type==='thinwall') cnt.thin++;
+    else if (c.type==='window') cnt.win++; else if (c.type==='ramp') cnt.ramp++;
+    else if (c.type==='platform') cnt.plat++;
+  };
+  // objは { cells:[[x,y,type,dir]], box:[x0,y0,x1,y1], fill:[[x,y,...]] }。置けたら true。
+  function place(o){
+    const [x0,y0,x1,y1] = o.box;
+    if (x0 < 2 || x1 > mid || y0 < 2 || y1 > h-3) return false;     // 外周との間に通路を残す
+    for (let y=Math.max(1,y0-1); y<=Math.min(h-2,y1+1); y++)
+      for (let x=Math.max(1,x0-1); x<=Math.min(w-2,x1+1); x++) if (occ[y][x]) return false;
+    for (const [x,,type,dir] of o.cells)                              // 中央列に東西向きの板は置けない
+      if (x === w-1-x && (dir==='E' || dir==='W')) return false;
+    for (const [x,y,type,dir] of o.cells){
+      g[y][x] = cell(type, dir); tally(g[y][x]);
+      const mx = w-1-x;
+      if (mx !== x){ g[y][mx] = cell(type, dir ? FLIP[dir] : undefined); tally(g[y][mx]); }
     }
+    for (let y=y0; y<=y1; y++) for (let x=x0; x<=x1; x++){ occ[y][x] = true; occ[y][w-1-x] = true; }
+    return true;
+  }
+  const rnd2 = (xmax, ymax) => [ri(2, xmax), ri(2, ymax)];
+
+  // 壁の柱（1x1〜2x3）
+  function tryWall(){
+    const bw = rng()<0.5 ? 1 : ri(1,2), bh = rng()<0.5 ? 1 : ri(1,3);
+    const [x,y] = rnd2(mid, h-3 - bh + 1);
+    const cells = [];
+    for (let j=0;j<bh;j++) for (let i=0;i<bw;i++) cells.push([x+i,y+j,'wall']);
+    return place({cells, box:[x,y,x+bw-1,y+bh-1]});
+  }
+  // 薄い壁の列（3〜9マス、途中に出入口をあけることがある）
+  function tryThin(){
+    const len = ri(3,9), horiz = rng()<0.5;
+    const dir = horiz ? pick(['N','S']) : pick(['E','W']);
+    const gap = len>=5 && rng()<0.5 ? ri(1,len-2) : -1;
+    const x = ri(2, mid), y = ri(2, h-3);
+    const cells = [];
+    for (let i=0;i<len;i++){
+      if (i===gap) continue;
+      cells.push(horiz ? [x+i,y,'thinwall',dir] : [x,y+i,'thinwall',dir]);
+    }
+    const box = horiz ? [x,y,x+len-1,y] : [x,y,x,y+len-1];
+    return place({cells, box});
+  }
+  // 小部屋：四隅が壁、辺が薄い壁（一部は窓）で、出入口を1〜2か所あける
+  function tryRoom(){
+    const rw = ri(5,7), rh = ri(5,7);
+    const x0 = ri(2, mid), y0 = ri(2, h-2-rh), x1 = x0+rw-1, y1 = y0+rh-1;
+    const cells = [], sides = [];
+    for (const [x,y] of [[x0,y0],[x1,y0],[x0,y1],[x1,y1]]) cells.push([x,y,'wall']);
+    for (let x=x0+1; x<x1; x++){ sides.push([x,y0,'N']); sides.push([x,y1,'S']); }
+    for (let y=y0+1; y<y1; y++){ sides.push([x0,y,'W']); sides.push([x1,y,'E']); }
+    const doors = new Set(); doors.add((rng()*sides.length)|0);
+    if (rng()<0.4) doors.add((rng()*sides.length)|0);
+    sides.forEach(([x,y,d], i) => {
+      if (doors.has(i)) return;
+      cells.push([x,y, rng()<0.2 ? 'window' : 'thinwall', d]);
+    });
+    return place({cells, box:[x0,y0,x1,y1]});
+  }
+  // 坂＋箱：箱（1〜5x1〜2）の周りの1〜3辺に、箱へ向かって上る坂を並べる
+  function tryMesa(){
+    const horiz = rng()<0.5;
+    const pw = horiz ? ri(2,5) : ri(1,2), pd = horiz ? ri(1,2) : ri(2,5);
+    const px = ri(3, mid), py = ri(3, h-4);
+    const px1 = px+pw-1, py1 = py+pd-1;
+    const cells = [];
+    for (let y=py; y<=py1; y++) for (let x=px; x<=px1; x++) cells.push([x,y,'platform']);
+    const sides = [
+      ['W', px-1, py, px-1, py1, 'E'], ['E', px1+1, py, px1+1, py1, 'W'],
+      ['N', px, py-1, px1, py-1, 'S'], ['S', px, py1+1, px1, py1+1, 'N'],
+    ].sort(() => rng()-0.5);
+    const n = ri(2,3);
+    let bx0=px, by0=py, bx1=px1, by1=py1;
+    for (let s=0; s<n; s++){
+      const [, ax, ay, bx, by, dir] = sides[s];
+      for (let y=ay; y<=by; y++) for (let x=ax; x<=bx; x++) cells.push([x,y,'ramp',dir]);
+      bx0=Math.min(bx0,ax); by0=Math.min(by0,ay); bx1=Math.max(bx1,bx); by1=Math.max(by1,by);
+    }
+    return place({cells, box:[bx0,by0,bx1,by1]});
   }
 
-  // ジャンプ練習台（坂＋箱）を開けた床にいくつか置く
-  let placed = 0, tries = 0;
-  const dirs = ['E','W','S','N'];
-  while (placed < 3 && tries < 300){
-    tries++;
-    const x = 2 + ((rng()*(w-5))|0), y = 2 + ((rng()*(h-5))|0);
-    const dir = dirs[(rng()*4)|0];
-    const [dx,dy] = dir==='E' ? [1,0] : dir==='W' ? [-1,0] : dir==='S' ? [0,1] : [0,-1];
-    const px = x+dx, py = y+dy;
-    if (px<=0 || py<=0 || px>=w-1 || py>=h-1) continue;
-    if (g[y][x].type !== 'floor' || g[py][px].type !== 'floor') continue;
-    g[y][x] = {type:'ramp', dir};
-    g[py][px] = {type:'platform'};
-    placed++;
+  // まず小部屋を左半分に1つ（面積に応じて増やす）、あとは足りないものを順に足していく
+  for (let i=0, rooms=Math.max(1, Math.round(k*0.8)), t=0; i<rooms && t<200; t++) if (tryRoom()) i++;
+  for (let t=0; t<4000; t++){
+    const need = [
+      ['plat', cnt.plat/goal.plat, tryMesa],
+      ['wall', cnt.wall/goal.wall, tryWall],
+      ['thin', cnt.thin/goal.thin, tryThin],
+    ].sort((a,b) => a[1]-b[1])[0];
+    if (need[1] >= 1) break;
+    need[2]();
+  }
+  // 窓が足りなければ、薄い壁の一部を窓に差し替える（鏡写しの相手も同時に）
+  const thins = [];
+  for (let y=1; y<h-1; y++) for (let x=1; x<=mid; x++) if (g[y][x].type==='thinwall') thins.push([x,y]);
+  thins.sort(() => rng()-0.5);
+  for (const [x,y] of thins){
+    if (cnt.win >= goal.win) break;
+    const mx = w-1-x;
+    g[y][x] = {type:'window', dir:g[y][x].dir}; cnt.win++; cnt.thin--;
+    if (mx !== x){ g[y][mx] = {type:'window', dir:g[y][mx].dir}; cnt.win++; cnt.thin--; }
   }
   return g;
 }
@@ -1306,6 +1379,7 @@ function setWeapon(w, save){
   P.ammo = curW().mag; P.reload = 0;
   for (const k in wBtns) wBtns[k].setAttribute('aria-pressed', String(k === CFG.weapon));
   el('ammonum').textContent = P.ammo;
+  scopeV.classList.toggle('sniper', CFG.weapon === 'sniper');   // スナイパーは覗くと円の外が真っ黒
   if (save){ try { localStorage.setItem('sublevel7.weapon', CFG.weapon); } catch(e){} }
 }
 wBtns.rifle.onclick  = () => setWeapon('rifle', true);
