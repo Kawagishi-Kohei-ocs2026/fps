@@ -170,7 +170,7 @@
   <p id="blurb">
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ<br>
     <kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>Esc</kbd> 設定<br>
-    左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ入／切（遠くが見えるが移動はしゃがみ速度）<br><br>
+    左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ（設定で「クリックで入/切」か「長押しで覗く」を選べる。遠くが見えるが移動はしゃがみ速度）<br><br>
     窓は普段は薄い壁と同じく通れないが、窓枠に触れた状態で<kbd>Space</kbd>を押すと乗り越えて反対側へ抜けられる。
   </p>
   <button id="go" disabled>読み込み中…</button>
@@ -191,6 +191,13 @@
     <div class="field">
       <div class="row"><em>感度</em><b id="v_sens">1.00</b></div>
       <input type="range" id="s_sens" min="0.15" max="3" step="0.05" value="1">
+    </div>
+    <div class="field">
+      <div class="row"><em>スコープ操作</em></div>
+      <div class="seg">
+        <button type="button" id="sc_toggle" aria-pressed="true">クリックで入/切</button>
+        <button type="button" id="sc_hold" aria-pressed="false">長押しで覗く</button>
+      </div>
     </div>
     <div class="field" id="netfield" style="display:none">
       <div class="row"><em>サーバー接続</em></div>
@@ -222,7 +229,7 @@ const el = id => document.getElementById(id);
 const canvas = el('view');
 const isTouch = matchMedia('(hover:none)').matches || 'ontouchstart' in window;
 if (isTouch) document.body.classList.add('touch');
-const CFG = { sens: 1, mode: 'solo', target: 5 }; // target: 対戦の決着に必要なキル数（2D版と同じ既定値）
+const CFG = { sens: 1, mode: 'solo', target: 5, scopeMode: 'toggle' }; // scopeMode: 'toggle'=右クリックで入/切 ／ 'hold'=右ボタンを押している間だけ覗く // target: 対戦の決着に必要なキル数（2D版と同じ既定値）
 
 /* ============ 地形パラメータ（fps3d_prototype.htmlより） ============ */
 // 現在のステージの横(W)・縦(H)のマス数。固定値ではなく、ステージを読み込む／受け取るたびに
@@ -1209,11 +1216,17 @@ addEventListener('mousemove', e => {
 canvas.addEventListener('click', () => { if (alive && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); });
 canvas.addEventListener('mousedown', e => {
   if (e.button === 0 && alive && !P.deadUntil && document.pointerLockElement === canvas){ mouseFire = true; shoot(); }
-  if (e.button === 2 && alive && !P.deadUntil && document.pointerLockElement === canvas) P.scope = !P.scope;   // 右クリックでスコープ入/切
+  if (e.button === 2 && alive && !P.deadUntil && document.pointerLockElement === canvas){
+    // toggle: 押すたびに入/切 ／ hold: 押している間だけ覗く
+    P.scope = (CFG.scopeMode === 'hold') ? true : !P.scope;
+  }
 });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 // ボタンを離したら連射停止（キャンバス外で離した場合も拾うため window で受ける）
-addEventListener('mouseup', e => { if (e.button === 0) mouseFire = false; });
+addEventListener('mouseup', e => {
+  if (e.button === 0) mouseFire = false;
+  if (e.button === 2 && CFG.scopeMode === 'hold') P.scope = false;   // 長押しモード：離したら解除
+});
 addEventListener('blur', () => { mouseFire = false; P.scope = false; });
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement !== canvas){ mouseFire = false; P.scope = false; }
@@ -1262,6 +1275,18 @@ const sSens = el('s_sens');
 function applySens(){ CFG.sens = parseFloat(sSens.value); el('v_sens').textContent = CFG.sens.toFixed(2); }
 sSens.oninput = applySens;
 applySens();
+
+// スコープ操作方式（クリックで入/切 or 長押しで覗く）。選択はブラウザに保存する
+const scBtns = { toggle: el('sc_toggle'), hold: el('sc_hold') };
+function setScopeMode(m, save){
+  CFG.scopeMode = (m === 'hold') ? 'hold' : 'toggle';
+  P.scope = false;   // 切り替え時は一度スコープを解除して状態のズレを防ぐ
+  for (const k in scBtns) scBtns[k].setAttribute('aria-pressed', String(k === CFG.scopeMode));
+  if (save){ try { localStorage.setItem('sublevel7.scopeMode', CFG.scopeMode); } catch(e){} }
+}
+scBtns.toggle.onclick = () => setScopeMode('toggle', true);
+scBtns.hold.onclick   = () => setScopeMode('hold', true);
+try { setScopeMode(localStorage.getItem('sublevel7.scopeMode') || 'toggle', false); } catch(e){ setScopeMode('toggle', false); }
 
 /* ============ ステージ選択 ============ */
 // stages.json の {t,d} 形式を内部で使う {type,dir} 形式に変換する
@@ -2236,7 +2261,7 @@ function applyMode(){
     ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。最初に入室した人がホストとなり、ステージを選んで人数がそろったら対戦を開始する。'
     : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ<br>'
     + '<kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>Esc</kbd> 設定<br>'
-    + '左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ入／切（遠くが見えるが移動はしゃがみ速度）<br><br>'
+    + '左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ（設定で「クリックで入/切」か「長押しで覗く」を選べる。遠くが見えるが移動はしゃがみ速度）<br><br>'
     + '窓は普段は薄い壁と同じく通れないが、窓枠に触れた状態で<kbd>Space</kbd>を押すと乗り越えて反対側へ抜けられる。';
   refreshGoVisibility();
 }
