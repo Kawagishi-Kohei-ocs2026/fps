@@ -496,8 +496,9 @@ function collidesSolid(px, py, r){
   }
   return false;
 }
+const VAULT_REACH = 0.45;   // 窓枠からこの距離（マス）以内なら乗り越え判定に入る（大きいほど判定が広い）
 function findTouchingWindow(px, py, r){
-  const pad = r + 0.08;
+  const pad = r + VAULT_REACH;
   const gx0 = Math.floor(px-pad), gx1 = Math.floor(px+pad);
   const gy0 = Math.floor(py-pad), gy1 = Math.floor(py+pad);
   for (let gy = gy0; gy <= gy1; gy++){
