@@ -971,7 +971,7 @@ function remoteHitMeshes(){
   return list;
 }
 function shoot(){
-  if (!alive || P.deadUntil || P.reload > 0) return;   // 観戦中（再出現待ち）は撃てない
+  if (!alive || P.deadUntil || P.reload > 0 || P.vault) return;   // 観戦中・窓の乗り越え中は撃てない
   if (P.ammo <= 0){ doReload(); return; }
   P.ammo--; P.flash = FIRE_COOLDOWN; P.kick = 1; fireCd = AUTO_FIRE_INTERVAL;
   beep(320, .16, 'square', .11);
