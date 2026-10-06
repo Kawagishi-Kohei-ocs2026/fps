@@ -13,6 +13,8 @@
     color:var(--dust);-webkit-user-select:none;user-select:none;touch-action:none}
   #view{display:block;width:100vw;height:100vh;cursor:none}
 
+  #scopeV{position:fixed;inset:0;pointer-events:none;opacity:0;
+    background:radial-gradient(circle at 50% 50%,transparent 38%,rgba(0,0,0,.55) 100%)}
   #cross{position:fixed;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;
     pointer-events:none}
   #cross::before,#cross::after{content:"";position:absolute;background:rgba(255,255,255,.75);
@@ -136,6 +138,7 @@
 </head>
 <body>
 <canvas id="view"></canvas>
+<div id="scopeV"></div>
 <div id="cross"></div>
 <div id="hurtflash"></div>
 
@@ -150,7 +153,7 @@
     <div><div class="num" id="hpnum">100</div><div class="tag">体力</div></div>
   </div>
   <div class="corner" id="ammocorner">
-    <div><div class="num" id="ammonum">12</div><div class="tag">装弾 / <span id="reserve">∞</span></div></div>
+    <div><div class="num" id="ammonum">18</div><div class="tag">装弾 / <span id="reserve">∞</span></div></div>
   </div>
 </div>
 
@@ -167,7 +170,7 @@
   <p id="blurb">
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ<br>
     <kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>Esc</kbd> 設定<br>
-    左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br><br>
+    左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ入／切（遠くが見えるが移動はしゃがみ速度）<br><br>
     窓は普段は薄い壁と同じく通れないが、窓枠に触れた状態で<kbd>Space</kbd>を押すと乗り越えて反対側へ抜けられる。
   </p>
   <button id="go" disabled>読み込み中…</button>
@@ -235,6 +238,10 @@ const JUMP_V = 6.0, GRAVITY = 16.0;
 const MOVE_SPEED = 3.4, RUN_MULT = 2.0;
 const STEP_TOL = 0.16;
 const PLAYER_R = 0.28;
+const SCOPE_FOV = 30;          // スコープ中の視野角（小さいほど拡大）
+const SCOPE_SENS_MULT = 0.8;    // スコープ中の感度倍率（設定感度に掛ける。1で下げない／小さいほど遅い）
+const SCOPE_EASE = 12;         // 覗き込み／解除のなめらかさ
+const SCOPE_SHOT_RANGE = 60;   // スコープ中の弾の届く距離
 const CROUCH_SPEED_MULT = 0.5, CROUCH_DUCK = 0.55, CROUCH_EASE = 10;
 const SLIDE_SPEED = 6.2, SLIDE_DURATION = 0.5;
 const VAULT_DUR = 0.42;      // 窓を乗り越える動作の長さ（秒）
@@ -243,7 +250,7 @@ const VAULT_DIP = 0.10;      // 乗り越え中に視線が下を向く量（ラ
 const VAULT_ROLL = 0.045;    // 乗り越え中にカメラが傾く量（ラジアン）
 
 /* ============ 武器（fps.html 変更前2D版の数値を踏襲） ============ */
-const MAG = 12;              // 装弾数（予備弾は∞）
+const MAG = 18;              // 装弾数（予備弾は∞）
 const RELOAD_TIME = 1.0;     // リロード秒数
 const AUTO_FIRE_INTERVAL = 0.25; // 長押し連射の発射間隔（秒）。小さいほど速い
 const FIRE_COOLDOWN = 0.06;  // 発射間隔（連射レート上限）
@@ -546,7 +553,15 @@ renderer.setPixelRatio(Math.min(2, devicePixelRatio));
 const scene = new THREE.Scene();
 const BG_COLOR = 0x4a5d6b; // 背景（空）と遠景の霧の色。明るくしたいときは値を大きく（元は 0x141b21）
 scene.background = new THREE.Color(BG_COLOR);
-scene.fog = new THREE.Fog(BG_COLOR, 8, 26);
+const FOG_NEAR0 = 8, FOG_FAR0 = 26;
+scene.fog = new THREE.Fog(BG_COLOR, FOG_NEAR0, FOG_FAR0);
+const scopeV = document.getElementById('scopeV');
+const EYE_MATS = new Set(); let eyeFogOff = false; // 相手の目の材質一覧／今、目が霧を無視しているか
+function setEyeFog(off){
+  if (off === eyeFogOff) return;
+  eyeFogOff = off;
+  for (const m of EYE_MATS){ m.fog = !off; m.needsUpdate = true; }
+}
 const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.05, 100);
 camera.rotation.order = 'YXZ';
 
@@ -712,6 +727,7 @@ let alive = false, started = false;
 let fireCd = 0;        // 連射用の発射間隔タイマー
 let mouseFire = false; // 左クリック長押し中
 const P = {
+  scope:false, scopeEase:0, // scope: 右クリック押下中／scopeEase: 0〜1 の覗き込み進行度
   crouch:false, crouchEase:0, sliding:false, slideT:0, slideDir:new THREE.Vector3(),
   vault:null, // 窓の乗り越え中は {t,x0,y0,z0,x1,y1,z1,side,yaw}
   vaultEnd:false, // 乗り越えが終わった直後（相手へ完了を1回だけ伝えるため）
@@ -980,6 +996,8 @@ function shoot(){
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
   raycaster.set(camera.position, dir);
+  const shotRange = scopeActive() ? SCOPE_SHOT_RANGE : MAX_SHOT_RANGE;
+  raycaster.far = shotRange;
   const wallHit = raycaster.intersectObjects(attackBlockers, false)[0];
   let playerHit = null;
   if (CFG.mode === 'online'){
@@ -995,7 +1013,7 @@ function shoot(){
   if (playerHit && (!wallHit || playerHit.distance < wallHit.distance)){ hit = playerHit; hitIsPlayer = true; }
   if (targetHit && (!wallHit || targetHit.distance < wallHit.distance)){ hit = targetHit; hitIsPlayer = false; hitIsTarget = true; }
 
-  if (hit && hit.distance <= MAX_SHOT_RANGE){
+  if (hit && hit.distance <= shotRange){
     const normal = (!hitIsPlayer && !hitIsTarget && hit.face)
       ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
       : null;
@@ -1013,7 +1031,7 @@ function shoot(){
       beep(headshot ? 700 : 520, .07, 'triangle', .07);
     }
   } else {
-    spawnTracer(camera.position, camera.position.clone().addScaledVector(dir, MAX_SHOT_RANGE));
+    spawnTracer(camera.position, camera.position.clone().addScaledVector(dir, shotRange));
   }
   updHUD();
   if (P.ammo === 0) doReload();
@@ -1024,6 +1042,7 @@ function doJump(){
   player.vz = JUMP_V; player.onGround = false;
   P.crouch = false; // ジャンプすると立ち上がる
 }
+function scopeActive(){ return P.scope && alive && !P.deadUntil && !P.vault && !P.sliding; }
 function isRunningNow(){
   const shift = keys.ShiftLeft || keys.ShiftRight || touchRun;
   const moving = keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD ||
@@ -1075,7 +1094,16 @@ function step(dt){
   }
   if (P.flash > 0) P.flash -= dt;
   if (P.kick > 0) P.kick -= dt*KICK_DECAY;
-  camera.fov = BASE_FOV + Math.max(0, P.kick) * 2.2;
+  {
+    if (P.scope && (!alive || P.deadUntil || P.vault || P.sliding)) P.scope = false;   // スライディング・乗り越え・死亡で解除
+    const target = scopeActive() ? 1 : 0;
+    P.scopeEase += (target - P.scopeEase) * Math.min(1, SCOPE_EASE * dt);
+    if (Math.abs(target - P.scopeEase) < 0.002) P.scopeEase = target;
+    const se = P.scopeEase;
+    setEyeFog(se > 0.05);
+    camera.fov = (BASE_FOV + (SCOPE_FOV - BASE_FOV) * se) + Math.max(0, P.kick) * 2.2 * (1 - se * 0.7);
+    scopeV.style.opacity = se.toFixed(3);
+  }
   camera.updateProjectionMatrix();
 
   camera.rotation.y = -yaw;
@@ -1117,7 +1145,7 @@ function step(dt){
       if (P.slideT <= 0) P.sliding = false;
     } else if (fwd || str){
       const len = Math.hypot(fwd,str); fwd/=len; str/=len;
-      const spdMul = P.crouch ? CROUCH_SPEED_MULT : run;
+      const spdMul = (P.crouch || scopeActive()) ? CROUCH_SPEED_MULT : run;
       const speed = MOVE_SPEED * spdMul;
       vx = (_fwd.x*fwd + _right.x*str) * speed;
       vz = (_fwd.z*fwd + _right.z*str) * speed;
@@ -1173,18 +1201,22 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => keys[e.code] = false);
 addEventListener('mousemove', e => {
   if (document.pointerLockElement !== canvas) return;
-  yaw += e.movementX * 0.0022 * CFG.sens;
-  pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch - e.movementY * 0.0022 * CFG.sens));
+  const zs = Math.tan(camera.fov * Math.PI / 360) / Math.tan(BASE_FOV * Math.PI / 360)   // 拡大中は視点移動も遅くして狙いやすくする
+             * (1 + (SCOPE_SENS_MULT - 1) * P.scopeEase);                                       // さらにスコープ中は設定感度から少し下げる
+  yaw += e.movementX * 0.0022 * CFG.sens * zs;
+  pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch - e.movementY * 0.0022 * CFG.sens * zs));
 });
 canvas.addEventListener('click', () => { if (alive && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); });
 canvas.addEventListener('mousedown', e => {
   if (e.button === 0 && alive && !P.deadUntil && document.pointerLockElement === canvas){ mouseFire = true; shoot(); }
+  if (e.button === 2 && alive && !P.deadUntil && document.pointerLockElement === canvas) P.scope = !P.scope;   // 右クリックでスコープ入/切
 });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 // ボタンを離したら連射停止（キャンバス外で離した場合も拾うため window で受ける）
 addEventListener('mouseup', e => { if (e.button === 0) mouseFire = false; });
-addEventListener('blur', () => { mouseFire = false; });
+addEventListener('blur', () => { mouseFire = false; P.scope = false; });
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement !== canvas) mouseFire = false;
+  if (document.pointerLockElement !== canvas){ mouseFire = false; P.scope = false; }
   if (alive && !isTouch && document.pointerLockElement !== canvas) pause();
 });
 
@@ -1711,6 +1743,7 @@ function buildCharacter3D(colors){
   const mGun  = new THREE.MeshStandardMaterial({ color:0x20262b, roughness:.7 });
   const mGunHi= new THREE.MeshStandardMaterial({ color:0x3a444c, roughness:.6 });
   const mEye  = new THREE.MeshBasicMaterial({ color:cEye });
+  mEye.fog = !eyeFogOff; EYE_MATS.add(mEye);   // スコープ中は霧の影響を外して目を光らせる
   const solids = [mBody, mHead, mGun, mGunHi];
   const G = () => new THREE.Group();
   // anchor: 'top'=上端が原点(手足), 'bot'=下端が原点(胴・頭), 0=中心
@@ -1782,7 +1815,7 @@ function buildCharacter3D(colors){
     return { body:_bbody, head:_bhead };
   }
   function setFlash(on){ solids.forEach(m => m.emissive.set(on ? 0xffe9e2 : 0x000000)); }
-  function dispose(){ root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); [...solids, mEye].forEach(m => m.dispose()); }
+  function dispose(){ root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); [...solids, mEye].forEach(m => m.dispose()); EYE_MATS.delete(mEye); }
   setPose('stand');
   return { group:root, setPose, setVault, vaultBoxes, setFlash, dispose };
 }
@@ -2203,7 +2236,7 @@ function applyMode(){
     ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。最初に入室した人がホストとなり、ステージを選んで人数がそろったら対戦を開始する。'
     : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ<br>'
     + '<kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>Esc</kbd> 設定<br>'
-    + '左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br><br>'
+    + '左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ入／切（遠くが見えるが移動はしゃがみ速度）<br><br>'
     + '窓は普段は薄い壁と同じく通れないが、窓枠に触れた状態で<kbd>Space</kbd>を押すと乗り越えて反対側へ抜けられる。';
   refreshGoVisibility();
 }
