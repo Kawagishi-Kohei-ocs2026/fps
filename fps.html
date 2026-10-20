@@ -1445,6 +1445,18 @@ addEventListener('keydown', e => {
   if (['Space','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', e => keys[e.code] = false);
+// マウスホイールでもジャンプ／窓の乗り越え（Spaceと同じ処理）。
+// Shift+W+Space の同時押しを認識しないキーボードでも跳べるようにする。
+// 視点操作中（ポインタロック中）だけ反応させ、メニュー画面のスクロールは邪魔しない。
+let lastWheelJump = 0;
+addEventListener('wheel', e => {
+  if (document.pointerLockElement !== canvas) return;
+  e.preventDefault();
+  const now = performance.now();
+  if (now - lastWheelJump < 120) return;   // ホイールの連続イベントで多重発火しないようにする
+  lastWheelJump = now;
+  if (!tryClimbThrough()) doJump();
+}, {passive:false});
 addEventListener('mousemove', e => {
   if (document.pointerLockElement !== canvas) return;
   const zs = Math.tan(camera.fov * Math.PI / 360) / Math.tan(BASE_FOV * Math.PI / 360)   // 拡大中は視点移動も遅くして狙いやすくする
