@@ -59,11 +59,55 @@
   #go{margin-top:24px;pointer-events:auto;border:0;background:var(--sodium);color:#0a0e12;
     font:inherit;font-size:15px;font-weight:700;letter-spacing:.18em;padding:15px 40px;cursor:pointer}
   #go:hover{background:#fff}
-  #rematch{margin-top:24px;pointer-events:auto;border:0;background:var(--sodium);color:#0a0e12;
-    font:inherit;font-size:15px;font-weight:700;letter-spacing:.18em;padding:15px 40px;cursor:pointer}
-  #rematch:hover:not(:disabled){background:#fff}
-  #rematch:disabled{opacity:.45;cursor:default}
-  #rematch:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
+  /* ---- カスタム画面・結果画面（オンライン） ---- */
+  .screen{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;
+    background:rgba(10,14,18,.97);text-align:center;padding:24px;overflow-y:auto;-webkit-overflow-scrolling:touch;pointer-events:auto}
+  .screen > :first-child{margin-top:auto}
+  .screen > :last-child{margin-bottom:auto}
+  .screen.gone{display:none}
+  .screen h1{font-size:clamp(30px,7vw,60px);font-weight:700;letter-spacing:-.04em;line-height:.9}
+  .screen h1 span{display:block;font-size:.34em;letter-spacing:.42em;color:var(--rust);font-weight:600;margin-bottom:12px}
+  #croom{margin-top:12px;font-size:12px;color:var(--teal);letter-spacing:.08em}
+  .cpanel{margin-top:16px;width:min(440px,94vw);text-align:left;border-top:1px solid #222c34;padding-top:14px}
+  #guestCfg{font-size:12.5px;color:#9aa4ab;line-height:1.8;letter-spacing:.04em}
+  #plist{margin-top:16px;width:min(440px,94vw);text-align:left;border-top:1px solid #222c34}
+  .prow{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #1b242c;font-size:14px}
+  .prow .pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prow.me .pname{color:var(--sodium);font-weight:700}
+  .ptag{font-size:10px;letter-spacing:.12em;color:#6d7880;border:1px solid #2b3740;padding:1px 6px;flex:none}
+  .pteam{flex:none;min-width:70px;border:1px solid;background:none;font:inherit;font-size:12px;padding:5px 10px;letter-spacing:.1em;cursor:default}
+  .pteam.can{cursor:pointer}
+  .pteam.can:hover{background:#1b242c}
+  .pteam.A{color:#e0573a;border-color:#e0573a}
+  .pteam.B{color:#4f93e0;border-color:#4f93e0}
+  #autoTeam{margin-top:12px;border:1px solid #4a5860;background:none;color:var(--dust);font:inherit;font-size:12px;
+    letter-spacing:.1em;padding:9px 18px;cursor:pointer}
+  #autoTeam:hover{background:#1b242c}
+  #cwait{margin-top:10px;color:var(--teal);font-size:12px}
+  #cquit{margin-top:14px}
+  #rsub{margin-top:14px;font-size:14px;letter-spacing:.06em;color:#b4bcc1;line-height:1.8}
+  #rtable{margin-top:18px;width:min(520px,94vw);border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+  #rtable th{font-weight:400;font-size:11px;letter-spacing:.14em;color:#6d7880;text-align:right;padding:6px 8px;border-bottom:1px solid #2b3740}
+  #rtable td{padding:9px 8px;text-align:right;border-bottom:1px solid #1b242c}
+  #rtable th:nth-child(2),#rtable td:nth-child(2){text-align:left}
+  #rtable th:first-child,#rtable td:first-child{text-align:center;width:44px}
+  #rtable tr.me td{color:var(--sodium);font-weight:700}
+  #rcount{margin-top:14px;font-size:12px;color:#5d6970;letter-spacing:.08em}
+  #rback{margin-top:14px;border:0;background:var(--sodium);color:#0a0e12;font:inherit;font-size:14px;font-weight:700;
+    letter-spacing:.16em;padding:13px 34px;cursor:pointer}
+  #rback:hover{background:#fff}
+  /* ---- キル表示 ---- */
+  #killfeed{position:absolute;top:58px;left:20px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;
+    font-size:12px;letter-spacing:.04em;max-width:46vw}
+  .feedrow{background:rgba(10,14,18,.62);border-left:2px solid #4a5860;padding:4px 10px;color:#c8cbc4;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;max-width:100%;transition:opacity .5s}
+  .feedrow.mine{border-left-color:var(--sodium);background:rgba(242,181,68,.16)}
+  .feedrow.out{opacity:0}
+  .feedrow i{font-style:normal;color:#6d7880;margin:0 7px}
+  #killmsg{position:absolute;left:0;right:0;top:60%;text-align:center;font-size:18px;letter-spacing:.2em;color:#e8ecee;
+    text-shadow:0 0 8px rgba(0,0,0,.85);opacity:0;transform:scale(1.15);transition:opacity .35s,transform .15s}
+  #killmsg b{color:var(--sodium);letter-spacing:.3em;margin-right:6px}
+  #killmsg.show{opacity:1;transform:scale(1);transition:opacity .05s,transform .12s}
   #go:focus-visible,#gear:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
   #score{margin-top:16px;font-size:13px;color:#5d6970;letter-spacing:.1em}
 
@@ -95,15 +139,14 @@
     font:inherit;font-size:12px;padding:0 16px;cursor:pointer;letter-spacing:.1em}
   #netrow button:hover{background:var(--sodium);color:#0a0e12}
   #netstatus{color:var(--teal);font-size:12px;margin-top:10px;letter-spacing:.04em}
-  #playercount{margin-top:2px}
   #startBtn{margin-top:10px;border:0;background:var(--sodium);color:#0a0e12;font:inherit;font-size:13px;
     font-weight:700;letter-spacing:.14em;padding:11px 26px;cursor:pointer}
   #startBtn:hover{background:#fff}
   #startBtn:disabled{background:#39454d;color:#6d7880;cursor:default}
-  #quit{margin-top:14px;pointer-events:auto;border:1px solid var(--rust);background:none;color:var(--rust);
+  #quit,#cquit{margin-top:14px;pointer-events:auto;border:1px solid var(--rust);background:none;color:var(--rust);
     font:inherit;font-size:13px;font-weight:600;letter-spacing:.16em;padding:12px 34px;cursor:pointer}
-  #quit:hover{background:var(--rust);color:#0a0e12}
-  #quit:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
+  #quit:hover,#cquit:hover{background:var(--rust);color:#0a0e12}
+  #quit:focus-visible,#cquit:focus-visible,#rback:focus-visible,#startBtn:focus-visible{outline:3px solid var(--acid);outline-offset:3px}
 
   #touch{position:fixed;inset:0;display:none;pointer-events:none}
   body.touch #touch{display:block}
@@ -150,6 +193,8 @@
   <button id="gear">設定</button>
   <div id="top">SUBLEVEL 7 &nbsp;·&nbsp; 移動練習</div>
   <div id="scoreboard"></div>
+  <div id="killfeed"></div>
+  <div id="killmsg"></div>
   <div class="corner" id="hpcorner">
     <div id="hpbar"><div id="hpfill" style="height:100%"></div></div>
     <div><div class="num" id="hpnum">100</div><div class="tag">体力</div></div>
@@ -219,16 +264,52 @@
         <em>最大人数（部屋を作る側のみ有効）</em>
         <input type="number" id="maxp" min="2" max="8" value="4" style="width:52px">
       </div>
-      <p class="hint">同じサーバーアドレスとルームコードを、対戦する全員（最大8人）に入力する。最初に入室した人がホストとなり、ステージを選んで人数がそろったら「対戦開始」を押す。</p>
+      <p class="hint">同じサーバーアドレスとルームコードを、対戦する全員（最大8人）に入力する。入室するとカスタム画面に移り、そこで名前の変更・ルール（個人戦／チーム戦）・ステージの設定をして、最初に入室した人（ホスト）が「対戦開始」を押す。</p>
       <p id="netstatus">未接続</p>
-      <div id="lobby" style="display:none">
-        <p id="playercount" class="hint"></p>
-        <button type="button" id="startBtn" style="display:none">対戦開始</button>
-      </div>
     </div>
   </div>
-  <button type="button" id="rematch" style="display:none">再戦</button>
   <button type="button" id="quit" style="display:none">切断する</button>
+</div>
+
+<div id="custom" class="screen gone">
+  <h1><span>カスタム</span>CUSTOM MATCH</h1>
+  <p id="croom"></p>
+  <div class="cpanel">
+    <div class="row"><em>あなたの名前</em></div>
+    <input type="text" id="nameInput" maxlength="12" placeholder="名前（12文字まで）" autocomplete="off" style="margin-top:0">
+    <p class="hint">名前は、キル表示・スコア・結果画面で他の参加者にも表示される。</p>
+  </div>
+  <div class="cpanel" id="hostCfg">
+    <div class="field">
+      <div class="row"><em>ルール</em></div>
+      <div class="seg">
+        <button type="button" id="m_ffa" aria-pressed="true">個人戦</button>
+        <button type="button" id="m_team" aria-pressed="false">チーム戦（赤 vs 青）</button>
+      </div>
+    </div>
+    <div class="field" style="margin-top:12px">
+      <div class="row"><em>決着のキル数（チーム戦は合計）</em></div>
+      <div class="seg" id="targetSeg"></div>
+    </div>
+    <div class="field" style="margin-top:12px">
+      <div class="row"><em>ステージ</em></div>
+      <div class="seg" id="stageSeg2"></div>
+    </div>
+  </div>
+  <div class="cpanel" id="guestCfg" style="display:none"></div>
+  <div id="plist"></div>
+  <button type="button" id="autoTeam" style="display:none">チームを自動で振り分ける</button>
+  <button type="button" id="startBtn" style="display:none">対戦開始</button>
+  <p id="cwait" class="hint"></p>
+  <button type="button" id="cquit">退出する</button>
+</div>
+
+<div id="result" class="screen gone">
+  <h1 id="rtitle"><span>決着</span>YOU WIN</h1>
+  <p id="rsub"></p>
+  <table id="rtable"></table>
+  <p id="rcount"></p>
+  <button type="button" id="rback">カスタム画面に戻る</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
@@ -831,7 +912,46 @@ const P = {
   invulnUntil:0, // この時刻(performance.now)まで被弾を無効にする（再出現直後の保護）
 };
 // 対戦相手の表示名。コールサインなどの管理はしないので、idの先頭4文字だけを使う。
-function callsign(id){ return id ? ('P-' + id.slice(0,4).toUpperCase()) : '？'; }
+const NAMES = new Map();   // id -> 表示名（オンライン対戦中のみ）
+function callsign(id){ if (!id) return '？'; return NAMES.get(id) || ('P-' + id.slice(0,4).toUpperCase()); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// チーム戦：チームごとの表示名・色・キャラクターの配色(kind)
+const TEAMS = {
+  A: { label:'赤', color:'#e0573a', kind:'p7' },
+  B: { label:'青', color:'#4f93e0', kind:'p8' },
+};
+// ホストが決めるカスタム設定（全員が同じ内容を保持する。ホストが抜けても次のホストがそのまま引き継ぐ）
+const CUSTOM = { mode:'ffa', target:5, teams:{}, stageName:'' };   // mode: 'ffa'=個人戦 / 'team'=チーム戦, teams: id -> 'A'|'B'
+const SCORE = new Map();   // id -> {k:キル, d:デス}。全員が「died」通知から同じように数える
+function sc(id){ let s = SCORE.get(id); if (!s){ s = { k:0, d:0 }; SCORE.set(id, s); } return s; }
+function isTeamMode(){ return CFG.mode === 'online' && CUSTOM.mode === 'team'; }
+function teamOf(id){ return CUSTOM.teams[id] || null; }
+function sameTeam(a, b){ const t = teamOf(a); return !!t && t === teamOf(b); }
+function teamTotals(){ const t = { A:0, B:0 }; for (const [id, s] of SCORE){ const k = teamOf(id); if (k) t[k] += s.k; } return t; }
+
+// ===== キル表示（画面左上のキルログ＋中央の「撃破」表示） =====
+const feedEl = el('killfeed'), killMsgEl = el('killmsg');
+let killMsgTimer = null;
+function showKillBanner(name){
+  killMsgEl.innerHTML = '<b>撃破</b>' + (name ? esc(name) : '的');
+  killMsgEl.classList.add('show');
+  clearTimeout(killMsgTimer);
+  killMsgTimer = setTimeout(() => killMsgEl.classList.remove('show'), 1300);
+}
+function nameHtml(id){
+  const t = isTeamMode() ? teamOf(id) : null;
+  return t ? `<span style="color:${TEAMS[t].color}">${esc(callsign(id))}</span>` : esc(callsign(id));
+}
+function addFeed(killerId, victimId){
+  const row = document.createElement('div');
+  row.className = 'feedrow' + ((killerId === myId || victimId === myId) ? ' mine' : '');
+  row.innerHTML = nameHtml(killerId) + '<i>▸</i>' + nameHtml(victimId);
+  feedEl.appendChild(row);
+  while (feedEl.children.length > 5) feedEl.firstChild.remove();
+  setTimeout(() => row.classList.add('out'), 4500);
+  setTimeout(() => row.remove(), 5100);
+}
+function clearFeed(){ feedEl.innerHTML = ''; killMsgEl.classList.remove('show'); }
 
 /* ============ 射撃・当たり判定（ステップ3、ステップ5-4でオンライン対戦に対応） ============ */
 // クロスヘア中心（カメラの向き）からレイキャストし、attackBlockers（壁／薄い壁）に
@@ -930,7 +1050,7 @@ function drawMap(){
   }
   if (CFG.mode === 'online'){
     for (const r of REMOTES.values()){
-      if (r.mmT > 0 && !r.dead){
+      if ((r.mmT > 0 || (isTeamMode() && sameTeam(r.id, myId))) && !r.dead){
         mc.fillStyle = KIND_COLORS[idToKind(r.id)][0];
         mc.beginPath(); mc.arc(r.x * t, r.y * t, 2.6, 0, 7); mc.fill();
       }
@@ -960,12 +1080,19 @@ function updHUD(){
   el('ammonum').textContent = P.reload > 0 ? '—' : P.ammo;
   el('ammonum').classList.toggle('empty', P.ammo === 0);
   if (CFG.mode === 'online'){
-    el('top').innerHTML = `あなた <b>${P.kills}</b> キル &nbsp;·&nbsp; ${REMOTES.size + 1}人対戦 &nbsp;·&nbsp; ${CFG.target}キル先取`;
-    const rows = [{ id:null, label:'あなた', kills:P.kills }];
-    for (const r of REMOTES.values()) rows.push({ id:r.id, label:callsign(r.id), kills:r.kills });
+    if (isTeamMode()){
+      const t = teamTotals();
+      el('top').innerHTML = `<span style="color:${TEAMS.A.color}">赤 <b>${t.A}</b></span> &nbsp;—&nbsp; <span style="color:${TEAMS.B.color}">青 <b>${t.B}</b></span> &nbsp;·&nbsp; チーム合計 ${CFG.target}キル先取`;
+    } else {
+      el('top').innerHTML = `あなた <b>${P.kills}</b> キル &nbsp;·&nbsp; ${REMOTES.size + 1}人対戦 &nbsp;·&nbsp; ${CFG.target}キル先取`;
+    }
+    const rows = [{ id:myId, kills:sc(myId).k }];
+    for (const r of REMOTES.values()) rows.push({ id:r.id, kills:sc(r.id).k });
     rows.sort((a,b) => b.kills - a.kills);
-    el('scoreboard').innerHTML = rows.map(r =>
-      `<div${r.id===null?' class="me"':''}>${r.label} ${r.kills}</div>`).join('');
+    el('scoreboard').innerHTML = rows.map(r => {
+      const tm = isTeamMode() ? teamOf(r.id) : null;
+      return `<div${r.id===myId?' class="me"':''}>${tm ? `<span style="color:${TEAMS[tm].color}">${esc(callsign(r.id))}</span>` : esc(callsign(r.id))} ${r.kills}</div>`;
+    }).join('');
   } else {
     el('top').innerHTML = `SUBLEVEL 7 &nbsp;·&nbsp; 的 <b>${P.kills}</b> 撃破`;
     el('scoreboard').innerHTML = '';
@@ -1046,6 +1173,7 @@ function hitTarget(t, headshot){
   if (t.hp > 0){ beep(headshot ? 700 : 520, .07, 'triangle', .07); return; }
   t.state = 'falling'; t.timer = 0;
   P.kills++;
+  showKillBanner(null);
   beep(880, .12, 'triangle', .09);
   updHUD();
 }
@@ -1075,6 +1203,7 @@ function remoteHitMeshes(){
   for (const [id, m] of remoteMeshes){
     const r = REMOTES.get(id);
     if (!r || r.dead) continue;
+    if (isTeamMode() && sameTeam(id, myId)) continue;   // チーム戦：味方には当たらない
     m.torso.userData.remoteId = id; m.torso.userData.isHead = false;
     m.head.userData.remoteId = id; m.head.userData.isHead = true;
     list.push(m.torso, m.head);
@@ -1132,17 +1261,32 @@ function shoot(){
   if (P.ammo === 0) doReload();
 }
 
-function doJump(){
-  if (!alive || P.deadUntil || !player.onGround || P.sliding || P.vault) return;
+// ジャンプの取りこぼし対策：
+//  ・先行入力(jumpBuf)：空中や接地判定が外れた瞬間に押しても、直後に着地したらジャンプする
+//  ・接地の猶予(coyote)：斜面・段差・縁を走り抜けた直後の短い間も、ジャンプできる
+const JUMP_BUFFER = 0.15, COYOTE_TIME = 0.12;
+let jumpBuf = 0, coyote = 0;
+function tryJump(){
+  if (!alive || P.deadUntil || P.sliding || P.vault) return false;
+  if (!player.onGround && coyote <= 0) return false;
   player.vz = JUMP_V; player.onGround = false;
+  jumpBuf = 0; coyote = 0;
   P.crouch = false; // ジャンプすると立ち上がる
+  return true;
+}
+function doJump(){
+  if (!tryJump() && alive && !P.deadUntil) jumpBuf = JUMP_BUFFER;
 }
 function scopeActive(){ return P.scope && alive && !P.deadUntil && !P.vault && !P.sliding; }
+// ダッシュ：Shiftを押している間に加えて、Shiftを「タップ」すると、止まるまで走り続ける（ダッシュ維持）。
+// Shift+W+Space の3キー同時押しをキーボードが認識しない場合でも、Shiftを離して W+Space だけで跳べるようにするため。
+let sprintLatch = false;
 function isRunningNow(){
   const shift = keys.ShiftLeft || keys.ShiftRight || touchRun;
   const moving = keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD ||
                  keys.ArrowUp || keys.ArrowDown || move.x || move.y;
-  return !!(shift && moving);
+  if (!moving || P.crouch || scopeActive()) sprintLatch = false;   // 止まる・しゃがむ・スコープで解除
+  return !!((shift || sprintLatch) && moving);
 }
 function toggleCrouch(){
   if (!alive || P.deadUntil || P.sliding || P.vault) return;
@@ -1150,6 +1294,7 @@ function toggleCrouch(){
   if (isRunningNow()) startSlide(); else P.crouch = true;
 }
 function startSlide(){
+  sprintLatch = false;
   P.crouch = false;
   P.sliding = true;
   P.slideT = SLIDE_DURATION;
@@ -1267,6 +1412,10 @@ function step(dt){
       if (nz <= groundH){ nz = groundH; player.vz = 0; player.onGround = true; } else player.onGround = false;
       player.z = nz;
     }
+    // ジャンプの先行入力・接地の猶予（上昇中は猶予を与えない）
+    if (player.onGround) coyote = COYOTE_TIME;
+    else coyote = (player.vz > 0) ? 0 : Math.max(0, coyote - dt);
+    if (jumpBuf > 0){ jumpBuf -= dt; tryJump(); }
   }
 
   const duckTarget = (P.crouch || P.sliding) ? CROUCH_DUCK : 0;
@@ -1284,7 +1433,9 @@ function step(dt){
 /* ============ 入力 ============ */
 let move = {x:0, y:0}, lookId = null, stickId = null, touchRun = false, firing = false;
 addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'INPUT') return;   // 名前・サーバー欄などへの入力中はゲーム操作にしない
   if (!e.repeat){
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') sprintLatch = true;   // Shiftタップ＝ダッシュ維持
     if (e.code === 'Space'){ if (!tryClimbThrough()) doJump(); }
     if (e.code === 'ControlLeft' || e.code === 'ControlRight' || e.code === 'KeyC') toggleCrouch();
     if (e.code === 'KeyR') doReload();
@@ -1315,7 +1466,7 @@ addEventListener('mouseup', e => {
   if (e.button === 0) mouseFire = false;
   if (e.button === 2 && CFG.scopeMode === 'hold') P.scope = false;   // 長押しモード：離したら解除
 });
-addEventListener('blur', () => { mouseFire = false; P.scope = false; });
+addEventListener('blur', () => { mouseFire = false; P.scope = false; sprintLatch = false; });
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement !== canvas){ mouseFire = false; P.scope = false; }
   if (alive && !isTouch && document.pointerLockElement !== canvas) pause();
@@ -1430,16 +1581,18 @@ async function loadStages(){
   el('go').textContent = '進入する';
 }
 function renderStageSeg(){
-  const seg = el('stageSeg');
-  seg.innerHTML = '';
   const items = [...STAGES.map(s => ({ id:s.id, label:s.name })), { id:'random', label:'ランダム' }];
-  for (const it of items){
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = it.label;
-    b.setAttribute('aria-pressed', String(it.id === selectedStageId));
-    b.onclick = () => setStage(it.id);
-    seg.appendChild(b);
+  for (const segId of ['stageSeg', 'stageSeg2']){
+    const seg = el(segId);
+    seg.innerHTML = '';
+    for (const it of items){
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = it.label;
+      b.setAttribute('aria-pressed', String(it.id === selectedStageId));
+      b.onclick = () => setStage(it.id);
+      seg.appendChild(b);
+    }
   }
 }
 function setStage(id){
@@ -1447,6 +1600,7 @@ function setStage(id){
   selectedStageId = id;
   started = false; // 次に入場する時に選び直したステージを作り直す
   renderStageSeg();
+  if (CFG.mode === 'online' && isHost && netState === 'custom'){ hostSetStageName(); broadcastConfig(); }
 }
 function currentStageCells(){
   if (selectedStageId === 'random') return generateRandomStage(mulberry32((Math.random()*1e9) | 0));
@@ -1705,6 +1859,7 @@ const KIND_COLORS = {
 // 全クライアントで同じidなら同じ色になるよう、ハッシュで決定的に割り当てる。
 const REMOTE_KINDS = ['p2','p3','p4','p5','p6','p7','p8'];
 function idToKind(id){
+  if (isTeamMode() && teamOf(id)) return TEAMS[teamOf(id)].kind;   // チーム戦：赤／青で統一
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return REMOTE_KINDS[h % REMOTE_KINDS.length];
@@ -2030,75 +2185,248 @@ function updateRemoteMeshes(dt){
   }
 }
 let socket = null, netState = 'idle', myId = null, hostId = null, isHost = false, roomMax = 8, room = '';
+// netState: idle(未接続) / connecting(接続中) / custom(カスタム画面) / playing(対戦中) / finished(結果表示中)
 function send(obj){ if (socket && socket.readyState === 1) socket.send(JSON.stringify(obj)); }
 function netStatus(t){ el('netstatus').textContent = t; }
-function updateLobbyUI(){
-  el('lobby').style.display = (netState === 'waiting') ? '' : 'none';
-  if (netState !== 'waiting') return;
-  const n = REMOTES.size + 1;
-  el('playercount').textContent = `参加人数：${n} / ${roomMax}（ルーム「${room}」）`;
-  const btn = el('startBtn');
+
+/* ---------- 名前 ---------- */
+let myName = '';
+try { myName = localStorage.getItem('sublevel7.name') || ''; } catch(e){}
+function cleanName(s){ return String(s || '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 12); }
+function defaultName(id){ return 'P-' + String(id || '????').slice(0, 4).toUpperCase(); }
+// 自分の名前を変更し、全員へ知らせる（fromUser: 入力欄からの変更なら次回用にブラウザへ保存）
+function applyMyName(raw, fromUser){
+  const typed = cleanName(raw);
+  if (fromUser){ myName = typed; try { localStorage.setItem('sublevel7.name', typed); } catch(e){} }
+  const n = typed || defaultName(myId);
+  NAMES.set(myId, n);
+  send({ type:'profile', name:n });
+  renderCustom();
+}
+
+/* ---------- カスタム設定の共有 ---------- */
+function hostSetStageName(){
+  const s = STAGES.find(s => s.id === selectedStageId);
+  CUSTOM.stageName = selectedStageId === 'random' ? 'ランダム' : (s ? s.name : '');
+}
+// チーム分け。rebalance=true なら全員をシャッフルして振り分け直し、false なら未所属の人だけ人数の少ないチームへ入れる。
+function assignTeams(rebalance){
+  const ids = [myId, ...REMOTES.keys()];
+  if (rebalance){
+    CUSTOM.teams = {};
+    for (let i = ids.length - 1; i > 0; i--){ const j = (Math.random() * (i + 1)) | 0; [ids[i], ids[j]] = [ids[j], ids[i]]; }
+  } else {
+    for (const id of Object.keys(CUSTOM.teams)) if (!ids.includes(id)) delete CUSTOM.teams[id];
+  }
+  const cnt = { A:0, B:0 };
+  for (const id of ids) if (CUSTOM.teams[id]) cnt[CUSTOM.teams[id]]++;
+  for (const id of ids) if (!CUSTOM.teams[id]){ const t = cnt.A <= cnt.B ? 'A' : 'B'; CUSTOM.teams[id] = t; cnt[t]++; }
+}
+function configMsg(){ return { type:'config', mode:CUSTOM.mode, target:CUSTOM.target, teams:CUSTOM.teams, stageName:CUSTOM.stageName }; }
+function broadcastConfig(){ if (!isHost) return; send(configMsg()); renderCustom(); }
+// 受け取った設定を検証して反映する（ホスト以外は、ここでしか設定が変わらない）
+function applyConfig(m){
+  CUSTOM.mode = m.mode === 'team' ? 'team' : 'ffa';
+  const t = parseInt(m.target, 10);
+  CUSTOM.target = (t >= 1 && t <= 99) ? t : 5;
+  const teams = {};
+  if (m.teams && typeof m.teams === 'object') for (const id of Object.keys(m.teams)) if (m.teams[id] === 'A' || m.teams[id] === 'B') teams[id] = m.teams[id];
+  CUSTOM.teams = teams;
+  CUSTOM.stageName = String(m.stageName || '').slice(0, 30);
+}
+
+/* ---------- カスタム画面 ---------- */
+function renderCustom(){
+  if (netState !== 'custom') return;
+  const ids = [myId, ...REMOTES.keys()];
+  const team = CUSTOM.mode === 'team';
+  el('croom').textContent = `ルーム「${room}」 ・ 参加 ${ids.length} / ${roomMax}`;
+  el('hostCfg').style.display = isHost ? '' : 'none';
+  el('guestCfg').style.display = isHost ? 'none' : '';
+  el('m_ffa').setAttribute('aria-pressed', String(!team));
+  el('m_team').setAttribute('aria-pressed', String(team));
+  for (const b of el('targetSeg').children) b.setAttribute('aria-pressed', String(+b.dataset.v === CUSTOM.target));
+  el('guestCfg').innerHTML = `<div class="row"><em>ホストの設定</em></div>${team ? 'チーム戦（赤 vs 青）' : '個人戦'} ・ ${CUSTOM.target}キル先取${team ? '（チーム合計）' : ''}<br>ステージ：${esc(CUSTOM.stageName || '—')}`;
+  el('autoTeam').style.display = (isHost && team) ? '' : 'none';
+
+  const list = el('plist');
+  list.innerHTML = '';
+  for (const id of ids){
+    const row = document.createElement('div');
+    row.className = 'prow' + (id === myId ? ' me' : '');
+    const nm = document.createElement('span');
+    nm.className = 'pname'; nm.textContent = callsign(id);
+    row.appendChild(nm);
+    if (id === hostId){ const t = document.createElement('span'); t.className = 'ptag'; t.textContent = 'ホスト'; row.appendChild(t); }
+    if (id === myId){ const t = document.createElement('span'); t.className = 'ptag'; t.textContent = 'あなた'; row.appendChild(t); }
+    if (team){
+      const tm = teamOf(id) || 'A';
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'pteam ' + tm + (isHost ? ' can' : '');
+      b.textContent = TEAMS[tm].label + 'チーム';
+      if (isHost) b.onclick = () => { CUSTOM.teams[id] = (teamOf(id) === 'A') ? 'B' : 'A'; broadcastConfig(); };
+      else b.disabled = true;
+      row.appendChild(b);
+    }
+    list.appendChild(row);
+  }
+
+  const n = ids.length, btn = el('startBtn');
   if (isHost){
-    btn.style.display = '';
-    btn.disabled = n < 2;
-    btn.textContent = n < 2 ? '対戦開始（あと1人以上必要）' : '対戦開始';
+    let ok = n >= 2, label = '対戦開始';
+    if (!ok) label = '対戦開始（あと1人以上必要）';
+    else if (team){
+      const c = { A:0, B:0 };
+      for (const id of ids) c[teamOf(id) || 'A']++;
+      if (!c.A || !c.B){ ok = false; label = '対戦開始（両チームに1人以上必要）'; }
+    }
+    btn.style.display = ''; btn.disabled = !ok; btn.textContent = label;
+    el('cwait').textContent = '準備ができたら「対戦開始」を押す。';
   } else {
     btn.style.display = 'none';
-    netStatus('ホストの開始を待っています…');
+    el('cwait').textContent = 'ホストの開始を待っています…';
   }
 }
+let resultTimer = null;
+function stopResultTimer(){ if (resultTimer){ clearInterval(resultTimer); resultTimer = null; } }
+// カスタム画面へ入る（入室直後／結果画面から戻る時の両方で使う）
+function enterCustom(){
+  stopResultTimer();
+  netState = 'custom'; alive = false; started = false;
+  P.deadUntil = 0; mouseFire = false; firing = false;
+  clearDeathView(); clearHitMarks(); clearFeed();
+  document.exitPointerLock?.();
+  veil.classList.add('gone');
+  el('result').classList.add('gone');
+  el('custom').classList.remove('gone');
+  el('nameInput').value = callsign(myId);
+  if (isHost){
+    hostSetStageName();
+    send({ type:'lobby' });   // 対戦が終わったので、新しい参加者の受付をサーバー側でも再開する
+    if (CUSTOM.mode === 'team') assignTeams(false);
+    send(configMsg());
+  }
+  renderCustom();
+}
+
 function connect(){
   const addr = el('srv').value.trim();
   room = el('room').value.trim();
   const max = Math.max(2, Math.min(8, parseInt(el('maxp').value, 10) || 8));
   if (!addr || !room){ netStatus('サーバーアドレスとルームコードを入力する'); return; }
-  if (socket){ try { socket.close(); } catch(e){} }
+  if (socket){ const old = socket; socket = null; try { old.close(); } catch(e){} }
   REMOTES.clear(); clearRemoteMeshes(); myId = null; hostId = null; isHost = false;
-  netState = 'connecting'; netStatus('接続中…');
-  el('lobby').style.display = 'none';
-  try { socket = new WebSocket(addr); } catch(e){ netState = 'idle'; netStatus('接続できません'); return; }
-  socket.onopen = () => send({ type:'join', room, max });
-  socket.onclose = () => { if (netState === 'finished'){ leaveOnline('切断されました'); return; } if (netState !== 'idle' && netState !== 'playing'){ netState = 'idle'; netStatus('切断されました'); el('lobby').style.display = 'none'; } };
-  socket.onerror = () => netStatus('接続エラー：アドレスを確認する');
-  socket.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch(e){ return; } handleNet(m); };
+  netState = 'connecting'; netStatus('接続中…'); refreshGoVisibility();
+  let s;
+  try { s = socket = new WebSocket(addr); } catch(e){ netState = 'idle'; netStatus('接続できません'); refreshGoVisibility(); return; }
+  s.onopen = () => send({ type:'join', room, max });
+  s.onclose = () => {
+    if (s !== socket) return;   // 古い接続のcloseは無視
+    if (netState === 'custom' || netState === 'playing' || netState === 'finished'){ leaveOnline('切断されました'); return; }
+    if (netState !== 'idle'){ netState = 'idle'; netStatus('切断されました'); refreshGoVisibility(); }
+  };
+  s.onerror = () => netStatus('接続エラー：アドレスを確認する');
+  s.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch(e){ return; } handleNet(m); };
 }
+
+// 誰かが倒された時、全員がこの関数で同じように処理する（スコア加算・キル表示・勝敗の確認）。
+// 倒された本人が「died」を全員へ送り、自分自身にもここを直接呼ぶ。
+function onKill(killerId, victimId){
+  if (netState !== 'playing' || !victimId) return;
+  sc(victimId).d++;
+  const killerKnown = killerId && killerId !== victimId && (killerId === myId || REMOTES.has(killerId) || SCORE.has(killerId));
+  if (killerKnown) sc(killerId).k++;
+  if (killerId === myId) P.kills = sc(myId).k;
+  addFeed(killerId, victimId);
+  if (killerKnown && killerId === myId){
+    showKillBanner(callsign(victimId));
+    beep(120, .35, 'sawtooth', .09);
+  }
+  updHUD();
+  checkWin();
+}
+// 勝敗判定はホストだけが行う（全員が同じ結果になり、同時到達の二重決着も起きない）
+function buildResults(){
+  const ids = new Set([myId, ...REMOTES.keys(), ...SCORE.keys()]);
+  return [...ids].map(id => ({ id, name:callsign(id), team:teamOf(id), kills:sc(id).k, deaths:sc(id).d }))
+    .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+}
+function checkWin(){
+  if (!isHost || netState !== 'playing') return;
+  let winnerId = null, winnerTeam = null;
+  if (CUSTOM.mode === 'team'){
+    const t = teamTotals();
+    if (t.A >= CFG.target) winnerTeam = 'A'; else if (t.B >= CFG.target) winnerTeam = 'B';
+    if (!winnerTeam) return;
+  } else {
+    for (const [id, s] of SCORE) if (s.k >= CFG.target){ winnerId = id; break; }
+    if (!winnerId) return;
+  }
+  const msg = { type:'matchover', mode:CUSTOM.mode, target:CFG.target, winnerId, winnerTeam, results:buildResults() };
+  send(msg);
+  finishOnline(msg);
+}
+
 function handleNet(m){
   if (m.type === 'joined'){
     myId = m.id; hostId = m.hostId; isHost = !!m.isHost; roomMax = m.max || 8;
     for (const id of (m.peers || [])) REMOTES.set(id, createRemote(id));
-    netState = 'waiting';
-    netStatus(isHost ? '参加者を待っています…（ルーム「'+room+'」）' : 'ホストが揃うのを待っています…');
-    updateLobbyUI();
+    NAMES.clear(); SCORE.clear();
+    CUSTOM.mode = 'ffa'; CUSTOM.target = 5; CUSTOM.teams = {}; CUSTOM.stageName = '';
+    NAMES.set(myId, cleanName(myName) || defaultName(myId));
+    send({ type:'profile', name:NAMES.get(myId) });   // 先に入っている人は、peer_joined を受けて自分の名前を返してくる
+    netStatus('');
+    enterCustom();
     return;
   }
-  if (m.type === 'full'){ netState = 'idle'; netStatus('このルームは満員です'); return; }
-  if (m.type === 'started'){ netState = 'idle'; netStatus('このルームは既に対戦を開始しています'); return; }
+  if (m.type === 'full'){ netState = 'idle'; netStatus('このルームは満員です'); refreshGoVisibility(); return; }
+  if (m.type === 'started'){ netState = 'idle'; netStatus('このルームは既に対戦を開始しています'); refreshGoVisibility(); return; }
   if (m.type === 'peer_joined'){
-    if (netState !== 'waiting') return;
+    if (netState === 'playing' || netState === 'idle' || netState === 'connecting') return;
     REMOTES.set(m.id, createRemote(m.id));
-    updateLobbyUI();
+    send({ type:'profile', name:NAMES.get(myId), to:m.id });   // 新しい人に自分の名前を教える
+    if (isHost){
+      if (CUSTOM.mode === 'team') assignTeams(false);
+      send(configMsg());   // 現在の設定（と新入りのチーム）を全員へ
+    }
+    renderCustom();
+    return;
+  }
+  if (m.type === 'profile'){
+    if (!m.from) return;
+    NAMES.set(m.from, cleanName(m.name) || defaultName(m.from));
+    renderCustom();
+    if (netState === 'playing') updHUD();
+    return;
+  }
+  if (m.type === 'config'){
+    if (m.from !== hostId || netState === 'playing') return;
+    applyConfig(m);
+    renderCustom();
     return;
   }
   if (m.type === 'host'){
     hostId = m.id; isHost = (m.id === myId);
-    if (netState === 'waiting') updateLobbyUI();
-    else if (netState === 'finished') updateRematchUI();
+    if (isHost && netState === 'custom'){ hostSetStageName(); send({ type:'lobby' }); if (CUSTOM.mode === 'team') assignTeams(false); send(configMsg()); }
+    renderCustom();
     return;
   }
   if (m.type === 'start'){
-    // ホスト自身はstartBtnクリック時に既にローカルで開始済みなので、他プレイヤーから見た場合のみ開始する
-    if (m.from === myId) return;
+    // ホスト自身は開始ボタンの時点で既にローカルで開始済み。他プレイヤーはここで開始する。
+    if (m.from === myId || m.from !== hostId) return;
+    applyConfig({ mode:m.mode, target:m.target, teams:m.teams, stageName:CUSTOM.stageName });
     beginMatchLocal(m.cells, m.spawns);
     return;
   }
   if (m.type === 'peer_left'){
     REMOTES.delete(m.id);
     if (netState === 'playing'){
+      // 対戦中は、抜けた人の名前・チーム・スコアを残す（結果に載せるため）
       if (REMOTES.size === 0) leaveOnline('対戦相手が全員切断した。');
-    } else if (netState === 'waiting'){
-      updateLobbyUI();
-    } else if (netState === 'finished'){
-      updateRematchUI();
+      else updHUD();
+    } else {
+      NAMES.delete(m.id); delete CUSTOM.teams[m.id]; SCORE.delete(m.id);
+      renderCustom();
     }
     return;
   }
@@ -2112,14 +2440,13 @@ function handleNet(m){
     r._p1ce = m.crouchEase || 0;
     r._dur = r._lastMsgT ? Math.min(220, Math.max(30, now - r._lastMsgT)) : 60;
     r._lastMsgT = now; r._t0 = now;
-    r.hp = m.hp; r.dead = m.hp <= 0; r.ammo = m.ammo; r.kills = m.kills; r.crouch = !!m.crouch; r.sliding = !!m.sliding;
+    r.hp = m.hp; r.dead = m.hp <= 0; r.ammo = m.ammo; r.kills = sc(m.from).k; r.crouch = !!m.crouch; r.sliding = !!m.sliding;
     // 窓の乗り越え：進行度は位置と同じ区間補間で滑らかに動かす。0 が届いたら即座に通常ポーズへ戻す。
     let vu = typeof m.vu === 'number' ? m.vu : 0;
     if (vu >= 1 && !(r.vaultU > 0)) vu = 0;   // 途中を見ていない「終了」だけが届いた場合は無視
     if (vu > 0){ r._p0vu = r.vaultU; r._p1vu = vu; r.vyaw = typeof m.vyaw === 'number' ? m.vyaw : r.yaw; }
     else { r._p0vu = r._p1vu = r.vaultU = 0; }
     // 歩行アニメーション用に、今回届いた座標がどれだけ動いたかから移動速度を概算しておく
-    // （足の速さの実測値は送っていないので、区間の移動距離 ÷ 区間時間で近似する）。
     r.speed = Math.hypot(r._p1x - r._p0x, r._p1y - r._p0y) / (r._dur / 1000);
     return;
   }
@@ -2130,40 +2457,43 @@ function handleNet(m){
   }
   if (m.type === 'hit'){
     if (!alive || P.deadUntil) return;   // 再出現待ち中は被弾しない
-    // 再出現・開始直後の短い無敵時間。撃破の瞬間に「飛んでいる途中」だった別の人の弾が、
-    // 再出現した直後の体力満タンの自分に当たってダメージが残るのを防ぐ。
+    // 再出現・開始直後の短い無敵時間（飛んでいる途中の弾が、再出現直後の自分に当たるのを防ぐ）
     if (performance.now() < P.invulnUntil) return;
+    if (isTeamMode() && sameTeam(m.from, myId)) return;   // チーム戦：味方の弾は無効
     P.hp -= m.dmg;
     const attacker = REMOTES.get(m.from);
     if (attacker) addHitMark(m.from, attacker.x, attacker.y);   // 撃ってきた位置を覚えて矢印を出す
     flashHurt();
     beep(90, .2, 'sawtooth', .1);
-    // HPが尽きたら再出現させつつ、撃った相手(m.from)にだけ「died」を送って
-    // キルを付けてもらう（宛先(to)を付けているので、他の人には転送されない）。
+    // HPが尽きたら再出現待ちにし、「誰が誰を倒したか」を全員へ知らせる（スコア・キル表示は全員がこの通知で更新する）
     if (P.hp <= 0){
       P.hp = 0;
       P.deadUntil = performance.now() + RESPAWN_DELAY_MS;
       P.vault = null; P.sliding = false; mouseFire = false; firing = false;
       P.killerId = m.from;
       flashHurt();
-      send({ type:'died', to: m.from });
+      send({ type:'died', killer:m.from });
+      onKill(m.from, myId);
     }
     updHUD();
     return;
   }
   if (m.type === 'died'){
-    // to が付いている「自分を倒した」通知だけを拾う（他人へのdiedは無視）
-    if (m.to && m.to !== myId) return;
-    P.kills++;
-    beep(120, .35, 'sawtooth', .09);
-    updHUD();
-    if (P.kills >= CFG.target){ send({ type:'matchover', winnerId: myId }); finishOnline(myId); }
+    // 倒された本人（m.from）が、撃破した相手（m.killer）を添えて全員へ送ってくる
+    if (!m.from || typeof m.killer !== 'string') return;
+    onKill(m.killer, m.from);
     return;
   }
-  if (m.type === 'matchover'){ finishOnline(m.winnerId); return; }
+  if (m.type === 'matchover'){ if (m.from === hostId) finishOnline(m); return; }
 }
 function hostBeginMatch(){
-  if (!isHost || REMOTES.size < 1) return;
+  if (!isHost || netState !== 'custom' || REMOTES.size < 1) return;
+  if (CUSTOM.mode === 'team'){
+    assignTeams(false);
+    const c = { A:0, B:0 };
+    for (const id of [myId, ...REMOTES.keys()]) c[teamOf(id)]++;
+    if (!c.A || !c.B) return;   // 両チームに1人以上必要
+  }
   const cells = currentStageCells();
   // 出現位置は「これから使うステージ」の上で決める。先に切り替えておかないと、直前まで使っていた
   // 別ステージ（ランダムなら別の迷路）のgridで座標を決めてしまい、新しいステージでは壁の上などになる。
@@ -2175,10 +2505,15 @@ function hostBeginMatch(){
     const s = freeSpot(Math.random, placed);
     spawns[id] = s; placed.push(s);
   }
-  send({ type:'start', cells, spawns });
+  send({ type:'start', cells, spawns, mode:CUSTOM.mode, target:CUSTOM.target, teams:CUSTOM.mode === 'team' ? CUSTOM.teams : {} });
   beginMatchLocal(cells, spawns);
 }
 function beginMatchLocal(cells, spawns){
+  stopResultTimer();
+  CFG.target = CUSTOM.target;
+  SCORE.clear(); clearFeed();
+  clearRemoteMeshes();   // 見た目（個人戦の色／チームカラー）を、この試合のルールで作り直す
+  el('custom').classList.add('gone'); el('result').classList.add('gone');
   setGrid(cells);
   buildScene();
   clearTargets();
@@ -2204,7 +2539,7 @@ function beginMatchLocal(cells, spawns){
   netState = 'playing';
   started = true;
   alive = true;
-  clearHitMarks(); updateRematchUI();
+  clearHitMarks();
   el('score').textContent = ''; el('quit').textContent = '切断する';
   veil.classList.add('gone');
   el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
@@ -2291,76 +2626,91 @@ function respawnSelf(){
   P.invulnUntil = performance.now() + SPAWN_PROTECT_MS;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
 }
-/* ============ 勝敗判定（ステップ5-5） ============ */
-// 誰かが規定キル数（CFG.target）に先に到達したら、その時点でそのプレイヤーの
-// クライアントが matchover をブロードキャストし、全員が同じ決着画面を表示する。
-function scoreboardText(){
-  const rows = [{ label:'あなた', kills:P.kills }];
-  for (const r of REMOTES.values()) rows.push({ label:callsign(r.id), kills:r.kills });
-  rows.sort((a,b) => b.kills - a.kills);
-  return rows.map(r => `${r.label} ${r.kills}`).join(' ／ ');
+/* ============ 勝敗判定・結果画面 ============ */
+// 勝敗の判定はホストが行い（checkWin）、結果を載せた matchover を全員へ送る。
+// 全員が同じ結果画面を表示し、数秒後（またはボタンで）カスタム画面へ戻る。
+const RESULT_SEC = 15;
+function renderResult(m){
+  const team = m.mode === 'team';
+  const results = m.results;
+  const me = results.find(r => r.id === myId);
+  let win, sub;
+  if (team){
+    const tot = { A:0, B:0 };
+    for (const r of results) if (r.team) tot[r.team] += r.kills;
+    win = !!me && me.team === m.winnerTeam;
+    const w = TEAMS[m.winnerTeam];
+    sub = `<span style="color:${w.color}">${w.label}チーム</span>の勝利 ・ <span style="color:${TEAMS.A.color}">赤 ${tot.A}</span> — <span style="color:${TEAMS.B.color}">${tot.B} 青</span>`;
+  } else {
+    win = m.winnerId === myId;
+    const w = results.find(r => r.id === m.winnerId);
+    sub = `${esc(w ? w.name : '？')} が ${m.target} キル先取`;
+  }
+  el('rtitle').innerHTML = `<span>決着</span>${win ? 'YOU WIN' : 'YOU LOSE'}`;
+  el('rsub').innerHTML = sub;
+  const tb = el('rtable');
+  tb.innerHTML = `<tr><th>順位</th><th>名前</th>${team ? '<th>チーム</th>' : ''}<th>キル</th><th>デス</th></tr>`;
+  results.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    if (r.id === myId) tr.className = 'me';
+    const tcell = team && r.team ? `<td style="color:${TEAMS[r.team].color}">${TEAMS[r.team].label}</td>` : (team ? '<td></td>' : '');
+    tr.innerHTML = `<td>${i + 1}</td><td>${esc(r.name)}</td>${tcell}<td>${r.kills}</td><td>${r.deaths}</td>`;
+    tb.appendChild(tr);
+  });
 }
-// 決着後の再戦。ソケットは繋いだままなので、ホストが「再戦」を押すと同じメンバーで
-// start を送り直す（サーバーは started 済みのルームでもホストの start を中継する）。
-// ホスト以外は、ホストの start を受け取った時点で自動的に次の試合が始まる。
-let finishBlurb = '';
-function updateRematchUI(){
-  const fin = netState === 'finished';
-  const btn = el('rematch');
-  btn.style.display = (fin && isHost) ? '' : 'none';
-  if (!fin) return;
-  const alone = REMOTES.size < 1;
-  btn.disabled = alone;
-  btn.textContent = alone ? '再戦（相手がいません）' : '再戦';
-  const hint = isHost
-    ? (alone ? '対戦相手が全員退出した。' : '「再戦」を押すと、同じメンバーでもう一度対戦する。')
-    : 'ホストが再戦を開始するのを待っている…（残る場合は何もしなくてよい）';
-  el('blurb').innerHTML = finishBlurb + '<br><br>' + hint;
-}
-function finishOnline(winnerId){
+function finishOnline(m){
+  if (netState !== 'playing') return;
+  // 受け取った結果を検証して整える
+  const results = (Array.isArray(m.results) ? m.results : []).slice(0, 16).map(r => ({
+    id: String(r.id || ''), name: cleanName(r.name) || '？', team: (r.team === 'A' || r.team === 'B') ? r.team : null,
+    kills: r.kills | 0, deaths: r.deaths | 0,
+  }));
+  const mode = m.mode === 'team' ? 'team' : 'ffa';
+  const data = { mode, target: m.target | 0, winnerId: m.winnerId || null, winnerTeam: m.winnerTeam === 'B' ? 'B' : 'A', results };
   clearDeathView();
   netState = 'finished';
-  alive = false; mouseFire = false; firing = false;
+  alive = false; mouseFire = false; firing = false; P.scope = false;
   document.exitPointerLock?.();
-  const iwon = winnerId === myId;
-  el('title').innerHTML = iwon ? '<span>決着</span>YOU WIN' : '<span>決着</span>YOU LOSE';
-  finishBlurb = iwon
-    ? `${CFG.target} キル先取した。`
-    : `${callsign(winnerId)} に ${CFG.target} キル先取された。`;
-  el('score').textContent = scoreboardText();
-  el('go').style.display = 'none';
-  el('quit').style.display = '';
-  el('quit').textContent = 'メニューへ';
-  el('lobby').style.display = 'none';
-  veil.classList.remove('gone'); clearHitMarks();
-  updateRematchUI();
+  renderResult(data);
+  clearHitMarks(); clearFeed();
+  veil.classList.add('gone'); el('custom').classList.add('gone');
+  el('result').classList.remove('gone');
+  stopResultTimer();
+  let left = RESULT_SEC;
+  const tick = () => { el('rcount').textContent = `${left}秒後に自動でカスタム画面へ戻ります`; };
+  tick();
+  resultTimer = setInterval(() => { left--; if (left <= 0){ enterCustom(); return; } tick(); }, 1000);
 }
 function leaveOnline(msg){
+  stopResultTimer();
   clearDeathView();
-  if (socket){ try { socket.close(); } catch(e){} socket = null; }
+  if (socket){ const s = socket; socket = null; try { s.close(); } catch(e){} }
   netState = 'idle'; alive = false; started = false;
   document.exitPointerLock?.();
-  REMOTES.clear(); clearRemoteMeshes();
-  el('lobby').style.display = 'none';
+  REMOTES.clear(); clearRemoteMeshes(); NAMES.clear(); SCORE.clear();
+  myId = null; hostId = null; isHost = false;
+  CUSTOM.mode = 'ffa'; CUSTOM.target = 5; CUSTOM.teams = {}; CUSTOM.stageName = '';
   netStatus(msg || '未接続');
-  veil.classList.remove('gone'); clearHitMarks();
+  el('custom').classList.add('gone'); el('result').classList.add('gone');
+  veil.classList.remove('gone'); clearHitMarks(); clearFeed();
   el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
+  el('go').textContent = '進入する';
   el('score').textContent = '';
   applyMode(); // blurb・quitボタンの表記・go/quitの表示状態をすべて通常メニューの状態に戻す
 }
 function refreshGoVisibility(){
-  el('rematch').style.display = (netState === 'finished' && isHost) ? '' : 'none';
   const showGo = CFG.mode === 'solo' || netState === 'playing';
   el('go').style.display = showGo ? '' : 'none';
-  el('quit').style.display = (CFG.mode === 'online' && netState !== 'idle') ? '' : 'none';
+  el('quit').style.display = (CFG.mode === 'online' && (netState === 'playing' || netState === 'connecting')) ? '' : 'none';
 }
 function applyMode(){
   el('g_solo').setAttribute('aria-pressed', String(CFG.mode === 'solo'));
   el('g_online').setAttribute('aria-pressed', String(CFG.mode === 'online'));
   el('netfield').style.display = CFG.mode === 'online' ? '' : 'none';
+  el('stagefield').style.display = CFG.mode === 'online' ? 'none' : '';   // オンラインではステージもカスタム画面でホストが選ぶ
   el('quit').textContent = '切断する';
   el('blurb').innerHTML = CFG.mode === 'online'
-    ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。最初に入室した人がホストとなり、ステージを選んで人数がそろったら対戦を開始する。'
+    ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。入室するとカスタム画面に移り、名前の変更・ルール（個人戦／チーム戦）・ステージの設定をして、ホスト（最初に入室した人）が対戦を開始する。'
     : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ<br>'
     + '<kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>Esc</kbd> 設定<br>'
     + '左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ（設定で「クリックで入/切」か「長押しで覗く」を選べる。遠くが見えるが移動はしゃがみ速度）<br><br>'
@@ -2374,9 +2724,28 @@ el('g_solo').onclick = () => {
 };
 el('g_online').onclick = () => { CFG.mode = 'online'; applyMode(); };
 el('connectBtn').onclick = connect;
-el('startBtn').onclick = hostBeginMatch;
-el('rematch').onclick = hostBeginMatch;
 el('quit').onclick = () => leaveOnline('未接続');
+
+// --- カスタム画面・結果画面の操作 ---
+for (const v of [3, 5, 10, 15, 20]){
+  const b = document.createElement('button');
+  b.type = 'button'; b.dataset.v = v; b.textContent = v + 'キル';
+  b.onclick = () => { if (!isHost || netState !== 'custom') return; CUSTOM.target = v; broadcastConfig(); };
+  el('targetSeg').appendChild(b);
+}
+function hostSetMode(mode){
+  if (!isHost || netState !== 'custom') return;
+  CUSTOM.mode = mode;
+  if (mode === 'team') assignTeams(true);
+  broadcastConfig();
+}
+el('m_ffa').onclick = () => hostSetMode('ffa');
+el('m_team').onclick = () => hostSetMode('team');
+el('autoTeam').onclick = () => { if (!isHost || netState !== 'custom') return; assignTeams(true); broadcastConfig(); };
+el('nameInput').addEventListener('input', e => { if (netState === 'custom' && myId) applyMyName(e.target.value, true); });
+el('startBtn').onclick = hostBeginMatch;
+el('cquit').onclick = () => leaveOnline('未接続');
+el('rback').onclick = enterCustom;
 applyMode();
 
 // サーバーから配信されている（file://ではなくhttp/httpsで開いている）場合は、
