@@ -6,10 +6,6 @@
 //   - msg.to が指定されていれば、その id のプレイヤーにだけ転送する。
 //   - 指定が無ければ、部屋にいる自分以外の全員に転送する（ブロードキャスト）。
 //   - どちらの場合も、転送時にサーバー側で msg.from = 送信者id を付与する。
-//
-// 特別に扱うメッセージ（ここだけゲームの進行を知っている）：
-//   - start : ホストのみ有効。以後、そのルームは新規参加を締め切る。
-//   - lobby : ホストのみ有効。対戦後にカスタム画面へ戻った合図で、新規参加の受付を再開する。
 
 const http = require('http');
 const fs = require('fs');
@@ -126,13 +122,6 @@ wss.on('connection', (ws) => {
       r.started = true;
       const out = { ...msg, from: myId };
       broadcast(r, out, myId);
-      return;
-    }
-
-    if (msg.type === 'lobby') {
-      // ホストが対戦後にカスタム画面へ戻った合図。新規参加の受付を再開する（ホストのみ有効）。
-      if (myId !== r.hostId) return;
-      r.started = false;
       return;
     }
 
