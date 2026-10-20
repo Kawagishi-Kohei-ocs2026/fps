@@ -1261,10 +1261,21 @@ function shoot(){
   if (P.ammo === 0) doReload();
 }
 
-function doJump(){
-  if (!alive || P.deadUntil || !player.onGround || P.sliding || P.vault) return;
+// ジャンプの取りこぼし対策：
+//  ・先行入力(jumpBuf)：空中や接地判定が外れた瞬間に押しても、直後に着地したらジャンプする
+//  ・接地の猶予(coyote)：斜面・段差・縁を走り抜けた直後の短い間も、ジャンプできる
+const JUMP_BUFFER = 0.15, COYOTE_TIME = 0.12;
+let jumpBuf = 0, coyote = 0;
+function tryJump(){
+  if (!alive || P.deadUntil || P.sliding || P.vault) return false;
+  if (!player.onGround && coyote <= 0) return false;
   player.vz = JUMP_V; player.onGround = false;
+  jumpBuf = 0; coyote = 0;
   P.crouch = false; // ジャンプすると立ち上がる
+  return true;
+}
+function doJump(){
+  if (!tryJump() && alive && !P.deadUntil) jumpBuf = JUMP_BUFFER;
 }
 function scopeActive(){ return P.scope && alive && !P.deadUntil && !P.vault && !P.sliding; }
 function isRunningNow(){
@@ -1396,6 +1407,10 @@ function step(dt){
       if (nz <= groundH){ nz = groundH; player.vz = 0; player.onGround = true; } else player.onGround = false;
       player.z = nz;
     }
+    // ジャンプの先行入力・接地の猶予（上昇中は猶予を与えない）
+    if (player.onGround) coyote = COYOTE_TIME;
+    else coyote = (player.vz > 0) ? 0 : Math.max(0, coyote - dt);
+    if (jumpBuf > 0){ jumpBuf -= dt; tryJump(); }
   }
 
   const duckTarget = (P.crouch || P.sliding) ? CROUCH_DUCK : 0;
