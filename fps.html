@@ -374,7 +374,7 @@ const WEAPONS = {
   // bow: 押している間だけ引き絞り（draw秒で最大）、離すと矢を放つ。矢は実際に飛び（speedMin〜speedMax m/s）、重力(gravity)で落ちる。
   // body・head は最大まで引いた時のダメージで、引き絞りの割合(minPower〜1)を掛ける。reload=矢をつがえ直す秒数
   bow:    { name:'弓', mag:1, reload:0.8, interval:0.1, body:45, head:90, kick:1.2, tone:430, vol:.1,
-            bow:true, draw:0.9, minPower:0.3, speedMin:20, speedMax:50, gravity:5.5 },
+            bow:true, zoom:0.2, draw:0.9, minPower:0.3, speedMin:20, speedMax:50, gravity:5.5 },
 };
 function curW(){ return WEAPONS[CFG.weapon] || WEAPONS.rifle; }
 
@@ -1395,6 +1395,97 @@ function updDrawBar(){
   drawBarEl.classList.toggle('full', f >= 1);
 }
 
+/* ============ 弓の一人称モデル（手に持った弓・矢・弦・両手） ============ */
+// 壁にめり込んで見えないよう、ゲーム世界とは別のシーン(vmScene)・別カメラ(vmCam)で描き、
+// ゲーム世界を描いたあとに深度だけ消して重ねる。構えていない時は弓を左下に斜めに持ち、
+// 押している間は弓を起こして中央へ寄せ、矢を番えた弦を右手で引く。
+const vmScene = new THREE.Scene();
+const vmCam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.02, 10);
+vmScene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 1.15));
+{ const l = new THREE.DirectionalLight(0xffffff, 0.8); l.position.set(0.5, 1, 1); vmScene.add(l); }
+const bowVM = (() => {
+  const std = (c, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  const mWood = std(0xd9b583), mGrip = std(0x3a2a20), mSkin = std(0xd9a77f, .7), mSleeve = std(0x1d343b, .9);
+  const mGold = std(0xc9a24a, .5), mStr = new THREE.MeshBasicMaterial({ color: 0xf2efe0 });
+  const mShaft = std(0xe8d9b0), mTip = std(0xdfe4e8, .4), mFeather = std(0xc4462c);
+  const group = new THREE.Group();          // 原点＝弓の握り。+Y が弓の上、-Z がゲーム内の前
+  const root = new THREE.Group(); root.add(group); vmScene.add(root);
+  group.scale.setScalar(0.8);
+  const Z = new THREE.Vector3(0, 0, 1);
+  // 腕：start から dir 方向へ len だけ伸びる角柱（根元が start）。画面の下側へ逃がして照準を隠さないようにする
+  const limb = (mat, start, dir, len, w, parent = group) => {
+    const g = new THREE.BoxGeometry(w, w, len); g.translate(0, 0, len / 2);
+    const m = new THREE.Mesh(g, mat); m.position.copy(start);
+    m.quaternion.setFromUnitVectors(Z, dir.clone().normalize()); parent.add(m); return m;
+  };
+  const box = (w, h, d, mat, x, y, z, parent = group) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m;
+  };
+  // 弓本体：上下の端が射手側（+Z）へ反る
+  const TIP = { y: 0.6, z: 0.13 };
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, -TIP.y, TIP.z), new THREE.Vector3(0, -0.36, 0.035), new THREE.Vector3(0, -0.12, 0),
+    new THREE.Vector3(0, 0.12, 0), new THREE.Vector3(0, 0.36, 0.035), new THREE.Vector3(0, TIP.y, TIP.z),
+  ]);
+  group.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.015, 8), mWood));
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.15, 10), mGrip); group.add(grip);
+  // 左手（弓を握る）と袖
+  box(0.07, 0.095, 0.065, mSkin, 0, -0.01, 0.035);
+  box(0.03, 0.05, 0.05, mSkin, 0.045, 0.02, 0.02);                       // 親指
+  limb(mSleeve, new THREE.Vector3(0, -0.04, 0.06), new THREE.Vector3(-0.3, -0.45, 0.85), 0.7, 0.075);
+  limb(mGold, new THREE.Vector3(-0.024, -0.076, 0.128), new THREE.Vector3(-0.3, -0.45, 0.85), 0.04, 0.086);   // 袖口
+  // 弦（2本の細い棒。毎フレーム位置を更新する）
+  const strA = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 1, 5), mStr);
+  const strB = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 1, 5), mStr);
+  group.add(strA, strB);
+  // 矢（尾が弦に番えた位置。矢は握りの左側を通る）
+  const ARROW_X = -0.03, ARROW_LEN = 0.75;
+  const arrow = new THREE.Group(); group.add(arrow);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0065, ARROW_LEN, 6), mShaft);
+  shaft.rotation.x = Math.PI / 2; shaft.position.z = -ARROW_LEN / 2; arrow.add(shaft);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.06, 6), mTip);
+  tip.rotation.x = -Math.PI / 2; tip.position.z = -ARROW_LEN - 0.02; arrow.add(tip);
+  for (const [fx, fy, w, h] of [[0, 0.016, 0.003, 0.03], [0.014, -0.008, 0.03, 0.003], [-0.014, -0.008, 0.03, 0.003]])
+    box(w, h, 0.09, mFeather, fx, fy, -0.07, arrow);
+  // 右手（弦を引く手）。構えている間だけ見える
+  const rhand = new THREE.Group(); group.add(rhand);
+  box(0.055, 0.065, 0.07, mSkin, 0, 0, 0.03, rhand);
+  limb(mSleeve, new THREE.Vector3(0, -0.02, 0.06), new THREE.Vector3(0.35, -0.45, 0.8), 0.6, 0.07, rhand);
+  limb(mGold, new THREE.Vector3(0.03, -0.07, 0.14), new THREE.Vector3(0.35, -0.45, 0.8), 0.04, 0.08, rhand);
+  const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _d = new THREE.Vector3();
+  function seg(mesh, p, q){
+    _d.copy(q).sub(p); const len = _d.length();
+    mesh.position.copy(p).addScaledVector(_d, 0.5); mesh.scale.set(1, len, 1);
+    mesh.quaternion.setFromUnitVectors(_Y, _d.normalize());
+  }
+  const PULL = 0.28;       // 弦を引く距離（m）
+  function pose(draw, aim, ready, t){
+    const lerp = (a, b, k) => a + (b - a) * k;
+    root.position.set(lerp(-0.22, 0.03, aim), lerp(-0.22, -0.04, aim), lerp(-0.68, -0.78, aim) + Math.max(0, P.kick) * 0.02);
+    root.rotation.set(lerp(0.12, 0, aim), lerp(0.3, 0, aim), lerp(-0.5, 0, aim));
+    if (draw >= 1) root.position.x += Math.sin(t * 0.05) * 0.0007;      // 引き切るとわずかに震える
+    else root.position.y += Math.sin(t * 0.0015) * 0.004 * (1 - aim);   // 構えていない間はゆっくり揺れる
+    const nz = TIP.z + PULL * draw;
+    _a.set(0, TIP.y, TIP.z); _b.set(ARROW_X, 0, nz); seg(strA, _a, _b);
+    _a.set(0, -TIP.y, TIP.z); seg(strB, _a, _b);
+    arrow.position.set(ARROW_X, 0, nz); arrow.visible = ready;
+    rhand.position.set(ARROW_X + 0.075, -0.055, nz); rhand.visible = aim > 0.15 && draw > 0.02;
+  }
+  return { root, pose };
+})();
+let bowDraw01 = 0, bowAim = 0;
+function updateBowVM(dt){
+  const W = curW();
+  const show = W.bow && alive && !P.deadUntil && P.scopeEase < 0.3;
+  bowVM.root.visible = show;
+  if (!show){ bowDraw01 = 0; bowAim = 0; return; }
+  const drawing = P.draw >= 0;
+  if (drawing) bowDraw01 = Math.min(1, P.draw / W.draw);
+  else bowDraw01 += (0 - bowDraw01) * Math.min(1, dt * 35);          // 離すと弦が素早く戻る
+  bowAim += ((drawing ? 1 : 0) - bowAim) * Math.min(1, dt * 9);
+  bowVM.pose(bowDraw01, bowAim, P.ammo > 0 && P.reload <= 0, performance.now());
+}
+
 // ジャンプの取りこぼし対策：
 //  ・先行入力(jumpBuf)：空中や接地判定が外れた瞬間に押しても、直後に着地したらジャンプする
 //  ・接地の猶予(coyote)：斜面・段差・縁を走り抜けた直後の短い間も、ジャンプできる
@@ -1411,7 +1502,7 @@ function tryJump(){
 function doJump(){
   if (!tryJump() && alive && !P.deadUntil) jumpBuf = JUMP_BUFFER;
 }
-function scopeActive(){ return P.scope && alive && !P.deadUntil && !P.vault && !P.sliding; }
+function scopeActive(){ return P.scope && !curW().bow && alive && !P.deadUntil && !P.vault && !P.sliding; }   // 弓にはスコープなし
 // ダッシュ：Shiftを押している間に加えて、Shiftを「タップ」すると、止まるまで走り続ける（ダッシュ維持）。
 // Shift+W+Space の3キー同時押しをキーボードが認識しない場合でも、Shiftを離して W+Space だけで跳べるようにするため。
 let sprintLatch = false;
@@ -1495,7 +1586,8 @@ function step(dt){
     if (Math.abs(target - P.scopeEase) < 0.002) P.scopeEase = target;
     const se = P.scopeEase;
     setEyeFog(se > 0.05);
-    camera.fov = (BASE_FOV + (SCOPE_FOV - BASE_FOV) * se) + Math.max(0, P.kick) * 2.2 * (1 - se * 0.7);
+    camera.fov = ((BASE_FOV + (SCOPE_FOV - BASE_FOV) * se) + Math.max(0, P.kick) * 2.2 * (1 - se * 0.7))
+                 * (1 - WEAPONS.bow.zoom * bowDraw01);   // 弓は引き絞るほど少しズームする（視点移動も自動で遅くなる）
     scopeV.style.opacity = se.toFixed(3);
   }
   camera.updateProjectionMatrix();
@@ -1614,7 +1706,7 @@ canvas.addEventListener('mousedown', e => {
     if (!tryClimbThrough()) doJump();
   }
   if (e.button === 0 && alive && !P.deadUntil && document.pointerLockElement === canvas){ mouseFire = true; pressFire(); }
-  if (e.button === 2 && alive && !P.deadUntil && document.pointerLockElement === canvas){
+  if (e.button === 2 && !curW().bow && alive && !P.deadUntil && document.pointerLockElement === canvas){
     // toggle: 押すたびに入/切 ／ hold: 押している間だけ覗く
     P.scope = (CFG.scopeMode === 'hold') ? true : !P.scope;
   }
@@ -1689,7 +1781,7 @@ function setScopeMode(m, save){
 const wBtns = { rifle: el('w_rifle'), sniper: el('w_sniper'), shotgun: el('w_shotgun'), bow: el('w_bow') };
 function setWeapon(w, save){
   CFG.weapon = WEAPONS[w] ? w : 'rifle';
-  P.ammo = curW().mag; P.reload = 0; cancelDraw();
+  P.ammo = curW().mag; P.reload = 0; cancelDraw(); if (curW().bow) P.scope = false;
   for (const k in wBtns) wBtns[k].setAttribute('aria-pressed', String(k === CFG.weapon));
   el('ammonum').textContent = P.ammo;
   scopeV.classList.toggle('sniper', CFG.weapon === 'sniper');   // スナイパーは覗くと円の外が真っ黒
@@ -2966,6 +3058,7 @@ loadStages();
 
 function resize(){
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  vmCam.aspect = innerWidth/innerHeight; vmCam.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 }
 addEventListener('resize', resize);
@@ -2978,8 +3071,11 @@ function frame(now){
   step(dt);
   updateHitMarks(dt);
   updDrawBar();
+  updateBowVM(dt);
   tickMap(dt);
+  renderer.autoClear = false; renderer.clear();
   renderer.render(scene, camera);
+  if (bowVM.root.visible){ renderer.clearDepth(); renderer.render(vmScene, vmCam); }   // 手に持った弓はゲーム世界の上に重ねる
   requestAnimationFrame(frame);
 }
 // stages.json の読み込みが終わるまでの仮表示（内蔵の練習ステージ）
