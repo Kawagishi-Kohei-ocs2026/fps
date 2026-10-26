@@ -1072,15 +1072,28 @@ function drawMap(){
   if (CFG.mode === 'online'){
     for (const r of REMOTES.values()){
       if ((r.mmT > 0 || (isTeamMode() && sameTeam(r.id, myId))) && !r.dead){
-        mc.fillStyle = KIND_COLORS[idToKind(r.id)][0];
-        mc.beginPath(); mc.arc(r.x * t, r.y * t, 2.6, 0, 7); mc.fill();
+        mapDot(r.x * t, r.y * t, 4.4, KIND_COLORS[idToKind(r.id)][0], true);
       }
     }
   }
-  mc.fillStyle = '#f2b544'; mc.strokeStyle = '#f2b544'; mc.lineWidth = 1.4;
-  mc.beginPath(); mc.arc(player.x * t, player.y * t, 2.6, 0, 7); mc.fill();
-  mc.beginPath(); mc.moveTo(player.x * t, player.y * t);
-  mc.lineTo((player.x + Math.sin(yaw) * 1.6) * t, (player.y - Math.cos(yaw) * 1.6) * t); mc.stroke();
+  // 自分：向きの線（縁取りつき）→ 点の順に描く
+  const px = player.x * t, py = player.y * t;
+  const lx = (player.x + Math.sin(yaw) * 2.2) * t, ly = (player.y - Math.cos(yaw) * 2.2) * t;
+  mc.lineCap = 'round';
+  mc.strokeStyle = '#0b0f13'; mc.lineWidth = 4; mc.beginPath(); mc.moveTo(px, py); mc.lineTo(lx, ly); mc.stroke();
+  mc.strokeStyle = '#f2b544'; mc.lineWidth = 2; mc.beginPath(); mc.moveTo(px, py); mc.lineTo(lx, ly); mc.stroke();
+  mapDot(px, py, 4.4, '#f2b544', false);
+}
+// ミニマップの点：黒い縁取り＋白いふち＋色の塗り（暗い床でも明るい壁でも見える）。相手は外側にうっすら広がる輪も付ける。
+function mapDot(x, y, r, color, ping){
+  if (ping){
+    const k = (performance.now() % 900) / 900;                 // 0→1 をくり返して輪を広げる
+    mc.strokeStyle = color; mc.globalAlpha = (1 - k) * 0.8; mc.lineWidth = 1.6;
+    mc.beginPath(); mc.arc(x, y, r + 1.5 + k * 6, 0, 7); mc.stroke(); mc.globalAlpha = 1;
+  }
+  mc.fillStyle = '#0b0f13'; mc.beginPath(); mc.arc(x, y, r + 1.6, 0, 7); mc.fill();
+  mc.fillStyle = '#ffffff'; mc.beginPath(); mc.arc(x, y, r + 0.6, 0, 7); mc.fill();
+  mc.fillStyle = color;     mc.beginPath(); mc.arc(x, y, r - 0.6, 0, 7); mc.fill();
 }
 function tickMap(dt){
   for (const r of REMOTES.values()) if (r.mmT > 0) r.mmT -= dt;
@@ -1329,7 +1342,7 @@ function releaseFire(){
   const power = Math.max(W.minPower, Math.min(1, t / W.draw));
   P.ammo--; P.flash = FIRE_COOLDOWN; P.kick = W.kick;
   beep(W.tone, .14, 'triangle', W.vol);
-  if (CFG.mode === 'online') send({ type:'shoot' });
+  if (CFG.mode === 'online' && power >= 0.999) send({ type:'shoot' });   // 相手のミニマップに映るのはフルチャージの時だけ
   const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
   const g = new THREE.Group();
   const shaft = new THREE.Mesh(arrowShaftGeo, arrowShaftMat);
