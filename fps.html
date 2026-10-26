@@ -374,7 +374,8 @@ const WEAPONS = {
   // bow: 押している間だけ引き絞り（draw秒で最大）、離すと矢を放つ。矢は実際に飛び（speedMin〜speedMax m/s）、重力(gravity)で落ちる。
   // body・head は最大まで引いた時のダメージで、引き絞りの割合(minPower〜1)を掛ける。reload=矢をつがえ直す秒数
   bow:    { name:'弓', mag:1, reload:0.8, interval:0.1, body:70, head:100, kick:1.2, tone:430, vol:.1,
-            bow:true, zoom:0.2, draw:0.9, minPower:0.3, speedMin:40, speedMax:100, gravity:5.5, drag:0.2 },   // drag=空気抵抗(1/秒)。真上に撃った矢が遠くまで流れず、近くへ落ちてくるようにする
+            bow:true, zoom:0.2, draw:0.9, minPower:0.3, speedMin:40, speedMax:100, gravity:5.5, drag:0.2,
+            highGrav:0.2, highFrom:10, stuckLife:1 },   // highGrav=高さ highFrom(m) を超えた分だけ重力が強まる割合（真上に撃っても数秒で落ちてくる）／stuckLife=刺さってから消えるまでの秒数   // drag=空気抵抗(1/秒)。真上に撃った矢が遠くまで流れず、近くへ落ちてくるようにする
 };
 function curW(){ return WEAPONS[CFG.weapon] || WEAPONS.rifle; }
 
@@ -1349,7 +1350,7 @@ function updateArrows(dt){
     a.life -= dt;
     if (a.life <= 0){ removeArrow(i); continue; }
     if (!a.stuck){
-      a.vel.y -= W.gravity * dt;
+      a.vel.y -= W.gravity * (1 + Math.max(0, a.pos.y - W.highFrom) * W.highGrav) * dt;   // 高く上がるほど重力が強い
       a.vel.multiplyScalar(Math.max(0, 1 - W.drag * dt));   // 空気抵抗
       const len = a.vel.length() * dt;
       _ad.copy(a.vel).normalize();
@@ -1374,11 +1375,11 @@ function updateArrows(dt){
         }
         removeArrow(i); continue;                   // 相手・的に当たった矢は消える
       }
-      if (hit){ a.pos.copy(hit.point); a.stuck = true; a.life = Math.min(a.life, 4); spawnImpact(hit.point, null); }
+      if (hit){ a.pos.copy(hit.point); a.stuck = true; a.life = Math.min(a.life, W.stuckLife); spawnImpact(hit.point, null); }
       else {
         a.pos.addScaledVector(_ad, len);
         const gh = heightAt(a.pos.x, a.pos.z);      // 床・箱・坂に落ちたら刺さる
-        if (a.pos.y <= gh){ a.pos.y = gh; a.stuck = true; a.life = Math.min(a.life, 4); }
+        if (a.pos.y <= gh){ a.pos.y = gh; a.stuck = true; a.life = Math.min(a.life, W.stuckLife); }
       }
       if (!a.stuck) a.dir = _ad.clone(); else if (!a.dir) a.dir = _ad.clone();
     }
