@@ -374,9 +374,10 @@ const WEAPONS = {
   // bow: 押している間だけ引き絞り（draw秒で最大）、離すと矢を放つ。矢は実際に飛び（speedMin〜speedMax m/s）、重力(gravity)で落ちる。
   // body・head は最大まで引いた時のダメージで、引き絞りの割合(minPower〜1)を掛ける。reload=矢をつがえ直す秒数
   bow:    { name:'弓', mag:1, reload:0.8, interval:0.1, body:70, head:100, kick:1.2, tone:430, vol:.1,
-            bow:true, zoom:0.2, draw:0.9, minPower:0.3, speedMin:40, speedMax:100, gravity:5.5, drag:0.2,
+            bow:true, zoom:0.4, zoomRelease:12, draw:0.9, minPower:0.3, speedMin:40, speedMax:100, gravity:5.5, drag:0.2,
             highGrav:0.2, highFrom:10, stuckLife:1,
-            fallReach:0.9, lobAngle:30 },   // fallReach=上に撃った矢(射出の仰角が lobAngle 度以上)が落下中(下向きに飛んでいる間)の当たり範囲の広がり(m)。当たれば部位に関係なく即死   // highGrav=高さ highFrom(m) を超えた分だけ重力が強まる割合（真上に撃っても数秒で落ちてくる）／stuckLife=刺さってから消えるまでの秒数   // drag=空気抵抗(1/秒)。真上に撃った矢が遠くまで流れず、近くへ落ちてくるようにする
+            fallReach:0.9, lobAngle:30,
+            lobWeakGrav:3 },   // lobWeakGrav=上に撃った時、チャージが浅いほど重力を強める量（浅いほど飛距離も落ちてくるまでの時間も短くなる）   // fallReach=フルチャージで上に撃った矢(射出の仰角が lobAngle 度以上)が落下中(下向きに飛んでいる間)の当たり範囲の広がり(m)。当たれば部位に関係なく即死   // highGrav=高さ highFrom(m) を超えた分だけ重力が強まる割合（真上に撃っても数秒で落ちてくる）／stuckLife=刺さってから消えるまでの秒数   // drag=空気抵抗(1/秒)。真上に撃った矢が遠くまで流れず、近くへ落ちてくるようにする
 };
 function curW(){ return WEAPONS[CFG.weapon] || WEAPONS.rifle; }
 
@@ -1335,7 +1336,14 @@ function releaseFire(){
   const head = new THREE.Mesh(arrowHeadGeo, arrowHeadMat); head.position.y = 0.39;
   g.add(shaft, head);
   scene.add(g);
-  arrows.push({ mesh:g, pos:camera.position.clone(), vel:dir.clone().multiplyScalar(W.speedMin + (W.speedMax - W.speedMin) * power),
+  // 上向きに撃つほど（仰角が lobAngle 度で最大）、チャージの浅さが効く：
+  //   初速はチャージの2乗で落ち（浅いと大きく失速）、重力も強まる → 飛距離も滞空時間も短くなる。水平撃ちは従来どおり。
+  const lobK = Math.max(0, Math.min(1, dir.y / Math.sin(W.lobAngle * Math.PI / 180)));
+  const speedFlat = W.speedMin + (W.speedMax - W.speedMin) * power;
+  const speedLob  = Math.max(8, 12 + (W.speedMax - 12) * power * power);
+  const speed = speedFlat + (speedLob - speedFlat) * lobK;
+  const gm = 1 + (1 - power) * W.lobWeakGrav * lobK;     // 重力の倍率（フルチャージなら1）
+  arrows.push({ mesh:g, pos:camera.position.clone(), vel:dir.clone().multiplyScalar(speed), gm,
                 power, life:40, stuck:false,
                 lob: dir.y >= Math.sin(W.lobAngle * Math.PI / 180) });   // lob=射出時の仰角が lobAngle 以上（上に撃った矢）   // life=空中にいられる秒数。真上に撃っても落ちてくるまで消えないよう長めにとる
   updHUD();
@@ -1353,7 +1361,7 @@ function updateArrows(dt){
     a.life -= dt;
     if (a.life <= 0){ removeArrow(i); continue; }
     if (!a.stuck){
-      a.vel.y -= W.gravity * (1 + Math.max(0, a.pos.y - W.highFrom) * W.highGrav) * dt;   // 高く上がるほど重力が強い
+      a.vel.y -= W.gravity * (a.gm || 1) * (1 + Math.max(0, a.pos.y - W.highFrom) * W.highGrav) * dt;   // 高く上がるほど重力が強い
       a.vel.multiplyScalar(Math.max(0, 1 - W.drag * dt));   // 空気抵抗
       const len = a.vel.length() * dt;
       _ad.copy(a.vel).normalize();
@@ -1364,10 +1372,10 @@ function updateArrows(dt){
       let hit = wallHit, kind = 'wall';
       if (pHit && (!hit || pHit.distance < hit.distance)){ hit = pHit; kind = 'player'; }
       if (tHit && (!hit || tHit.distance < hit.distance)){ hit = tHit; kind = 'target'; }
-      // 上に撃った矢（a.lob）が落下中（下向きに飛んでいる）の時：当たり判定の箱を W.fallReach だけ広げて調べる。
+      // フルチャージで上に撃った矢（a.lob）が落下中（下向きに飛んでいる）の時：当たり判定の箱を W.fallReach だけ広げて調べる。
       // 広げた範囲に触れたら、頭・胴のどこでも即死。壁より手前にある場合だけ有効。
       let fallKill = false;
-      if (a.lob && a.vel.y < 0){
+      if (a.lob && a.power >= 0.999 && a.vel.y < 0){
         let best = null;
         for (const m of pms.concat(tms)){
           _fbBox.setFromObject(m).expandByScalar(W.fallReach);
@@ -1499,16 +1507,19 @@ const bowVM = (() => {
   }
   return { root, pose };
 })();
-let bowDraw01 = 0, bowAim = 0;
+let bowDraw01 = 0, bowAim = 0, bowZoom01 = 0;   // bowZoom01=ズームの進み具合（引き絞り時間に合わせて0→1）
 function updateBowVM(dt){
   const W = curW();
   const show = W.bow && alive && !P.deadUntil && P.scopeEase < 0.3;
   bowVM.root.visible = show;
-  if (!show){ bowDraw01 = 0; bowAim = 0; return; }
+  if (!show){ bowDraw01 = 0; bowAim = 0; bowZoom01 = 0; return; }
   const drawing = P.draw >= 0;
   if (drawing) bowDraw01 = Math.min(1, P.draw / W.draw);
   else bowDraw01 += (0 - bowDraw01) * Math.min(1, dt * 35);          // 離すと弦が素早く戻る
   bowAim += ((drawing ? 1 : 0) - bowAim) * Math.min(1, dt * 9);
+  // ズーム：引き絞り時間に比例してじわじわ寄る（draw秒で最大）。離すと少し遅れてなめらかに戻る。
+  if (drawing) bowZoom01 = Math.min(1, P.draw / W.draw);
+  else bowZoom01 += (0 - bowZoom01) * Math.min(1, dt * W.zoomRelease);
   bowVM.pose(bowDraw01, bowAim, P.ammo > 0 && P.reload <= 0, performance.now());
 }
 
@@ -1614,7 +1625,7 @@ function step(dt){
     const se = P.scopeEase;
     setEyeFog(se > 0.05);
     camera.fov = ((BASE_FOV + (SCOPE_FOV - BASE_FOV) * se) + Math.max(0, P.kick) * 2.2 * (1 - se * 0.7))
-                 * (1 - WEAPONS.bow.zoom * bowDraw01);   // 弓は引き絞るほど少しズームする（視点移動も自動で遅くなる）
+                 * (1 - WEAPONS.bow.zoom * bowZoom01 * (2 - bowZoom01));   // 弓は引き絞り時間に合わせて徐々にズームする（最初は速く、満タン近くでゆっくり。視点移動も自動で遅くなる）
     scopeV.style.opacity = se.toFixed(3);
   }
   camera.updateProjectionMatrix();
