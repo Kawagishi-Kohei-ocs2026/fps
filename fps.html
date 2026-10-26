@@ -2552,7 +2552,7 @@ function beginMatchLocal(cells, spawns){
   veil.classList.add('gone');
   el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
   refreshGoVisibility();
-  if (!isTouch) canvas.requestPointerLock?.();
+  if (!isTouch){ enterFullscreen(); canvas.requestPointerLock?.(); }
 }
 // 相手からの被弾でHPが尽きた時、他プレイヤーから離れた場所に体力満タンで再出現させる。
 // キルの加算・撃破した相手への通知は呼び出し元（'hit'受信時）で行う。
@@ -2784,7 +2784,16 @@ function start(){
   alive = true;
   veil.classList.add('gone');
   el('title').innerHTML = '<span>地下七層</span>SUBLEVEL 7';
-  if (!isTouch) canvas.requestPointerLock?.();
+  if (!isTouch){ enterFullscreen(); canvas.requestPointerLock?.(); }
+}
+// ブラウザの上部バーやタスクバーを隠して全画面にする（ボタンを押した操作の中でのみ許可される）。
+// 失敗しても（非対応・拒否）ゲームは通常どおり続行する。Escで全画面を抜けても問題ない。
+function enterFullscreen(){
+  if (document.fullscreenElement) return;
+  try{
+    const p = document.documentElement.requestFullscreen?.();
+    if (p && p.catch) p.catch(() => {});
+  }catch(e){}
 }
 function pause(){
   if (!alive) return;
