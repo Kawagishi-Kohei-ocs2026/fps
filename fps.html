@@ -206,7 +206,7 @@
     <div><div class="num" id="hpnum">100</div><div class="tag">体力</div></div>
   </div>
   <div class="corner" id="ammocorner">
-    <div><div class="num" id="ammonum">18</div><div class="tag">装弾 / <span id="reserve">∞</span></div></div>
+    <div><div class="num" id="ammonum">18</div><div class="tag"><span id="wname">ライフル</span> · 装弾 / <span id="reserve">∞</span></div></div>
   </div>
 </div>
 
@@ -924,6 +924,7 @@ const P = {
   vaultEnd:false, // 乗り越えが終わった直後（相手へ完了を1回だけ伝えるため）
   hp:100, ammo:curW().mag, reload:0, flash:0, kick:0, kills:0,
   draw:-1, // 弓を引き絞っている秒数（-1=引いていない）
+  equip:0, // 武器を持ち替えた直後、撃てるようになるまでの秒数
   killerId:null, // 自分を倒した相手のid（再出現待ち中のキルカムで使う）
   deadUntil:0,   // 0以外：撃破されて再出現待ち中。この時刻(performance.now)に再出現する
   invulnUntil:0, // この時刻(performance.now)まで被弾を無効にする（再出現直後の保護）
@@ -1230,7 +1231,7 @@ function remoteHitMeshes(){
 }
 function shoot(){
   const W = curW();
-  if (!alive || P.deadUntil || P.vault) return;   // 観戦中・窓の乗り越え中は撃てない
+  if (!alive || P.deadUntil || P.vault || P.equip > 0) return;   // 観戦中・窓の乗り越え中・持ち替え直後は撃てない
   if (P.reload > 0){
     if (!(W.shell && P.ammo > 0)) return;
     P.reload = 0;                                  // 1発ずつ装填の武器は、装填を中断して撃てる
@@ -1311,7 +1312,7 @@ function cancelDraw(){ P.draw = -1; }
 function pressFire(){
   const W = curW();
   if (!W.bow){ shoot(); return; }
-  if (!alive || P.deadUntil || P.vault || P.reload > 0) return;
+  if (!alive || P.deadUntil || P.vault || P.reload > 0 || P.equip > 0) return;
   if (P.ammo <= 0){ doReload(); return; }
   P.draw = 0;
 }
@@ -1408,6 +1409,8 @@ const bowVM = (() => {
   const mWood = std(0xd9b583), mGrip = std(0x3a2a20), mSkin = std(0xd9a77f, .7), mSleeve = std(0x1d343b, .9);
   const mGold = std(0xc9a24a, .5), mStr = new THREE.MeshBasicMaterial({ color: 0xf2efe0 });
   const mShaft = std(0xe8d9b0), mTip = std(0xdfe4e8, .4), mFeather = std(0xc4462c);
+  const mats = [mWood, mGrip, mSkin, mSleeve, mGold, mStr, mShaft, mTip, mFeather];
+  for (const m of mats) m.transparent = true;
   const group = new THREE.Group();          // 原点＝弓の握り。+Y が弓の上、-Z がゲーム内の前
   const root = new THREE.Group(); root.add(group); vmScene.add(root);
   group.scale.setScalar(0.8);
@@ -1458,7 +1461,8 @@ const bowVM = (() => {
     mesh.position.copy(p).addScaledVector(_d, 0.5); mesh.scale.set(1, len, 1);
     mesh.quaternion.setFromUnitVectors(_Y, _d.normalize());
   }
-  const PULL = 0.28;       // 弦を引く距離（m）
+  const PULL = 0.28;              // 弦を引く距離（m）
+  const VM_DRAW_OPACITY = 0.35;   // 引き絞り中の濃さ（1で不透明）
   function pose(draw, aim, ready, t){
     const lerp = (a, b, k) => a + (b - a) * k;
     root.position.set(lerp(-0.22, 0.03, aim), lerp(-0.22, -0.04, aim), lerp(-0.68, -0.78, aim) + Math.max(0, P.kick) * 0.02);
@@ -1470,6 +1474,8 @@ const bowVM = (() => {
     _a.set(0, -TIP.y, TIP.z); seg(strB, _a, _b);
     arrow.position.set(ARROW_X, 0, nz); arrow.visible = ready;
     rhand.position.set(ARROW_X + 0.075, -0.055, nz); rhand.visible = aim > 0.15 && draw > 0.02;
+    const op = lerp(1, VM_DRAW_OPACITY, aim);          // 引き絞っている間は半透明にして、向こう側を見やすくする
+    for (const m of mats){ m.opacity = op; m.depthWrite = op > 0.99; }
   }
   return { root, pose };
 })();
@@ -1553,6 +1559,7 @@ function step(dt){
     respawnSelf();
   }
   if (fireCd > 0) fireCd -= dt;
+  if (P.equip > 0) P.equip -= dt;
   {
     const Wc = curW();
     // 弓：押している間だけ引き絞る。離れていた・窓を越え始めた・矢をつがえ直し中なら引き絞りをやめる
@@ -1779,14 +1786,33 @@ function setScopeMode(m, save){
 }
 // 武器選択。切り替えたら弾を満タンにしてリロード状態をリセットする
 const wBtns = { rifle: el('w_rifle'), sniper: el('w_sniper'), shotgun: el('w_shotgun'), bow: el('w_bow') };
-function setWeapon(w, save){
+let ammoStash = {};   // スクロールで持ち替えた時、持ち替える前の武器の残弾を覚えておく（持ち替えで弾が満タンにならないように）
+function setWeapon(w, save, fromWheel){
   CFG.weapon = WEAPONS[w] ? w : 'rifle';
-  P.ammo = curW().mag; P.reload = 0; cancelDraw(); if (curW().bow) P.scope = false;
+  if (fromWheel && ammoStash[CFG.weapon] !== undefined) P.ammo = ammoStash[CFG.weapon];
+  else { P.ammo = curW().mag; if (!fromWheel) ammoStash = {}; }
+  P.reload = 0; cancelDraw(); if (curW().bow) P.scope = false;
+  el('wname').textContent = curW().name;
+  if (fromWheel){ P.equip = 0.3; if (P.ammo <= 0) doReload(); }
   for (const k in wBtns) wBtns[k].setAttribute('aria-pressed', String(k === CFG.weapon));
   el('ammonum').textContent = P.ammo;
   scopeV.classList.toggle('sniper', CFG.weapon === 'sniper');   // スナイパーは覗くと円の外が真っ黒
   if (save){ try { localStorage.setItem('sublevel7.weapon', CFG.weapon); } catch(e){} }
 }
+// マウスホイールで武器を順番に持ち替える（下へ回すと次、上へ回すと前）
+let wheelLock = 0;
+addEventListener('wheel', e => {
+  if (!alive || P.deadUntil || e.target !== canvas) return;
+  e.preventDefault();
+  const now = performance.now();
+  if (now < wheelLock) return;            // トラックパッドなどで連続して発火するのを抑える
+  wheelLock = now + 150;
+  const keys = Object.keys(WEAPONS), n = keys.length;
+  const next = keys[(keys.indexOf(CFG.weapon) + (e.deltaY > 0 ? 1 : -1) + n) % n];
+  ammoStash[CFG.weapon] = P.ammo;
+  setWeapon(next, true, true);
+  updHUD();
+}, { passive:false });
 wBtns.rifle.onclick  = () => setWeapon('rifle', true);
 wBtns.sniper.onclick = () => setWeapon('sniper', true);
 wBtns.shotgun.onclick = () => setWeapon('shotgun', true);
@@ -1911,7 +1937,7 @@ function netLoop(dt){
     const vu = P.vault ? Math.max(0.001, Math.min(1, P.vault.t / VAULT_DUR)) : (P.vaultEnd ? 1 : 0);
     P.vaultEnd = false;
     send({ type:'state', x:player.x, y:player.y, z:player.z, yaw, crouchEase:P.crouchEase,
-           hp:P.hp, ammo:P.ammo, kills:P.kills, crouch:P.crouch, sliding:P.sliding,
+           hp:P.hp, ammo:P.ammo, kills:P.kills, crouch:P.crouch, sliding:P.sliding, w:CFG.weapon,
            vu, vyaw: P.vault ? P.vault.yaw : 0 });
     updHUD(); // スコアボードに相手のキル数（state経由で届く）を反映する
   }
@@ -2310,10 +2336,43 @@ function buildCharacter3D(colors){
     box(5,7,7,mBody,0,0,0,'top',kn);
     return { th, kn };
   });
-  gun.position.set(0,19,0); torso.add(gun);                 // 銃：胸の前で構える
-  box(4,6,10,mGun,0,0,-8,0,gun); box(3,3,12,mGun,0,1,-19,0,gun);
-  box(2.5,2.5,2,mGunHi,0,1,-25.5,0,gun); box(4,5,8,mGun,0,-.5,4,0,gun);
-  box(3.5,7,4,mGun,0,-6,-6,0,gun); box(2,2,6,mGunHi,0,3.5,-8,0,gun);
+  gun.position.set(0,19,0); torso.add(gun);                 // 銃：胸の前で構える。武器ごとの見た目は下の gunSets に作る
+  const mWood = new THREE.MeshStandardMaterial({ color:0xd9b583, roughness:.8 });
+  const mStr = new THREE.MeshBasicMaterial({ color:0xf2efe0 });
+  solids.push(mWood);
+  const gunSets = { rifle:G(), sniper:G(), shotgun:G(), bow:G() };
+  for (const k in gunSets) gun.add(gunSets[k]);
+  { // ライフル（従来の見た目）
+    const g = gunSets.rifle;
+    box(4,6,10,mGun,0,0,-8,0,g); box(3,3,12,mGun,0,1,-19,0,g);
+    box(2.5,2.5,2,mGunHi,0,1,-25.5,0,g); box(4,5,8,mGun,0,-.5,4,0,g);
+    box(3.5,7,4,mGun,0,-6,-6,0,g); box(2,2,6,mGunHi,0,3.5,-8,0,g);
+  }
+  { // スナイパー：長い銃身・スコープ・太い銃床
+    const g = gunSets.sniper;
+    box(4,6,12,mGun,0,0,-8,0,g); box(2.4,2.4,26,mGun,0,1,-27,0,g); box(3.4,3.4,3,mGunHi,0,1,-41,0,g);
+    box(4.5,6,12,mGun,0,-.5,6,0,g); box(3.5,7,4,mGun,0,-6,-6,0,g);
+    box(3.6,3.6,13,mGunHi,0,5.5,-10,0,g); box(4.6,4.6,2,mGun,0,5.5,-17,0,g); box(4.6,4.6,2,mGun,0,5.5,-3,0,g);
+  }
+  { // ショットガン：短くて太い銃身・ポンプ・まっすぐな銃床
+    const g = gunSets.shotgun;
+    box(5,5.5,13,mGun,0,0,-8,0,g); box(4.2,3.2,18,mGun,0,1.5,-22,0,g);
+    box(6,4,8,mGunHi,0,-1.5,-18,0,g); box(4.2,7,11,mGun,0,-1,6,0,g); box(3.5,7,4,mGun,0,-6,-5,0,g);
+    box(3,1.6,16,mGunHi,0,3.7,-21,0,g);
+  }
+  { // 弓：握りと上下の反った板、弦（銃のかわりに前へ構える）
+    const g = gunSets.bow;
+    box(2.6,9,2.6,mGun,0,0,-13,0,g);
+    for (const s of [1,-1]){
+      const l1 = box(2,13,2,mWood,0,0,0,0,g); l1.position.set(0,s*10.5,-11.5); l1.rotation.x = s*0.32;
+      const l2 = box(1.6,10,1.6,mWood,0,0,0,0,g); l2.position.set(0,s*19.5,-8.6); l2.rotation.x = s*0.62;
+    }
+    box(0.6,40,0.6,mStr,0,0,-5.5,0,g);
+  }
+  function setWeapon(name){
+    const key = gunSets[name] ? name : 'rifle';
+    for (const k in gunSets) gunSets[k].visible = (k === key);
+  }
   root.scale.setScalar(CHAR_U);
   let cur = null;
   function applyPose(p, side){
@@ -2353,9 +2412,9 @@ function buildCharacter3D(colors){
     return { body:_bbody, head:_bhead };
   }
   function setFlash(on){ solids.forEach(m => m.emissive.set(on ? 0xffe9e2 : 0x000000)); }
-  function dispose(){ root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); [...solids, mEye].forEach(m => m.dispose()); EYE_MATS.delete(mEye); }
-  setPose('stand');
-  return { group:root, setPose, setVault, vaultBoxes, setFlash, dispose };
+  function dispose(){ root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); [...solids, mEye, mStr].forEach(m => m.dispose()); EYE_MATS.delete(mEye); }
+  setPose('stand'); setWeapon('rifle');
+  return { group:root, setPose, setVault, vaultBoxes, setFlash, setWeapon, dispose };
 }
 
 function buildRemoteMesh(id){
@@ -2406,6 +2465,7 @@ function updateRemoteMeshes(dt){
     const m = remoteMeshes.get(id);
     if (!m) continue;
     const pose = r.sliding ? 'slide' : (r.crouch ? 'crouch' : 'stand');
+    m.model.setWeapon(r.weapon || 'rifle');             // 持っている武器の見た目
     m.model.setFlash(now < (r.flashUntil || 0));        // 自分が当てた瞬間だけ白く光る（発砲では光らない）
 
     // 窓の乗り越え中：ダイブの姿勢にして、越える向きへ体を向ける。当たり判定も体の実際の位置に合わせる。
@@ -2697,6 +2757,7 @@ function handleNet(m){
     r._dur = r._lastMsgT ? Math.min(220, Math.max(30, now - r._lastMsgT)) : 60;
     r._lastMsgT = now; r._t0 = now;
     r.hp = m.hp; r.dead = m.hp <= 0; r.ammo = m.ammo; r.kills = sc(m.from).k; r.crouch = !!m.crouch; r.sliding = !!m.sliding;
+    r.weapon = WEAPONS[m.w] ? m.w : 'rifle';   // 相手が持っている武器（見た目に反映）
     // 窓の乗り越え：進行度は位置と同じ区間補間で滑らかに動かす。0 が届いたら即座に通常ポーズへ戻す。
     let vu = typeof m.vu === 'number' ? m.vu : 0;
     if (vu >= 1 && !(r.vaultU > 0)) vu = 0;   // 途中を見ていない「終了」だけが届いた場合は無視
@@ -2777,7 +2838,7 @@ function beginMatchLocal(cells, spawns){
   player.x = mySpot.x; player.y = mySpot.y; player.z = heightAt(mySpot.x, mySpot.y); player.vz = 0; player.onGround = true;
   yaw = 0; pitch = 0;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
-  P.hp = 100; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
+  P.hp = 100; ammoStash = {}; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
   P.deadUntil = 0; clearDeathView();
   P.invulnUntil = performance.now() + SPAWN_PROTECT_MS;
   for (const [id, r] of REMOTES){
@@ -2878,7 +2939,7 @@ function respawnSelf(){
   pitch = 0;   // 観戦中の視線を水平に戻す
   const spot = freeSpot(Math.random, [...REMOTES.values()]);
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
-  P.hp = 100; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0;
+  P.hp = 100; ammoStash = {}; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0;
   P.invulnUntil = performance.now() + SPAWN_PROTECT_MS;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
 }
@@ -3020,7 +3081,7 @@ function resetLevel(){
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
   yaw = 0; pitch = 0;
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
-  P.hp = 100; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
+  P.hp = 100; ammoStash = {}; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
   P.deadUntil = 0; clearDeathView();
   spawnTargets(); clearArrows();
   updHUD();
