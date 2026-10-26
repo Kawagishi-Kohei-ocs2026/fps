@@ -1375,7 +1375,7 @@ function updateArrows(dt){
       // 上に撃った矢（a.lob）が落下中（下向きに飛んでいる）の時：当たり判定の箱を W.fallReach だけ広げて調べる（チャージ量は問わない）。
       // 広げた範囲に触れたら命中。壁より手前にある場合だけ有効。
       //   フルチャージ → 頭・胴のどこでも即死（ダメージ9999）
-      //   それ以外   → 通常ダメージ。実際の箱（広げていない方）が頭に当たっていれば頭、それ以外は胴
+      //   それ以外   → 通常ダメージだが、頭に当たったものとして頭のダメージ
       let fallKill = false;
       if (a.lob && a.vel.y < 0){
         let best = null;
@@ -1390,15 +1390,12 @@ function updateArrows(dt){
         if (best){
           fallKill = a.power >= 0.999;
           if (!fallKill){
-            // 同じ相手の頭・胴のメッシュを探し、実際に頭の箱へ矢の線が届いているかで頭／胴を決める
+            // 即死でない場合も、広い範囲で当たったら問答無用で頭扱い（頭のダメージ）にする
             const u = best.object.userData;
-            let headM, bodyM;
-            if (u.target){ headM = u.target.head; bodyM = u.target.body; }
-            else { const rm = remoteMeshes.get(u.remoteId); if (rm){ headM = rm.head; bodyM = rm.torso; } }
-            if (headM && bodyM){
-              const realHead = raycaster.intersectObject(headM, false)[0];
-              best.object = (realHead && realHead.distance <= len) ? headM : bodyM;
-            }
+            let headM;
+            if (u.target) headM = u.target.head;
+            else { const rm = remoteMeshes.get(u.remoteId); if (rm) headM = rm.head; }
+            if (headM) best.object = headM;
           }
           hit = best; kind = best.object.userData.target ? 'target' : 'player';
         }
