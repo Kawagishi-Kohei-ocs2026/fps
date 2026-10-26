@@ -244,6 +244,7 @@
       <div class="seg">
         <button type="button" id="w_rifle" aria-pressed="true">ライフル（18発・胴12／頭24）</button>
         <button type="button" id="w_sniper" aria-pressed="false">スナイパー（1発ごとにリロード・胴50／頭100）</button>
+        <button type="button" id="w_shotgun" aria-pressed="false">ショットガン（6発・8粒散弾・近距離で最大 胴64／頭128）</button>
       </div>
     </div>
     <div class="field">
@@ -359,6 +360,10 @@ const DMG_BODY = 12, DMG_HEAD = 24;
 const WEAPONS = {
   rifle:  { name:'ライフル',   mag:MAG, reload:RELOAD_TIME, interval:AUTO_FIRE_INTERVAL, body:DMG_BODY, head:DMG_HEAD, kick:1,   tone:320, vol:.11 },
   sniper: { name:'スナイパー', mag:1,   reload:1.8,         interval:AUTO_FIRE_INTERVAL, body:50,       head:100,      kick:2.2, tone:150, vol:.16 },
+  // shotgun: 1発で pellets 粒の散弾を飛ばす。body・head は「1粒あたり」のダメージ。
+  // spread=散らばり(ラジアン。スコープ中は半分) / range=有効射程(m) / falloff=射程の端でダメージが減る割合(0.65なら端で35%)
+  shotgun:{ name:'ショットガン', mag:6, reload:2.2,         interval:0.8,                body:8,        head:16,       kick:3.2, tone:95,  vol:.2,
+            pellets:8, spread:0.07, range:16, falloff:0.65 },
 };
 function curW(){ return WEAPONS[CFG.weapon] || WEAPONS.rifle; }
 
@@ -1167,8 +1172,9 @@ function targetHitMeshes(){
   for (const t of TARGETS) if (t.state === 'up') list.push(t.body, t.head);
   return list;
 }
-function hitTarget(t, headshot){
-  t.hp -= headshot ? curW().head : curW().body;
+function hitTarget(t, headshot, dmg){
+  if (t.state !== 'up') return;   // 散弾で同じ的に複数粒当たっても、キル数は1回だけ
+  t.hp -= (typeof dmg === 'number') ? dmg : (headshot ? curW().head : curW().body);
   t.flash = 0.12;
   if (t.hp > 0){ beep(headshot ? 700 : 520, .07, 'triangle', .07); return; }
   t.state = 'falling'; t.timer = 0;
@@ -1217,45 +1223,59 @@ function shoot(){
   P.ammo--; P.flash = FIRE_COOLDOWN; P.kick = W.kick; fireCd = W.interval;
   beep(W.tone, .16, 'square', W.vol);
   if (CFG.mode === 'online') send({ type:'shoot' });
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  raycaster.set(camera.position, dir);
-  const shotRange = scopeActive() ? SCOPE_SHOT_RANGE : MAX_SHOT_RANGE;
+  const base = new THREE.Vector3();
+  camera.getWorldDirection(base);
+  const pellets = W.pellets || 1;
+  const spread = (W.spread || 0) * (scopeActive() ? 0.5 : 1);   // スコープ中は散らばりが半分
+  const shotRange = Math.min(scopeActive() ? SCOPE_SHOT_RANGE : MAX_SHOT_RANGE, W.range || Infinity);
   raycaster.far = shotRange;
-  const wallHit = raycaster.intersectObjects(attackBlockers, false)[0];
-  let playerHit = null;
-  if (CFG.mode === 'online'){
-    const targets = remoteHitMeshes();
-    if (targets.length) playerHit = raycaster.intersectObjects(targets, false)[0];
-  }
-  let targetHit = null;
-  if (CFG.mode === 'solo'){
-    const tms = targetHitMeshes();
-    if (tms.length) targetHit = raycaster.intersectObjects(tms, false)[0];
-  }
-  let hit = wallHit, hitIsPlayer = false, hitIsTarget = false;
-  if (playerHit && (!wallHit || playerHit.distance < wallHit.distance)){ hit = playerHit; hitIsPlayer = true; }
-  if (targetHit && (!wallHit || targetHit.distance < wallHit.distance)){ hit = targetHit; hitIsPlayer = false; hitIsTarget = true; }
-
-  if (hit && hit.distance <= shotRange){
-    const normal = (!hitIsPlayer && !hitIsTarget && hit.face)
-      ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
-      : null;
-    spawnTracer(camera.position, hit.point);
-    spawnImpact(hit.point, normal);
-    if (hitIsTarget){
-      hitTarget(hit.object.userData.target, hit.object.userData.isHead);
-    } else if (hitIsPlayer){
-      const remoteId = hit.object.userData.remoteId;
-      const headshot = hit.object.userData.isHead;
-      const dmg = headshot ? W.head : W.body;
-      const remote = REMOTES.get(remoteId);
-      if (remote) remote.flashUntil = performance.now() + 150;
-      send({ type:'hit', to: remoteId, dmg });
-      beep(headshot ? 700 : 520, .07, 'triangle', .07);
+  const pms = (CFG.mode === 'online') ? remoteHitMeshes() : [];
+  const tms = (CFG.mode === 'solo') ? targetHitMeshes() : [];
+  // 1粒ずつ判定し、相手／的ごとにダメージを合算してから1回だけ適用する（通信も1発につき1回）
+  const playerDmg = new Map();   // 相手id → { dmg, head }
+  const targetDmg = new Map();   // 的 → { dmg, head }
+  for (let i = 0; i < pellets; i++){
+    let dir = base;
+    if (spread > 0){
+      const a = Math.random() * Math.PI * 2, rr = spread * Math.sqrt(Math.random());   // 円内に一様に散らす
+      dir = new THREE.Vector3(Math.cos(a) * rr, Math.sin(a) * rr, -1).normalize().applyQuaternion(camera.quaternion);
     }
-  } else {
-    spawnTracer(camera.position, camera.position.clone().addScaledVector(dir, shotRange));
+    raycaster.set(camera.position, dir);
+    const wallHit = raycaster.intersectObjects(attackBlockers, false)[0];
+    const playerHit = pms.length ? raycaster.intersectObjects(pms, false)[0] : null;
+    const targetHit = tms.length ? raycaster.intersectObjects(tms, false)[0] : null;
+    let hit = wallHit, hitIsPlayer = false, hitIsTarget = false;
+    if (playerHit && (!wallHit || playerHit.distance < wallHit.distance)){ hit = playerHit; hitIsPlayer = true; }
+    if (targetHit && (!wallHit || targetHit.distance < wallHit.distance)){ hit = targetHit; hitIsPlayer = false; hitIsTarget = true; }
+
+    if (hit && hit.distance <= shotRange){
+      const normal = (!hitIsPlayer && !hitIsTarget && hit.face)
+        ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+        : null;
+      spawnTracer(camera.position, hit.point);
+      spawnImpact(hit.point, normal);
+      if (hitIsTarget || hitIsPlayer){
+        const head = !!hit.object.userData.isHead;
+        const fall = W.falloff ? 1 - W.falloff * (hit.distance / shotRange) : 1;   // 遠いほど威力が落ちる
+        const d = (head ? W.head : W.body) * fall;
+        const map = hitIsTarget ? targetDmg : playerDmg;
+        const key = hitIsTarget ? hit.object.userData.target : hit.object.userData.remoteId;
+        const cur = map.get(key) || { dmg: 0, head: false };
+        cur.dmg += d; cur.head = cur.head || head;
+        map.set(key, cur);
+      }
+    } else {
+      spawnTracer(camera.position, camera.position.clone().addScaledVector(dir, shotRange));
+    }
+  }
+  for (const [t, v] of targetDmg) hitTarget(t, v.head, Math.round(v.dmg));
+  for (const [remoteId, v] of playerDmg){
+    const dmg = Math.round(v.dmg);
+    if (dmg <= 0) continue;
+    const remote = REMOTES.get(remoteId);
+    if (remote) remote.flashUntil = performance.now() + 150;
+    send({ type:'hit', to: remoteId, dmg });
+    beep(v.head ? 700 : 520, .07, 'triangle', .07);
   }
   updHUD();
   if (P.ammo === 0) doReload();
@@ -1532,7 +1552,7 @@ function setScopeMode(m, save){
   if (save){ try { localStorage.setItem('sublevel7.scopeMode', CFG.scopeMode); } catch(e){} }
 }
 // 武器選択。切り替えたら弾を満タンにしてリロード状態をリセットする
-const wBtns = { rifle: el('w_rifle'), sniper: el('w_sniper') };
+const wBtns = { rifle: el('w_rifle'), sniper: el('w_sniper'), shotgun: el('w_shotgun') };
 function setWeapon(w, save){
   CFG.weapon = WEAPONS[w] ? w : 'rifle';
   P.ammo = curW().mag; P.reload = 0;
@@ -1543,6 +1563,7 @@ function setWeapon(w, save){
 }
 wBtns.rifle.onclick  = () => setWeapon('rifle', true);
 wBtns.sniper.onclick = () => setWeapon('sniper', true);
+wBtns.shotgun.onclick = () => setWeapon('shotgun', true);
 try { setWeapon(localStorage.getItem('sublevel7.weapon') || 'rifle', false); } catch(e){ setWeapon('rifle', false); }
 
 scBtns.toggle.onclick = () => setScopeMode('toggle', true);
