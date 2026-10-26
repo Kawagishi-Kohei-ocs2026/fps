@@ -24,6 +24,11 @@
   #cross::before{left:50%;top:0;width:2px;height:100%;margin-left:-1px}
   #cross::after{top:50%;left:0;height:2px;width:100%;margin-top:-1px}
 
+  /* 弓：引き絞りゲージ（照準の少し下） */
+  #drawbar{position:fixed;left:50%;top:calc(50% + 28px);width:90px;height:5px;margin-left:-45px;display:none;
+    background:rgba(255,255,255,.18);pointer-events:none}
+  #drawfill{height:100%;width:0;background:var(--sodium)}
+  #drawbar.full #drawfill{background:#fff}
   #hud{position:fixed;inset:0;pointer-events:none}
   #top{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.28em;color:#b4bcc1;text-shadow:0 0 4px rgba(0,0,0,.55)}
   #top b{color:var(--dust);font-weight:600}
@@ -185,6 +190,7 @@
 <canvas id="view"></canvas>
 <div id="scopeV"></div>
 <div id="cross"></div>
+<div id="drawbar"><div id="drawfill"></div></div>
 <div id="hurtflash"></div>
 
 <div id="hud">
@@ -244,7 +250,8 @@
       <div class="seg">
         <button type="button" id="w_rifle" aria-pressed="true">ライフル（18発・胴12／頭24）</button>
         <button type="button" id="w_sniper" aria-pressed="false">スナイパー（1発ごとにリロード・胴50／頭100）</button>
-        <button type="button" id="w_shotgun" aria-pressed="false">ショットガン（6発・8粒散弾・近距離で最大 胴64／頭128）</button>
+        <button type="button" id="w_shotgun" aria-pressed="false">ショットガン（6発・1発ずつ装填・8粒散弾・近距離で最大 胴64／頭128）</button>
+        <button type="button" id="w_bow" aria-pressed="false">弓（長押しで引き絞り・離して発射・最大 胴45／頭90・矢は落ちる）</button>
       </div>
     </div>
     <div class="field">
@@ -362,8 +369,12 @@ const WEAPONS = {
   sniper: { name:'スナイパー', mag:1,   reload:1.8,         interval:AUTO_FIRE_INTERVAL, body:50,       head:100,      kick:2.2, tone:150, vol:.16 },
   // shotgun: 1発で pellets 粒の散弾を飛ばす。body・head は「1粒あたり」のダメージ。
   // spread=散らばり(ラジアン。スコープ中は半分) / range=有効射程(m) / falloff=射程の端でダメージが減る割合(0.65なら端で35%)
-  shotgun:{ name:'ショットガン', mag:6, reload:2.2,         interval:0.8,                body:8,        head:16,       kick:3.2, tone:95,  vol:.2,
-            pellets:8, spread:0.07, range:16, falloff:0.65 },
+  shotgun:{ name:'ショットガン', mag:6, reload:0.55, shell:true,         interval:0.8,                body:8,        head:16,       kick:3.2, tone:95,  vol:.2,
+            pellets:8, spread:0.07, range:16, falloff:0.65 },   // shell:true = 1発ずつ装填（reload=1発あたりの秒数）。装填中でも弾が残っていれば撃て、撃つと装填を中断する
+  // bow: 押している間だけ引き絞り（draw秒で最大）、離すと矢を放つ。矢は実際に飛び（speedMin〜speedMax m/s）、重力(gravity)で落ちる。
+  // body・head は最大まで引いた時のダメージで、引き絞りの割合(minPower〜1)を掛ける。reload=矢をつがえ直す秒数
+  bow:    { name:'弓', mag:1, reload:0.8, interval:0.1, body:45, head:90, kick:1.2, tone:430, vol:.1,
+            bow:true, draw:0.9, minPower:0.3, speedMin:20, speedMax:50, gravity:5.5 },
 };
 function curW(){ return WEAPONS[CFG.weapon] || WEAPONS.rifle; }
 
@@ -912,6 +923,7 @@ const P = {
   vault:null, // 窓の乗り越え中は {t,x0,y0,z0,x1,y1,z1,side,yaw}
   vaultEnd:false, // 乗り越えが終わった直後（相手へ完了を1回だけ伝えるため）
   hp:100, ammo:curW().mag, reload:0, flash:0, kick:0, kills:0,
+  draw:-1, // 弓を引き絞っている秒数（-1=引いていない）
   killerId:null, // 自分を倒した相手のid（再出現待ち中のキルカムで使う）
   deadUntil:0,   // 0以外：撃破されて再出現待ち中。この時刻(performance.now)に再出現する
   invulnUntil:0, // この時刻(performance.now)まで被弾を無効にする（再出現直後の保護）
@@ -1082,7 +1094,7 @@ function updHUD(){
   el('hpnum').classList.toggle('hurt', P.hp <= 30);
   el('hpfill').style.height = Math.max(0, P.hp) + '%';
   el('hpfill').style.background = P.hp <= 30 ? '#c4462c' : '#f2b544';
-  el('ammonum').textContent = P.reload > 0 ? '—' : P.ammo;
+  el('ammonum').textContent = (P.reload > 0 && !curW().shell) ? '—' : P.ammo;   // 1発ずつ装填の武器は、装填中も弾数を見せる
   el('ammonum').classList.toggle('empty', P.ammo === 0);
   if (CFG.mode === 'online'){
     if (isTeamMode()){
@@ -1217,9 +1229,13 @@ function remoteHitMeshes(){
   return list;
 }
 function shoot(){
-  if (!alive || P.deadUntil || P.reload > 0 || P.vault) return;   // 観戦中・窓の乗り越え中は撃てない
-  if (P.ammo <= 0){ doReload(); return; }
   const W = curW();
+  if (!alive || P.deadUntil || P.vault) return;   // 観戦中・窓の乗り越え中は撃てない
+  if (P.reload > 0){
+    if (!(W.shell && P.ammo > 0)) return;
+    P.reload = 0;                                  // 1発ずつ装填の武器は、装填を中断して撃てる
+  }
+  if (P.ammo <= 0){ doReload(); return; }
   P.ammo--; P.flash = FIRE_COOLDOWN; P.kick = W.kick; fireCd = W.interval;
   beep(W.tone, .16, 'square', W.vol);
   if (CFG.mode === 'online') send({ type:'shoot' });
@@ -1281,6 +1297,104 @@ function shoot(){
   if (P.ammo === 0) doReload();
 }
 
+/* ============ 弓・矢 ============ */
+// 押す→引き絞り開始 / 離す→発射。矢は毎フレーム、前回位置→今回位置の線分でレイキャストして
+// 壁・的・相手に当たるか調べる（高速でもすり抜けない）。壁や床に当たった矢はしばらく刺さったまま残る。
+// ダメージ判定は撃った本人のクライアントで行い、当たったら銃と同じ 'hit' メッセージを送る（サーバーは無改造）。
+const arrows = [];
+const arrowShaftGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.7, 6);
+const arrowHeadGeo = new THREE.ConeGeometry(0.03, 0.09, 6);
+const arrowShaftMat = new THREE.MeshBasicMaterial({ color: 0xe8d9b0 });
+const arrowHeadMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const _Y = new THREE.Vector3(0, 1, 0), _ad = new THREE.Vector3();
+function cancelDraw(){ P.draw = -1; }
+function pressFire(){
+  const W = curW();
+  if (!W.bow){ shoot(); return; }
+  if (!alive || P.deadUntil || P.vault || P.reload > 0) return;
+  if (P.ammo <= 0){ doReload(); return; }
+  P.draw = 0;
+}
+function releaseFire(){
+  const W = curW();
+  if (!W.bow || P.draw < 0) return;
+  const t = P.draw; P.draw = -1;
+  if (!alive || P.deadUntil || P.vault || P.reload > 0 || P.ammo <= 0) return;
+  if (t < 0.15) return;                             // ちょっと触れただけでは撃たない（矢は減らない）
+  const power = Math.max(W.minPower, Math.min(1, t / W.draw));
+  P.ammo--; P.flash = FIRE_COOLDOWN; P.kick = W.kick;
+  beep(W.tone, .14, 'triangle', W.vol);
+  if (CFG.mode === 'online') send({ type:'shoot' });
+  const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(arrowShaftGeo, arrowShaftMat);
+  const head = new THREE.Mesh(arrowHeadGeo, arrowHeadMat); head.position.y = 0.39;
+  g.add(shaft, head);
+  scene.add(g);
+  arrows.push({ mesh:g, pos:camera.position.clone(), vel:dir.clone().multiplyScalar(W.speedMin + (W.speedMax - W.speedMin) * power),
+                power, life:6, stuck:false });
+  updHUD();
+  if (P.ammo === 0) doReload();
+}
+function removeArrow(i){ scene.remove(arrows[i].mesh); arrows.splice(i, 1); }
+function clearArrows(){ while (arrows.length) removeArrow(arrows.length - 1); }
+function updateArrows(dt){
+  if (!arrows.length) return;
+  const W = WEAPONS.bow;
+  const pms = (CFG.mode === 'online') ? remoteHitMeshes() : [];
+  const tms = (CFG.mode === 'solo') ? targetHitMeshes() : [];
+  for (let i = arrows.length - 1; i >= 0; i--){
+    const a = arrows[i];
+    a.life -= dt;
+    if (a.life <= 0){ removeArrow(i); continue; }
+    if (!a.stuck){
+      a.vel.y -= W.gravity * dt;
+      const len = a.vel.length() * dt;
+      _ad.copy(a.vel).normalize();
+      raycaster.set(a.pos, _ad); raycaster.far = len;
+      const wallHit = raycaster.intersectObjects(attackBlockers, false)[0];
+      const pHit = pms.length ? raycaster.intersectObjects(pms, false)[0] : null;
+      const tHit = tms.length ? raycaster.intersectObjects(tms, false)[0] : null;
+      let hit = wallHit, kind = 'wall';
+      if (pHit && (!hit || pHit.distance < hit.distance)){ hit = pHit; kind = 'player'; }
+      if (tHit && (!hit || tHit.distance < hit.distance)){ hit = tHit; kind = 'target'; }
+      if (hit && kind !== 'wall'){
+        const head = !!hit.object.userData.isHead;
+        const dmg = Math.max(1, Math.round((head ? W.head : W.body) * a.power));
+        spawnImpact(hit.point, null);
+        if (kind === 'target') hitTarget(hit.object.userData.target, head, dmg);
+        else {
+          const remoteId = hit.object.userData.remoteId;
+          const remote = REMOTES.get(remoteId);
+          if (remote) remote.flashUntil = performance.now() + 150;
+          send({ type:'hit', to: remoteId, dmg });
+          beep(head ? 700 : 520, .07, 'triangle', .07);
+        }
+        removeArrow(i); continue;                   // 相手・的に当たった矢は消える
+      }
+      if (hit){ a.pos.copy(hit.point); a.stuck = true; a.life = Math.min(a.life, 4); spawnImpact(hit.point, null); }
+      else {
+        a.pos.addScaledVector(_ad, len);
+        const gh = heightAt(a.pos.x, a.pos.z);      // 床・箱・坂に落ちたら刺さる
+        if (a.pos.y <= gh){ a.pos.y = gh; a.stuck = true; a.life = Math.min(a.life, 4); }
+      }
+      if (!a.stuck) a.dir = _ad.clone(); else if (!a.dir) a.dir = _ad.clone();
+    }
+    a.mesh.quaternion.setFromUnitVectors(_Y, a.dir);
+    a.mesh.position.copy(a.pos).addScaledVector(a.dir, -0.3);
+  }
+}
+const drawBarEl = el('drawbar'), drawFillEl = el('drawfill');
+function updDrawBar(){
+  const W = curW();
+  const on = W.bow && alive && !P.deadUntil && P.draw >= 0;
+  drawBarEl.style.display = on ? 'block' : 'none';
+  if (!on) return;
+  const f = Math.min(1, P.draw / W.draw);
+  drawFillEl.style.width = (f * 100).toFixed(0) + '%';
+  drawBarEl.classList.toggle('full', f >= 1);
+}
+
 // ジャンプの取りこぼし対策：
 //  ・先行入力(jumpBuf)：空中や接地判定が外れた瞬間に押しても、直後に着地したらジャンプする
 //  ・接地の猶予(coyote)：斜面・段差・縁を走り抜けた直後の短い間も、ジャンプできる
@@ -1336,6 +1450,7 @@ function step(dt){
   netLoop(dt);
   updateAllRemoteInterp();
   updateTargets(dt);
+  updateArrows(dt);
   if (P.deadUntil){
     if (performance.now() < P.deadUntil){
       // 観戦モード：自分の移動・射撃は止めるが、相手モデルの更新は続ける（しゃがみ・スライディング・
@@ -1347,10 +1462,29 @@ function step(dt){
     respawnSelf();
   }
   if (fireCd > 0) fireCd -= dt;
-  if ((firing || mouseFire) && fireCd <= 0 && P.flash <= 0 && P.ammo > 0 && P.reload <= 0) shoot();
+  {
+    const Wc = curW();
+    // 弓：押している間だけ引き絞る。離れていた・窓を越え始めた・矢をつがえ直し中なら引き絞りをやめる
+    if (P.draw >= 0){
+      if (!Wc.bow || P.vault || P.reload > 0 || !(mouseFire || firing)) cancelDraw();
+      else P.draw += dt;
+    }
+    if (!Wc.bow && (firing || mouseFire) && fireCd <= 0 && P.flash <= 0 && P.ammo > 0 && (P.reload <= 0 || Wc.shell)) shoot();
+  }
   if (P.reload > 0){
     P.reload -= dt;
-    if (P.reload <= 0){ P.reload = 0; P.ammo = curW().mag; beep(280,.09,'square',.05); updHUD(); }
+    if (P.reload <= 0){
+      const Wc = curW();
+      if (Wc.shell){
+        // 1発ずつ装填：1発入れるたびに音が鳴り、満タンになるまで続ける
+        P.ammo = Math.min(Wc.mag, P.ammo + 1);
+        beep(280, .07, 'square', .05);
+        P.reload = P.ammo < Wc.mag ? Wc.reload : 0;
+      } else {
+        P.reload = 0; P.ammo = Wc.mag; beep(280,.09,'square',.05);
+      }
+      updHUD();
+    }
   }
   if (P.flash > 0) P.flash -= dt;
   if (P.kick > 0) P.kick -= dt*KICK_DECAY;
@@ -1479,7 +1613,7 @@ canvas.addEventListener('mousedown', e => {
     e.preventDefault();
     if (!tryClimbThrough()) doJump();
   }
-  if (e.button === 0 && alive && !P.deadUntil && document.pointerLockElement === canvas){ mouseFire = true; shoot(); }
+  if (e.button === 0 && alive && !P.deadUntil && document.pointerLockElement === canvas){ mouseFire = true; pressFire(); }
   if (e.button === 2 && alive && !P.deadUntil && document.pointerLockElement === canvas){
     // toggle: 押すたびに入/切 ／ hold: 押している間だけ覗く
     P.scope = (CFG.scopeMode === 'hold') ? true : !P.scope;
@@ -1491,7 +1625,7 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('mouseup', e => { if (e.button === 3 || e.button === 4) e.preventDefault(); });
 addEventListener('auxclick', e => { if (e.button === 3 || e.button === 4) e.preventDefault(); });
 addEventListener('mouseup', e => {
-  if (e.button === 0) mouseFire = false;
+  if (e.button === 0){ mouseFire = false; releaseFire(); }
   if (e.button === 2 && CFG.scopeMode === 'hold') P.scope = false;   // 長押しモード：離したら解除
 });
 addEventListener('blur', () => { mouseFire = false; P.scope = false; sprintLatch = false; });
@@ -1508,8 +1642,8 @@ jumpBtn.addEventListener('touchstart', e => { if (!tryClimbThrough()) doJump(); 
 crouchBtn.addEventListener('touchstart', e => { toggleCrouch(); crouchBtn.classList.toggle('active', P.crouch); e.preventDefault(); }, {passive:false});
 runBtn.addEventListener('touchstart', e => { touchRun = true; runBtn.classList.add('active'); e.preventDefault(); }, {passive:false});
 runBtn.addEventListener('touchend', () => { touchRun = false; runBtn.classList.remove('active'); });
-fireBtn.addEventListener('touchstart', e => { if (!P.deadUntil){ firing = true; shoot(); } fireBtn.classList.add('active'); e.preventDefault(); }, {passive:false});
-fireBtn.addEventListener('touchend', () => { firing = false; fireBtn.classList.remove('active'); });
+fireBtn.addEventListener('touchstart', e => { if (!P.deadUntil){ firing = true; pressFire(); } fireBtn.classList.add('active'); e.preventDefault(); }, {passive:false});
+fireBtn.addEventListener('touchend', () => { firing = false; releaseFire(); fireBtn.classList.remove('active'); });
 addEventListener('touchmove', e => {
   for (const t of e.changedTouches){
     if (t.identifier === stickId){
@@ -1552,10 +1686,10 @@ function setScopeMode(m, save){
   if (save){ try { localStorage.setItem('sublevel7.scopeMode', CFG.scopeMode); } catch(e){} }
 }
 // 武器選択。切り替えたら弾を満タンにしてリロード状態をリセットする
-const wBtns = { rifle: el('w_rifle'), sniper: el('w_sniper'), shotgun: el('w_shotgun') };
+const wBtns = { rifle: el('w_rifle'), sniper: el('w_sniper'), shotgun: el('w_shotgun'), bow: el('w_bow') };
 function setWeapon(w, save){
   CFG.weapon = WEAPONS[w] ? w : 'rifle';
-  P.ammo = curW().mag; P.reload = 0;
+  P.ammo = curW().mag; P.reload = 0; cancelDraw();
   for (const k in wBtns) wBtns[k].setAttribute('aria-pressed', String(k === CFG.weapon));
   el('ammonum').textContent = P.ammo;
   scopeV.classList.toggle('sniper', CFG.weapon === 'sniper');   // スナイパーは覗くと円の外が真っ黒
@@ -1564,6 +1698,7 @@ function setWeapon(w, save){
 wBtns.rifle.onclick  = () => setWeapon('rifle', true);
 wBtns.sniper.onclick = () => setWeapon('sniper', true);
 wBtns.shotgun.onclick = () => setWeapon('shotgun', true);
+wBtns.bow.onclick = () => setWeapon('bow', true);
 try { setWeapon(localStorage.getItem('sublevel7.weapon') || 'rifle', false); } catch(e){ setWeapon('rifle', false); }
 
 scBtns.toggle.onclick = () => setScopeMode('toggle', true);
@@ -2545,7 +2680,7 @@ function beginMatchLocal(cells, spawns){
   el('custom').classList.add('gone'); el('result').classList.add('gone');
   setGrid(cells);
   buildScene();
-  clearTargets();
+  clearTargets(); clearArrows();
   const mySpot = spawns[myId] || freeSpot(Math.random, null);
   player.x = mySpot.x; player.y = mySpot.y; player.z = heightAt(mySpot.x, mySpot.y); player.vz = 0; player.onGround = true;
   yaw = 0; pitch = 0;
@@ -2795,7 +2930,7 @@ function resetLevel(){
   P.crouch = false; P.crouchEase = 0; P.sliding = false; P.slideT = 0; P.vault = null;
   P.hp = 100; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0; P.kills = 0;
   P.deadUntil = 0; clearDeathView();
-  spawnTargets();
+  spawnTargets(); clearArrows();
   updHUD();
 }
 function start(){
@@ -2818,6 +2953,7 @@ function enterFullscreen(){
 }
 function pause(){
   if (!alive) return;
+  cancelDraw();
   alive = false; mouseFire = false; firing = false; P.vault = null;
   document.exitPointerLock?.();
   el('title').innerHTML = '<span>一時停止</span>PAUSED';
@@ -2841,6 +2977,7 @@ function frame(now){
   const dt = Math.min(0.05, (now-last)/1000); last = now;
   step(dt);
   updateHitMarks(dt);
+  updDrawBar();
   tickMap(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
