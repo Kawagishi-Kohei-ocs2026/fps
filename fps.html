@@ -123,6 +123,9 @@
   .field{margin-bottom:4px}
   .hint{font-size:11px;color:#59636a;line-height:1.75;margin-top:6px}
   input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:none;height:20px;cursor:pointer}
+  input[type=range]:disabled{opacity:.35;cursor:default}
+  .chk{display:flex;align-items:center;gap:8px;margin-top:6px;margin-bottom:10px;font-size:12px;color:#6d7880;cursor:pointer;user-select:none}
+  .chk input{accent-color:var(--sodium);width:14px;height:14px;margin:0;cursor:pointer}
   input[type=range]::-webkit-slider-runnable-track{height:2px;background:#2b3740}
   input[type=range]::-moz-range-track{height:2px;background:#2b3740}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--sodium);margin-top:-6px;border-radius:0}
@@ -246,6 +249,11 @@
       <input type="range" id="s_sens" min="0.15" max="3" step="0.05" value="1">
     </div>
     <div class="field">
+      <div class="row"><em>スコープ中の感度</em><b id="v_ssens">1.00</b></div>
+      <input type="range" id="s_ssens" min="0.15" max="3" step="0.05" value="1">
+      <label class="chk"><input type="checkbox" id="c_ssync" checked>通常感度と同期</label>
+    </div>
+    <div class="field">
       <div class="row"><em>武器</em></div>
       <div class="seg">
         <button type="button" id="w_rifle" aria-pressed="true">ライフル（18発・胴12／頭24）</button>
@@ -350,7 +358,6 @@ const MOVE_SPEED = 3.4, RUN_MULT = 2.0;
 const STEP_TOL = 0.16;
 const PLAYER_R = 0.28;
 const SCOPE_FOV = 30;          // スコープ中の視野角（小さいほど拡大）
-const SCOPE_SENS_MULT = 0.8;    // スコープ中の感度倍率（設定感度に掛ける。1で下げない／小さいほど遅い）
 const SCOPE_EASE = 12;         // 覗き込み／解除のなめらかさ
 const SCOPE_SHOT_RANGE = 60;   // スコープ中の弾の届く距離
 const CROUCH_SPEED_MULT = 0.5, CROUCH_DUCK = 0.55, CROUCH_EASE = 10;
@@ -649,14 +656,15 @@ function freeSpot(rng, minFrom){
     console.warn('出現できる場所が見つかりません（ステージが狭すぎる可能性）');
     return { x: W/2, y: H/2 };
   }
-  // 他プレイヤー（minFrom）から SPAWN_MIN_DIST 以上離れた場所だけから選ぶ。
-  // 人数が多くて満たせない時は、距離の基準を段階的に下げ、それでも無理なら
-  // 「一番近い相手までの距離が最大の地点」を選ぶ（近くに湧くことはなるべく避ける）。
+  // 他プレイヤー（minFrom）から十分離れた場所だけから選ぶ。
+  // 距離の基準はマップの広さに合わせて決める（広いマップで10マスだと目の前に感じるため）。
+  // 満たせない時は、基準を段階的に下げ、それでも無理なら「一番近い相手までの距離が最大の地点」を選ぶ。
   if (minFrom && minFrom.length){
     const dist = p => Math.min(...minFrom.map(q => Math.hypot(p.x-q.x, p.y-q.y)));
     const ds = pts.map(dist);
-    for (const minD of SPAWN_DIST_STEPS){
-      const far = pts.filter((p,i) => ds[i] >= minD);
+    const base = Math.max(SPAWN_MIN_DIST, Math.min(W, H) * 0.4);
+    for (const f of [1, .75, .5]){
+      const far = pts.filter((p,i) => ds[i] >= base*f);
       if (far.length) return far[(rng()*far.length)|0];
     }
     return pts[ds.indexOf(Math.max(...ds))];
@@ -1425,6 +1433,7 @@ function shoot(){
   const spread = (W.spread || 0) * (scopeActive() ? 0.5 : 1);   // スコープ中は散らばりが半分
   const shotRange = Math.min(scopeActive() ? SCOPE_SHOT_RANGE : MAX_SHOT_RANGE, W.range || Infinity);
   raycaster.far = shotRange;
+  const muzzle = tracerStart();                      // 軌跡の見た目の始点（銃口）。当たり判定は従来どおりカメラ中心から
   const pms = (CFG.mode === 'online') ? remoteHitMeshes() : [];
   const tms = (CFG.mode === 'solo') ? targetHitMeshes() : [];
   // 1粒ずつ判定し、相手／的ごとにダメージを合算してから1回だけ適用する（通信も1発につき1回）
@@ -1448,7 +1457,7 @@ function shoot(){
       const normal = (!hitIsPlayer && !hitIsTarget && hit.face)
         ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
         : null;
-      spawnTracer(camera.position, hit.point);
+      spawnTracer(muzzle, hit.point);
       spawnImpact(hit.point, normal);
       if (hitIsTarget || hitIsPlayer){
         const head = !!hit.object.userData.isHead;
@@ -1461,7 +1470,7 @@ function shoot(){
         map.set(key, cur);
       }
     } else {
-      spawnTracer(camera.position, camera.position.clone().addScaledVector(dir, shotRange));
+      spawnTracer(muzzle, camera.position.clone().addScaledVector(dir, shotRange));
     }
   }
   for (const [t, v] of targetDmg) hitTarget(t, v.head, Math.round(v.dmg));
@@ -1699,7 +1708,7 @@ const bowVM = (() => {
 let bowDraw01 = 0, bowAim = 0, bowZoom01 = 0;   // bowZoom01=ズームの進み具合（引き絞り時間に合わせて0→1）
 function updateBowVM(dt){
   const W = curW();
-  const show = W.bow && alive && !P.deadUntil && P.scopeEase < 0.3;
+  const show = !!(W.bow && alive && !P.deadUntil && P.scopeEase < 0.3);
   bowVM.root.visible = show;
   if (!show){ bowDraw01 = 0; bowAim = 0; bowZoom01 = 0; return; }
   const drawing = P.draw >= 0;
@@ -1710,6 +1719,99 @@ function updateBowVM(dt){
   if (drawing) bowZoom01 = Math.min(1, P.draw / W.draw);
   else bowZoom01 += (0 - bowZoom01) * Math.min(1, dt * W.zoomRelease);
   bowVM.pose(bowDraw01, bowAim, P.ammo > 0 && P.reload <= 0, performance.now());
+}
+
+/* ============ 銃の一人称モデル（ライフル／スナイパー／ショットガン。右下に構えて両手で持つ） ============ */
+// 弓と同じく別シーン(vmScene)に描いて重ねる。反動で後ろへ跳ね、リロード中は下げ、持ち替えでは下から上がってくる。
+// スコープで覗いている間は消える（スコープの円と重ならないように）。
+const gunVM = (() => {
+  const std = (c, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  const mGun = std(0x2c3138, .6), mGunHi = std(0x77828e, .5), mSkin = std(0xd9a77f, .7), mSleeve = std(0x1d343b, .9), mGold = std(0xc9a24a, .5);
+  const mFlash = new THREE.MeshBasicMaterial({ color: 0xffd27a });
+  const K = 0.0095;                                  // 1単位＝約1cm（他プレイヤーの銃と同じ寸法表で作る）
+  const root = new THREE.Group(); vmScene.add(root);
+  const Z = new THREE.Vector3(0, 0, 1);
+  const box = (w, h, d, mat, x, y, z, parent) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m;
+  };
+  const limb = (mat, start, dir, len, w, parent) => {
+    const g = new THREE.BoxGeometry(w, w, len); g.translate(0, 0, len / 2);
+    const m = new THREE.Mesh(g, mat); m.position.copy(start);
+    m.quaternion.setFromUnitVectors(Z, dir.clone().normalize()); parent.add(m); return m;
+  };
+  // 両手：右手は握り(グリップ)、左手は銃身の下（lz, ly の位置）を持つ
+  function hands(g, gripZ, lz, ly){
+    box(5, 5.5, 5.5, mSkin, 0, -5.5, gripZ, g);
+    limb(mSleeve, new THREE.Vector3(0.5, -6, gripZ + 2), new THREE.Vector3(0.25, -0.5, 0.85), 50, 6.5, g);
+    limb(mGold, new THREE.Vector3(0.7, -7, gripZ + 5), new THREE.Vector3(0.25, -0.5, 0.85), 3, 7.4, g);
+    box(6, 4.5, 6.5, mSkin, 0, ly, lz, g);
+    limb(mSleeve, new THREE.Vector3(-0.5, ly - 1, lz + 3), new THREE.Vector3(-0.45, -0.3, 0.85), 50, 6.5, g);
+    limb(mGold, new THREE.Vector3(-1.5, ly - 1.8, lz + 6), new THREE.Vector3(-0.45, -0.3, 0.85), 3, 7.4, g);
+  }
+  const sets = {};
+  const make = (name, muzzleZ) => {
+    const g = new THREE.Group(); g.scale.setScalar(K); g.position.set(0, 0, 8 * K);   // 原点＝本体の中心あたり。-Z が前
+    root.add(g);
+    const flash = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 6), mFlash); flash.position.set(0, 1, muzzleZ - 4); flash.visible = false; g.add(flash);
+    sets[name] = { g, flash, muzzleZ }; return g;
+  };
+  { // ライフル
+    const g = make('rifle', -26.5);
+    box(4,6,10,mGun,0,0,-8,g); box(3,3,12,mGun,0,1,-19,g); box(2.5,2.5,2,mGunHi,0,1,-25.5,g);
+    box(4,5,8,mGun,0,-.5,4,g); box(3.5,7,4,mGun,0,-6,-6,g); box(2,2,6,mGunHi,0,3.5,-8,g);
+    hands(g, -6, -18, -2.5);
+  }
+  { // スナイパー：長い銃身・スコープ・太い銃床
+    const g = make('sniper', -42);
+    box(4,6,12,mGun,0,0,-8,g); box(2.4,2.4,26,mGun,0,1,-27,g); box(3.4,3.4,3,mGunHi,0,1,-41,g);
+    box(4.5,6,12,mGun,0,-.5,6,g); box(3.5,7,4,mGun,0,-6,-6,g);
+    box(3.6,3.6,13,mGunHi,0,5.5,-10,g); box(4.6,4.6,2,mGun,0,5.5,-17,g); box(4.6,4.6,2,mGun,0,5.5,-3,g);
+    hands(g, -6, -20, -2.5);
+  }
+  { // ショットガン：短くて太い銃身・ポンプ・まっすぐな銃床
+    const g = make('shotgun', -31);
+    box(5,5.5,13,mGun,0,0,-8,g); box(4.2,3.2,18,mGun,0,1.5,-22,g);
+    box(6,4,8,mGunHi,0,-1.5,-18,g); box(4.2,7,11,mGun,0,-1,6,g); box(3.5,7,4,mGun,0,-6,-5,g);
+    box(3,1.6,16,mGunHi,0,3.7,-21,g);
+    hands(g, -5, -18, -4.5);
+  }
+  const lerp = (a, b, k) => a + (b - a) * k;
+  // kick=反動(0〜) / rel=リロードの進み(0〜1、していなければ-1) / equip=持ち替えで上がってくる残り(1→0)
+  function pose(name, kick, rel, equip, flash, t){
+    for (const k in sets) sets[k].g.visible = (k === name);
+    const S = sets[name]; if (!S) return;
+    S.flash.visible = flash;
+    const dip = rel >= 0 ? Math.sin(rel * Math.PI) : 0;          // リロード中は銃口を下げて手前へ引く
+    const sway = Math.sin(t * 0.0015) * 0.003;
+    root.position.set(0.19, -0.2 + sway - dip * 0.1 - equip * 0.3, -0.58 + kick * 0.02 + dip * 0.06);
+    root.rotation.set(0.05 + kick * 0.03 - dip * 0.55 + equip * 0.5, 0.08, -dip * 0.25);
+  }
+  // 銃口の位置（手持ち用シーン＝カメラ基準の座標）。弾の軌跡を銃口から出すのに使う
+  function muzzle(name, out){
+    const S = sets[name]; if (!S) return null;
+    root.updateMatrixWorld(true);
+    return S.g.localToWorld(out.set(0, 1, S.muzzleZ - 1));
+  }
+  return { root, pose, muzzle };
+})();
+// 弾の軌跡の始点：手に持った銃が見えている間は、画面上の銃口の位置から出す（当たり判定は照準の中心のまま）。
+// 手持ちモデルは別カメラ(vmCam)で描いているので、画面上の位置が同じになるよう、メインカメラ側の座標へ置き換える。
+const _mz = new THREE.Vector3();
+function tracerStart(){
+  if (!gunVM.root.visible || !gunVM.muzzle(CFG.weapon, _mz)) return camera.position;
+  camera.updateMatrixWorld(); vmCam.updateMatrixWorld();
+  const dist = -_mz.z;                                   // 銃口までの奥行き
+  _mz.project(vmCam);                                    // 画面上の位置(-1〜1)
+  const dir = new THREE.Vector3(_mz.x, _mz.y, 0.5).unproject(camera).sub(camera.position).normalize();
+  return camera.position.clone().addScaledVector(dir, dist);
+}
+function updateGunVM(dt){
+  const W = curW();
+  const show = !!(!W.bow && alive && !P.deadUntil && P.scopeEase < 0.3);
+  gunVM.root.visible = show;
+  if (!show) return;
+  const rel = P.reload > 0 ? Math.max(0, Math.min(1, 1 - P.reload / W.reload)) : -1;
+  gunVM.pose(CFG.weapon, Math.max(0, P.kick), rel, Math.max(0, (P.equip || 0) / 0.3), P.flash > 0, performance.now());
 }
 
 // ジャンプの取りこぼし対策：
@@ -1929,10 +2031,10 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => keys[e.code] = false);
 addEventListener('mousemove', e => {
   if (document.pointerLockElement !== canvas) return;
-  const zs = Math.tan(camera.fov * Math.PI / 360) / Math.tan(BASE_FOV * Math.PI / 360)   // 拡大中は視点移動も遅くして狙いやすくする
-             * (1 + (SCOPE_SENS_MULT - 1) * P.scopeEase);                                       // さらにスコープ中は設定感度から少し下げる
-  yaw += e.movementX * 0.0022 * CFG.sens * zs;
-  pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch - e.movementY * 0.0022 * CFG.sens * zs));
+  const zs = Math.tan(camera.fov * Math.PI / 360) / Math.tan(BASE_FOV * Math.PI / 360);   // 拡大中は視点移動も遅くして狙いやすくする
+  const sens = lookSens();                                                                  // スコープ中は「スコープ中の感度」を使う
+  yaw += e.movementX * 0.0022 * sens * zs;
+  pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch - e.movementY * 0.0022 * sens * zs));
 });
 canvas.addEventListener('click', () => { if (alive && document.pointerLockElement !== canvas) canvas.requestPointerLock?.(); });
 canvas.addEventListener('mousedown', e => {
@@ -2001,9 +2103,33 @@ addEventListener('touchend', e => {
 
 /* ============ 設定 ============ */
 const sSens = el('s_sens');
-function applySens(){ CFG.sens = parseFloat(sSens.value); el('v_sens').textContent = CFG.sens.toFixed(2); }
+// スコープ中の感度：通常感度とは別に設定できる。「通常感度と同期」にチェックがあると、通常感度と同じ値を使う（スライダーは通常感度に追従して操作できなくなる）
+const sSSens = el('s_ssens'), cSync = el('c_ssync');
+CFG.scopeSens = 1; CFG.scopeSync = true;
+function applyScopeSens(save){
+  CFG.scopeSync = cSync.checked;
+  if (CFG.scopeSync) sSSens.value = sSens.value;   // 同期中は通常感度の値を表示
+  sSSens.disabled = CFG.scopeSync;
+  CFG.scopeSens = parseFloat(sSSens.value);
+  el('v_ssens').textContent = CFG.scopeSens.toFixed(2);
+  if (save){ try { localStorage.setItem('sublevel7.scopeSens', String(CFG.scopeSens)); localStorage.setItem('sublevel7.scopeSync', CFG.scopeSync ? '1' : '0'); } catch(e){} }
+}
+function applySens(){ CFG.sens = parseFloat(sSens.value); el('v_sens').textContent = CFG.sens.toFixed(2); if (CFG.scopeSync) applyScopeSens(false); }
 sSens.oninput = applySens;
+sSSens.oninput = () => applyScopeSens(true);
+cSync.onchange = () => {
+  if (!cSync.checked) sSSens.value = CFG.scopeSens;   // 同期を外した時は、その時の値から調整を始める
+  applyScopeSens(true);
+};
+try {
+  const v = localStorage.getItem('sublevel7.scopeSens'), y = localStorage.getItem('sublevel7.scopeSync');
+  if (v !== null && isFinite(parseFloat(v))) sSSens.value = v;
+  if (y !== null) cSync.checked = (y !== '0');
+} catch(e){}
 applySens();
+applyScopeSens(false);
+// 今の視点移動に使う感度：スコープに入るほど、スコープ中の感度へなめらかに切り替わる
+function lookSens(){ return CFG.sens + ((CFG.scopeSync ? CFG.sens : CFG.scopeSens) - CFG.sens) * P.scopeEase; }
 
 // スコープ操作方式（クリックで入/切 or 長押しで覗く）。選択はブラウザに保存する
 const scBtns = { toggle: el('sc_toggle'), hold: el('sc_hold') };
@@ -3368,10 +3494,11 @@ function frame(now){
   updateHitMarks(dt);
   updDrawBar();
   updateBowVM(dt);
+  updateGunVM(dt);
   tickMap(dt);
   renderer.autoClear = false; renderer.clear();
   renderer.render(scene, camera);
-  if (bowVM.root.visible){ renderer.clearDepth(); renderer.render(vmScene, vmCam); }   // 手に持った弓はゲーム世界の上に重ねる
+  if (bowVM.root.visible || gunVM.root.visible){ renderer.clearDepth(); renderer.render(vmScene, vmCam); }   // 手に持った弓・銃はゲーム世界の上に重ねる
   requestAnimationFrame(frame);
 }
 // stages.json の読み込みが終わるまでの仮表示（内蔵の練習ステージ）
