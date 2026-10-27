@@ -1814,8 +1814,7 @@ function step(dt){
     if (Math.abs(target - P.scopeEase) < 0.002) P.scopeEase = target;
     const se = P.scopeEase;
     setEyeFog(se > 0.05);
-    camera.fov = ((BASE_FOV + (SCOPE_FOV - BASE_FOV) * se) + Math.max(0, P.kick) * 2.2 * (1 - se * 0.7))
-                 * (1 - WEAPONS.bow.zoom * bowZoom01 * (2 - bowZoom01));   // 弓は引き絞り時間に合わせて徐々にズームする（最初は速く、満タン近くでゆっくり。視点移動も自動で遅くなる）
+    camera.fov = ((BASE_FOV + (SCOPE_FOV - BASE_FOV) * se) + Math.max(0, P.kick) * 2.2 * (1 - se * 0.7));
     scopeV.style.opacity = se.toFixed(3);
   }
   camera.updateProjectionMatrix();
