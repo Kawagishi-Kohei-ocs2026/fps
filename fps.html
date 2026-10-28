@@ -1545,6 +1545,10 @@ function releaseFire(){
   const speedLob  = Math.max(8, 12 + (W.speedMax - 12) * power * power);
   const speed = speedFlat + (speedLob - speedFlat) * lobK;
   const gm = 1 + (1 - power) * W.lobWeakGrav * lobK;     // 重力の倍率（フルチャージなら1）
+  if (CFG.mode === 'online'){   // 相手の画面にも飛んでいく矢を見せる（見た目だけ。当たり判定は撃った側だけが行う）
+    const v = dir.clone().multiplyScalar(speed), p0 = camera.position;
+    send({ type:'arrow', p:[+p0.x.toFixed(3), +p0.y.toFixed(3), +p0.z.toFixed(3)], v:[+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)], gm:+gm.toFixed(3) });
+  }
   arrows.push({ mesh:g, pos:camera.position.clone(), vel:dir.clone().multiplyScalar(speed), gm,
                 power, life:40, stuck:false,
                 lob: dir.y >= Math.sin(W.lobAngle * Math.PI / 180) });   // lob=射出時の仰角が lobAngle 以上（上に撃った矢）   // life=空中にいられる秒数。真上に撃っても落ちてくるまで消えないよう長めにとる
@@ -1552,7 +1556,55 @@ function releaseFire(){
   if (P.ammo === 0) doReload();
 }
 function removeArrow(i){ scene.remove(arrows[i].mesh); arrows.splice(i, 1); }
-function clearArrows(){ while (arrows.length) removeArrow(arrows.length - 1); }
+/* 相手が放った矢（見た目だけ）。重力・空気抵抗は自分の矢と同じ。壁・床に刺さり、人に当たったら消える。 */
+const ghostArrows = [];
+const GHOST_MAX = 40;
+function spawnGhostArrow(from, p, v, gm){
+  if ([...p, ...v, gm].some(x => typeof x !== 'number' || !isFinite(x))) return;
+  if (Math.hypot(...v) > 200) return;   // 異常な値は無視
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(arrowShaftGeo, arrowShaftMat);
+  const head = new THREE.Mesh(arrowHeadGeo, arrowHeadMat); head.position.y = 0.39;
+  g.add(shaft, head); scene.add(g);
+  const vel = new THREE.Vector3(...v);
+  const a = { mesh:g, from, pos:new THREE.Vector3(...p), vel, gm:Math.max(1, Math.min(6, gm)), life:40, stuck:false, dir:vel.clone().normalize() };
+  ghostArrows.push(a);
+  if (ghostArrows.length > GHOST_MAX) removeGhost(0);
+}
+function removeGhost(i){ scene.remove(ghostArrows[i].mesh); ghostArrows.splice(i, 1); }
+function clearGhostArrows(){ while (ghostArrows.length) removeGhost(ghostArrows.length - 1); }
+function updateGhostArrows(dt){
+  if (!ghostArrows.length) return;
+  const W = WEAPONS.bow;
+  const pms = remoteHitMeshes();
+  for (let i = ghostArrows.length - 1; i >= 0; i--){
+    const a = ghostArrows[i];
+    a.life -= dt;
+    if (a.life <= 0){ removeGhost(i); continue; }
+    if (!a.stuck){
+      a.vel.y -= W.gravity * a.gm * (1 + Math.max(0, a.pos.y - W.highFrom) * W.highGrav) * dt;
+      a.vel.multiplyScalar(Math.max(0, 1 - W.drag * dt));
+      const len = a.vel.length() * dt;
+      _ad.copy(a.vel).normalize();
+      raycaster.set(a.pos, _ad); raycaster.far = len;
+      const wallHit = raycaster.intersectObjects(attackBlockers, false)[0];
+      const pHit = pms.length ? raycaster.intersectObjects(pms.filter(m => m.userData.remoteId !== a.from), false)[0] : null;
+      if (pHit && (!wallHit || pHit.distance < wallHit.distance)){ spawnImpact(pHit.point, null); removeGhost(i); continue; }
+      // 自分に近づいたら（当たり判定は撃った側がやるので）見た目だけ消す
+      if (a.pos.distanceTo(camera.position) < 0.6 && alive){ removeGhost(i); continue; }
+      if (wallHit){ a.pos.copy(wallHit.point); a.stuck = true; a.life = Math.min(a.life, W.stuckLife); spawnImpact(wallHit.point, null); }
+      else {
+        a.pos.addScaledVector(_ad, len);
+        const gh = solidTopAt(a.pos.x, a.pos.z, a.pos.y);
+        if (a.pos.y <= gh){ a.pos.y = gh; a.stuck = true; a.life = Math.min(a.life, W.stuckLife); }
+      }
+      if (!a.stuck) a.dir.copy(_ad);
+    }
+    a.mesh.quaternion.setFromUnitVectors(_Y, a.dir);
+    a.mesh.position.copy(a.pos).addScaledVector(a.dir, -0.3);
+  }
+}
+function clearArrows(){ while (arrows.length) removeArrow(arrows.length - 1); clearGhostArrows(); }
 function updateArrows(dt){
   if (!arrows.length) return;
   const W = WEAPONS.bow;
@@ -1892,7 +1944,7 @@ function step(dt){
   netLoop(dt);
   updateAllRemoteInterp();
   updateTargets(dt);
-  updateArrows(dt);
+  updateArrows(dt); updateGhostArrows(dt);
   if (P.deadUntil){
     if (performance.now() < P.deadUntil){
       // 観戦モード：自分の移動・射撃は止めるが、相手モデルの更新は続ける（しゃがみ・スライディング・
@@ -3294,6 +3346,11 @@ function handleNet(m){
     else { r._p0vu = r._p1vu = r.vaultU = 0; }
     // 歩行アニメーション用に、今回届いた座標がどれだけ動いたかから移動速度を概算しておく
     r.speed = Math.hypot(r._p1x - r._p0x, r._p1y - r._p0y) / (r._dur / 1000);
+    return;
+  }
+  if (m.type === 'arrow'){
+    if (m.from === myId || !REMOTES.has(m.from)) return;
+    if (Array.isArray(m.p) && m.p.length === 3 && Array.isArray(m.v) && m.v.length === 3) spawnGhostArrow(m.from, m.p, m.v, +m.gm || 1);
     return;
   }
   if (m.type === 'shoot'){
