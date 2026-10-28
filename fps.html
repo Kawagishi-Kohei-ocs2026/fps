@@ -231,9 +231,8 @@
   <h1 id="title"><span>地下七層</span>SUBLEVEL 7</h1>
   <p id="blurb">
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ<br>
-    <kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>Esc</kbd> 設定<br>
-    左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ（設定で「クリックで入/切」か「長押しで覗く」を選べる。遠くが見えるが移動はしゃがみ速度）<br><br>
-    窓は普段は薄い壁と同じく通れないが、窓枠に触れた状態で<kbd>Space</kbd>を押すと乗り越えて反対側へ抜けられる。
+    <kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（スライディング） ／ <kbd>Esc</kbd> 設定<br>
+    左クリック／射撃／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ<br><br>
   </p>
   <button id="go" disabled>読み込み中…</button>
   <p id="score"></p>
@@ -262,10 +261,10 @@
     <div class="field">
       <div class="row"><em>武器</em></div>
       <div class="seg">
-        <button type="button" id="w_rifle" aria-pressed="true">ライフル（18発・胴12／頭24）</button>
-        <button type="button" id="w_sniper" aria-pressed="false">スナイパー（1発ごとにリロード・胴50／頭100）</button>
-        <button type="button" id="w_shotgun" aria-pressed="false">ショットガン（1発ごとにリロード・8粒散弾・近距離で最大 胴64／頭128）</button>
-        <button type="button" id="w_bow" aria-pressed="false">弓（長押しで引き絞り・離して発射・フルチャージで胴70／頭は一撃・矢は落ちる）</button>
+        <button type="button" id="w_rifle" aria-pressed="true">ライフル</button>
+        <button type="button" id="w_sniper" aria-pressed="false">スナイパー</button>
+        <button type="button" id="w_shotgun" aria-pressed="false">ショットガン</button>
+        <button type="button" id="w_bow" aria-pressed="false">弓</button>
       </div>
     </div>
     <div class="field">
@@ -475,12 +474,14 @@ function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
   const goal = { wall:64*k, thin:81*k, win:21*k, ramp:36*k, plat:21*k };
 
   const cell = (type, dir) => dir ? {type, dir} : {type};
+  // 左右に鏡写しにしたセル（東西の向きを入れ替える。2階以上(up)も一緒に）
+  const flipCell = c => { const o = Object.assign({}, c); if (o.dir) o.dir = FLIP[o.dir]; if (o.up) o.up = flipCell(o.up); return o; };
   const tally = c => {
     if (c.type==='wall') cnt.wall++; else if (c.type==='thinwall') cnt.thin++;
     else if (c.type==='window') cnt.win++; else if (c.type==='ramp') cnt.ramp++;
     else if (c.type==='platform') cnt.plat++;
   };
-  // objは { cells:[[x,y,type,dir]], box:[x0,y0,x1,y1], fill:[[x,y,...]] }。置けたら true。
+  // objは { cells:[[x,y,type,dir]], box:[x0,y0,x1,y1], noTally? }。置けたら true。
   function place(o){
     const [x0,y0,x1,y1] = o.box;
     if (x0 < 2 || x1 > mid || y0 < 2 || y1 > h-3) return false;     // 外周との間に通路を残す
@@ -488,10 +489,12 @@ function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
       for (let x=Math.max(1,x0-1); x<=Math.min(w-2,x1+1); x++) if (occ[y][x]) return false;
     for (const [x,,type,dir] of o.cells)                              // 中央列に東西向きの板は置けない
       if (x === w-1-x && (dir==='E' || dir==='W')) return false;
-    for (const [x,y,type,dir] of o.cells){
-      g[y][x] = cell(type, dir); tally(g[y][x]);
+    for (const e of o.cells){        // e = [x, y, type, dir]、または [x, y, セルそのもの]（天井・2階つきなど）
+      const x = e[0], y = e[1];
+      const base = (typeof e[2] === 'object') ? e[2] : cell(e[2], e[3]);
+      g[y][x] = base; if (!o.noTally) tally(base);
       const mx = w-1-x;
-      if (mx !== x){ g[y][mx] = cell(type, dir ? FLIP[dir] : undefined); tally(g[y][mx]); }
+      if (mx !== x){ const m = flipCell(base); g[y][mx] = m; if (!o.noTally) tally(m); }
     }
     for (let y=y0; y<=y1; y++) for (let x=x0; x<=x1; x++){ occ[y][x] = true; occ[y][w-1-x] = true; }
     return true;
@@ -558,7 +561,46 @@ function generateRandomStage(rng, w = DEFAULT_W, h = DEFAULT_H){
     return place({cells, box:[bx0,by0,bx1,by1]});
   }
 
-  // まず小部屋を左半分に1つ（面積に応じて増やす）、あとは足りないものを順に足していく
+  // 2階建ての家：外周は2階まで続く壁（一部は2階が窓）、内側は天井つきの床（＝2階の床）。
+  // 出入口を2か所あけ、階段（4マス＝ちょうど1階分。この真上は天井なし）で2階へ上がれる。2階には壁・箱・薄い壁を少し置く。
+  function tryHouse(){
+    const rw = ri(8,11), rh = ri(6,8);
+    const xmax = mid - rw;                              // 右端が mid-1 以下（中央列にまたがらない）
+    if (xmax < 2 || h-2-rh < 2) return false;
+    const x0 = ri(2, xmax), y0 = ri(2, h-2-rh), x1 = x0+rw-1, y1 = y0+rh-1;
+    const cells = [], put = (x,y,c) => cells.push([x,y,c]);
+    const doors = new Set();
+    for (const s of [0,1,2,3].sort(() => rng()-0.5).slice(0,2)){   // 別々の辺に2か所（角は避ける）
+      const d = s===0 ? [ri(x0+1,x1-1), y0] : s===1 ? [ri(x0+1,x1-1), y1] : s===2 ? [x0, ri(y0+1,y1-1)] : [x1, ri(y0+1,y1-1)];
+      doors.add(d[0]+','+d[1]);
+    }
+    for (let y=y0; y<=y1; y++) for (let x=x0; x<=x1; x++){
+      const edge = x===x0 || x===x1 || y===y0 || y===y1;
+      if (!edge){ put(x, y, {type:'floor', ceil:true}); continue; }
+      if (doors.has(x+','+y)){ put(x, y, {type:'floor', ceil:true, up:{type:'wall'}}); continue; }   // 出入口（上に天井と2階の壁）
+      const corner = (x===x0 || x===x1) && (y===y0 || y===y1);
+      const dir = y===y0 ? 'N' : y===y1 ? 'S' : x===x0 ? 'W' : 'E';
+      put(x, y, {type:'wall', up: (!corner && rng()<0.3) ? {type:'window', dir} : {type:'wall'}});
+    }
+    // 階段：東向き(→)か西向き(←)。下り口の手前と、上り切った先に1マスずつ平らな床を残してある
+    const sd = rng()<0.5 ? 'E' : 'W', ys = ri(y0+2, y1-2);
+    for (let i=0; i<4; i++) put(sd==='E' ? x0+2+i : x1-2-i, ys, {type:'stairs', dir:sd, k:i});
+    // 2階の遮蔽物（階段の出口まわりは空ける）
+    const near = (x,y) => Math.abs(y-ys) <= 1 && (sd==='E' ? x <= x0+7 : x >= x1-7);
+    const used = new Set();
+    for (let t=0, n=ri(2,4), done=0; t<40 && done<n; t++){
+      const x = ri(x0+1, x1-1), y = ri(y0+1, y1-1), key = x+','+y;
+      if (near(x,y) || used.has(key)) continue;
+      used.add(key);
+      const kind = pick(['wall','wall','platform','thinwall']);
+      put(x, y, {type:'floor', ceil:true, up: kind==='thinwall' ? {type:'thinwall', dir:pick(['N','S','E','W'])} : {type:kind}});
+      done++;
+    }
+    return place({cells, box:[x0,y0,x1,y1], noTally:true});   // 壁などの数の目標には数えない（家のぶん減らさない）
+  }
+
+  // まず2階建ての家を左半分に（面積に応じて、鏡写しで左右に1組ずつ）、次に小部屋を左半分に1つ（面積に応じて増やす）、あとは足りないものを順に足していく
+  for (let i=0, houses=Math.max(1, Math.round(k*0.7)), t=0; i<houses && t<200; t++) if (tryHouse()) i++;
   for (let i=0, rooms=Math.max(1, Math.round(k*0.8)), t=0; i<rooms && t<200; t++) if (tryRoom()) i++;
   for (let t=0; t<4000; t++){
     const need = [
@@ -654,6 +696,48 @@ function computeSpawnPoints(){
     if (good) pts.push({x, y});
   }
   return pts;
+}
+// 対戦の初期位置：n人ぶんの出現位置を「全員がお互いにできるだけ遠くなる」ように決める。
+// まず適当な点から一番遠い点を1人目にし、以降は「すでに置いた誰からも最も遠い点」を1人ずつ足していく。
+function spreadSpots(n){
+  if (_spawnCache.grid !== grid) _spawnCache = { grid, pts: computeSpawnPoints() };
+  const pts = _spawnCache.pts;
+  if (!pts.length) return Array.from({length:n}, () => ({ x: W/2, y: H/2 }));
+  const far = (from) => {           // from のどれからも最も遠い点
+    let best = pts[0], bd = -1;
+    for (const p of pts){
+      let d = Infinity;
+      for (const q of from){ const e = Math.hypot(p.x-q.x, p.y-q.y); if (e < d) d = e; }
+      if (d > bd){ bd = d; best = p; }
+    }
+    return best;
+  };
+  const first = far([pts[(Math.random()*pts.length)|0]]);
+  const out = [first];
+  while (out.length < n) out.push(far(out));
+  return out;
+}
+// 再出現位置：敵から十分離れた場所のうち、自分が倒された場所から最も遠い所を選ぶ。
+// 敵から離れる基準は段階的に下げ、どうしても無ければ「敵から一番遠い所」にする。
+function respawnSpot(enemies, deathX, deathY){
+  if (_spawnCache.grid !== grid) _spawnCache = { grid, pts: computeSpawnPoints() };
+  const pts = _spawnCache.pts;
+  if (!pts.length) return { x: W/2, y: H/2 };
+  const dd = p => Math.hypot(p.x-deathX, p.y-deathY);
+  if (!enemies.length) return pts.reduce((a, b) => dd(b) > dd(a) ? b : a);
+  const ed = p => Math.min(...enemies.map(q => Math.hypot(p.x-q.x, p.y-q.y)));
+  const es = pts.map(ed);
+  const base = Math.max(SPAWN_MIN_DIST, Math.min(W, H) * 0.4);
+  for (const f of [1, .75, .5]){
+    let best = null, bd = -1;
+    for (let i = 0; i < pts.length; i++){
+      if (es[i] < base * f) continue;
+      const d = dd(pts[i]);
+      if (d > bd){ bd = d; best = pts[i]; }
+    }
+    if (best) return best;
+  }
+  return pts[es.indexOf(Math.max(...es))];
 }
 function freeSpot(rng, minFrom){
   if (_spawnCache.grid !== grid) _spawnCache = { grid, pts: computeSpawnPoints() };
@@ -853,7 +937,9 @@ function tryClimbThrough(){
   if (collidesSolid(nx, ny, PLAYER_R, player.z)) return false;
   // 反対側の位置を目標にして、step() の中で一定時間かけて移動させる
   P.crouch = false; P.sliding = false;
-  P.vault = { t:0, x0:player.x, y0:player.y, z0:player.z, x1:nx, y1:ny, z1:groundAt(nx, ny, player.z),
+  // 反対側に床が無い（2階の窓から外へ出る等）時は、窓枠を越えるあいだ高さを保ち、越え終わってから落下させる
+  const gz = groundAt(nx, ny, player.z), drop = gz < player.z - STEP_TOL;
+  P.vault = { t:0, x0:player.x, y0:player.y, z0:player.z, x1:nx, y1:ny, z1: drop ? player.z : gz, drop,
               side: (vaultSide = -vaultSide),
               yaw: Math.atan2(nx - player.x, -(ny - player.y)) };  // 越える向き（yaw と同じ定義）
   netTick = 1; // 開始をすぐ相手に伝える（次のフレームで状態を送る）
@@ -871,6 +957,30 @@ const BG_COLOR = 0x4a5d6b; // 背景（空）と遠景の霧の色。明るく�
 scene.background = new THREE.Color(BG_COLOR);
 const FOG_NEAR0 = 8, FOG_FAR0 = 26;
 scene.fog = new THREE.Fog(BG_COLOR, FOG_NEAR0, FOG_FAR0);
+// ----- 霧の濃さが、ゲーム中にゆっくり変わる -----
+// 濃さ d は 0（最も薄い：マップの端が見えない程度）〜1（今までの最大の濃さ）。FOG_PERIOD 秒ごとに次の目標の濃さがランダムに決まり、
+// 最初は据え置き、そこから次の目標へなだらかに移る（途切れなく続く）。
+// 濃さは「種(seed)」と経過時間だけで決まるので、同じ種を使えば対戦の全員で同じ霧になる（ホストが種を配る）。
+const FOG_PERIOD = 30, FOG_HOLD = 0.4;
+const FOG_MIN_K = 0.75;   // 最も薄い時の霧の距離 = マップの長い辺 × この値（マップの端が見えない程度）
+let fogSeed = null, fogT0 = 0;
+function startFog(seed){ fogSeed = seed == null ? ((Math.random() * 1e9) | 0) : seed; fogT0 = performance.now(); }
+function fogDensityAt(seed, sec){
+  const i = Math.floor(sec / FOG_PERIOD), u = sec / FOG_PERIOD - i;
+  const v = k => Math.max(0, Math.min(1, mulberry32((seed + k * 7919) | 0)() * 1.5 - 0.25));   // 両端（霧なし／最大）も出やすいよう少し広めに振る
+  const a = v(i), b = v(i + 1);
+  const f = u < FOG_HOLD ? 0 : (u - FOG_HOLD) / (1 - FOG_HOLD);
+  return a + (b - a) * (f * f * (3 - 2 * f));
+}
+function updateFog(){
+  const d = fogSeed == null ? 1 : fogDensityAt(fogSeed, (performance.now() - fogT0) / 1000);
+  // いちばん薄い時でも、マップの端は霧で見えない距離にする（ステージの大きさに合わせる）。ただし最大の濃さより薄くなるようにはする。
+  const farMin = Math.max(FOG_FAR0 * 1.3, Math.max(W, H) * FOG_MIN_K);
+  const invFar = 1 / farMin + (1 / FOG_FAR0 - 1 / farMin) * d;   // 距離の逆数で混ぜると、濃さが自然に変わって見える
+  const far = 1 / invFar;
+  scene.fog.far = far; scene.fog.near = far * (FOG_NEAR0 / FOG_FAR0);
+  camera.far = Math.min(200, Math.max(100, far + 5));
+}
 const scopeV = document.getElementById('scopeV');
 const EYE_MATS = new Set(); let eyeFogOff = false; // 相手の目の材質一覧／今、目が霧を無視しているか
 function setEyeFog(off){
@@ -878,7 +988,7 @@ function setEyeFog(off){
   eyeFogOff = off;
   for (const m of EYE_MATS){ m.fog = !off; m.needsUpdate = true; }
 }
-const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.05, 100);
+const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.05, 200);   // 霧が無い時でも遠くまで見えるよう、描画距離は200
 camera.rotation.order = 'YXZ';
 
 scene.add(new THREE.HemisphereLight(0x8fa4b0, 0x1a1410, 0.9));
@@ -1220,57 +1330,100 @@ function updateHitMarks(dt){             // 位置・向きは固定。時間で
 }
 function clearHitMarks(){ for (const h of hitMarks.values()) h.el.remove(); hitMarks.clear(); }
 // ===== ミニマップ（右上） =====
-// 自分は常に表示（向きの線つき）。相手はオンライン中、撃った直後の数秒（mmT）だけ映る。上が-Z（北）、右が+X。
+// 真上から見下ろした図。自分が何階にいても見た目は変わらない。
+// 各マスについて、一番上の階から順に調べ、最初に「上から見えるもの」を描く：
+//   ・壁／天井(ceil)のあるマス … 屋根。その下（箱・階段・薄い壁・下の階）は見えないので塗りつぶす
+//   ・天井の無い2階以上のマス（真下が壁か天井で支えられている）… 下の階の天井＝上の階の「床」として塗り、
+//     その床の上に箱・坂・階段・薄い壁・窓を乗せて描く
+//   ・何も無い階（吹き抜け）… 素通りして、1つ下の階を見る
+// 高い所ほど色を明るくし、1段低いマスに面した縁には影の線を入れて、2階建て・3階建てだと分かるようにする。
+// 自分は常に表示（点＋向きの矢印）。相手はオンライン中、撃った直後の数秒（mmT）だけ映る。上が-Z（北）、右が+X。
 const mm = el('map'), mc = mm.getContext('2d'), MAP_PX = 132;
 let mapT = 0;
+const MAP_DOT_R = 2.4;      // 点の半径
+const MAP_SOLID = ['#39454d', '#48565f', '#58676f'];   // 壁・屋根（高さ1,2,3）
+const MAP_SLAB  = [null, '#5b717e', '#6f8999'];          // 上の階の床（1階の天井の上面。2階=index1, 3階=index2）
 function drawMap(){
   if (!grid.length) return;
   const t = MAP_PX / Math.max(W, H), th = Math.max(1.6, t * 0.28);
   mc.clearRect(0, 0, MAP_PX, MAP_PX);
   mc.fillStyle = 'rgba(10,14,18,.55)'; mc.fillRect(0, 0, MAP_PX, MAP_PX);
-  const lv = levelOfZ(player.z);                      // 今いる階だけを描く
+  // 1) 各マスで「上から見えるセル」と、その高さを求める
+  const top = new Array(W * H), ht = new Uint8Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
-    const c = cellLevel(x, y, lv), X = x * t, Y = y * t;
-    if (lv > 0){ if (supportedAt(x, y, lv)){ mc.fillStyle = '#26313a'; mc.fillRect(X, Y, t, t); } }   // 上の階の床（天井の上面）。無い所は吹き抜け
-    else if (c.ceil){ mc.fillStyle = 'rgba(255,255,255,.08)'; mc.fillRect(X, Y, t, t); }              // 1階では天井のある所をうっすら示す
-    if (c.type === 'wall'){ mc.fillStyle = '#39454d'; mc.fillRect(X, Y, t, t); }
-    else if (c.type === 'platform'){ mc.fillStyle = '#5a5140'; mc.fillRect(X, Y, t, t); }
+    let found = null;
+    for (let l = MAX_LEVELS - 1; l >= 0; l--){
+      if (l > 0 && !supportedAt(x, y, l)) continue;   // 吹き抜け：この階には何も無いので下を見る
+      const cl = cellLevel(x, y, l);
+      const roof = cl.type === 'wall' || !!cl.ceil;
+      found = { c: cl, l, roof };
+      ht[y * W + x] = roof ? l + 1 : l;                // 見えている面の高さ（階数）
+      break;
+    }
+    top[y * W + x] = found;
+  }
+  // 2) 塗る：屋根・壁 → 上の階の床 → その上に乗るもの
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const f = top[y * W + x]; if (!f) continue;
+    const c = f.c, X = x * t, Y = y * t;
+    if (f.roof){ mc.fillStyle = MAP_SOLID[Math.min(2, ht[y * W + x] - 1)]; mc.fillRect(X, Y, t, t); continue; }
+    if (f.l > 0){ mc.fillStyle = MAP_SLAB[Math.min(2, f.l)]; mc.fillRect(X, Y, t, t); }   // 上の階の床
+    if (c.type === 'platform'){ mc.fillStyle = '#7a6a48'; mc.fillRect(X, Y, t, t); }
     else if (c.type === 'ramp'){ mc.fillStyle = '#3d5a55'; mc.fillRect(X, Y, t, t); }
     else if (c.type === 'stairs'){ mc.fillStyle = '#5d7a52'; mc.fillRect(X, Y, t, t); }
     else if (c.type === 'thinwall' || c.type === 'window'){   // 薄い壁・窓はセルの縁に細く描く（dir=N/S/W/E）
-      mc.fillStyle = c.type === 'window' ? '#4fa3a3' : '#7b858c';
+      mc.fillStyle = c.type === 'window' ? '#4fa3a3' : '#aab4ba';
       if (c.dir === 'N') mc.fillRect(X, Y, t, th);
       else if (c.dir === 'S') mc.fillRect(X, Y + t - th, t, th);
       else if (c.dir === 'W') mc.fillRect(X, Y, th, t);
       else mc.fillRect(X + t - th, Y, th, t);
     }
   }
-  mc.fillStyle = 'rgba(242,181,68,.9)'; mc.font = 'bold 11px sans-serif'; mc.textBaseline = 'top'; mc.fillText((lv + 1) + 'F', 5, 4);
+  // 3) 1段低いマスに面した縁に影を入れる（高さの差が見える）
+  const ew = Math.max(0.9, t * 0.18);
+  mc.fillStyle = 'rgba(6,9,12,.7)';
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const h = ht[y * W + x]; if (h <= 0) continue;
+    const X = x * t, Y = y * t;
+    if (y > 0     && ht[(y-1) * W + x] < h) mc.fillRect(X, Y, t, ew);
+    if (y < H - 1 && ht[(y+1) * W + x] < h) mc.fillRect(X, Y + t - ew, t, ew);
+    if (x > 0     && ht[y * W + x - 1] < h) mc.fillRect(X, Y, ew, t);
+    if (x < W - 1 && ht[y * W + x + 1] < h) mc.fillRect(X + t - ew, Y, ew, t);
+  }
   if (CFG.mode === 'online'){
     for (const r of REMOTES.values()){
       if ((r.mmT > 0 || (isTeamMode() && sameTeam(r.id, myId))) && !r.dead){
-        mapDot(r.x * t, r.y * t, 4.4, KIND_COLORS[idToKind(r.id)][0], true);
+        mapDot(r.x * t, r.y * t, MAP_DOT_R, KIND_COLORS[idToKind(r.id)][0], true);
       }
     }
   }
-  // 自分：向きの線（縁取りつき）→ 点の順に描く
+  // 自分：点＋向きの矢印（点の外側へ向かう三角形）
   const px = player.x * t, py = player.y * t;
-  const lx = (player.x + Math.sin(yaw) * 2.2) * t, ly = (player.y - Math.cos(yaw) * 2.2) * t;
-  mc.lineCap = 'round';
-  mc.strokeStyle = '#0b0f13'; mc.lineWidth = 4; mc.beginPath(); mc.moveTo(px, py); mc.lineTo(lx, ly); mc.stroke();
-  mc.strokeStyle = '#f2b544'; mc.lineWidth = 2; mc.beginPath(); mc.moveTo(px, py); mc.lineTo(lx, ly); mc.stroke();
-  mapDot(px, py, 4.4, '#f2b544', false);
+  const dx = Math.sin(yaw), dy = -Math.cos(yaw);          // 向いている方向（画面上）
+  const nx = -dy, ny = dx;                                 // それと直角の向き
+  const r0 = MAP_DOT_R + 1.8, r1 = MAP_DOT_R + 7.5, hw = 3.2;
+  const tri = () => {
+    mc.beginPath();
+    mc.moveTo(px + dx * r1, py + dy * r1);                 // 先端
+    mc.lineTo(px + dx * r0 + nx * hw, py + dy * r0 + ny * hw);
+    mc.lineTo(px + dx * r0 - nx * hw, py + dy * r0 - ny * hw);
+    mc.closePath();
+  };
+  mc.lineJoin = 'round';
+  tri(); mc.strokeStyle = '#0b0f13'; mc.lineWidth = 2.6; mc.stroke();
+  tri(); mc.fillStyle = '#f2b544'; mc.fill();
+  mapDot(px, py, MAP_DOT_R, '#f2b544', false);
 }
 // ミニマップの点：黒い縁取り＋白いふち＋色の塗り（暗い床でも明るい壁でも見える）。相手は外側にうっすら広がる輪も付ける。
 function mapDot(x, y, r, color, ping){
   if (ping){
     const k = (performance.now() % 900) / 900;                 // 0→1 をくり返して輪を広げる
-    mc.strokeStyle = color; mc.globalAlpha = (1 - k) * 0.8; mc.lineWidth = 1.6;
-    mc.beginPath(); mc.arc(x, y, r + 1.5 + k * 6, 0, 7); mc.stroke(); mc.globalAlpha = 1;
+    mc.strokeStyle = color; mc.globalAlpha = (1 - k) * 0.8; mc.lineWidth = 1.4;
+    mc.beginPath(); mc.arc(x, y, r + 1.2 + k * 5, 0, 7); mc.stroke(); mc.globalAlpha = 1;
   }
-  mc.fillStyle = '#0b0f13'; mc.beginPath(); mc.arc(x, y, r + 1.6, 0, 7); mc.fill();
-  mc.fillStyle = '#ffffff'; mc.beginPath(); mc.arc(x, y, r + 0.6, 0, 7); mc.fill();
-  mc.fillStyle = color;     mc.beginPath(); mc.arc(x, y, r - 0.6, 0, 7); mc.fill();
+  mc.fillStyle = '#0b0f13'; mc.beginPath(); mc.arc(x, y, r + 1.1, 0, 7); mc.fill();
+  mc.fillStyle = '#ffffff'; mc.beginPath(); mc.arc(x, y, r + 0.4, 0, 7); mc.fill();
+  mc.fillStyle = color;     mc.beginPath(); mc.arc(x, y, r - 0.5, 0, 7); mc.fill();
 }
 function tickMap(dt){
   for (const r of REMOTES.values()) if (r.mmT > 0) r.mmT -= dt;
@@ -2040,7 +2193,11 @@ function step(dt){
     player.vz = 0; player.onGround = true;
     vaultArc = Math.sin(Math.PI * u);              // 0→1→0 の山（途中が一番大きい）
     vaultLift = vaultArc * VAULT_LIFT;
-    if (u >= 1){ beep(150, .09, 'triangle', .06); P.vault = null; P.vaultEnd = true; }  // 着地音
+    if (u >= 1){
+      if (v.drop) player.onGround = false;            // 窓の外に床が無ければ、ここから落下（次のフレームから重力）
+      else beep(150, .09, 'triangle', .06);           // 着地音
+      P.vault = null; P.vaultEnd = true;
+    }
   } else {
     let fwd=0, str=0;
     if (keys.KeyW || keys.ArrowUp) fwd+=1; if (keys.KeyS || keys.ArrowDown) fwd-=1;
@@ -2342,10 +2499,50 @@ function setStage(id){
   renderStageSeg();
   if (CFG.mode === 'online' && isHost && netState === 'custom'){ hostSetStageName(); broadcastConfig(); }
 }
-function currentStageCells(){
-  if (selectedStageId === 'random') return generateRandomStage(mulberry32((Math.random()*1e9) | 0));
+// ----- 人数に応じてステージを広くする -----
+// ランダムステージ：一辺を人数に応じて伸ばす（3人までは従来の大きさ、8人で約1.6倍）。
+function randomStageSize(n){
+  const k = Math.max(1, Math.sqrt(Math.max(1, n) / 3));
+  return Math.min(MAX_SIZE, Math.round(DEFAULT_W * k));
+}
+// 作り込んだステージ(stages.json)：外周の内側を鏡写しにして並べ、そのまま広げる。
+// 4人まで=そのまま／5〜6人=短い辺の方向に2倍／7〜8人=縦横とも2倍。
+// 鏡写しなので境目は必ずつながり、向きのあるもの（薄い壁・窓・坂・階段）は向きを反転させる。
+const MIRROR_H = { E:'W', W:'E' }, MIRROR_V = { N:'S', S:'N' };
+function mirrorCell(c, map){
+  const o = Object.assign({}, c);
+  if (o.dir && map[o.dir]) o.dir = map[o.dir];
+  if (o.up) o.up = mirrorCell(o.up, map);
+  return o;
+}
+function expandCellsH(cells){
+  return cells.map(row => {
+    const w = row.length, inner = row.slice(1, w - 1);
+    return [Object.assign({}, row[0]), ...inner.map(c => mirrorCell(c, {})),
+            ...inner.slice().reverse().map(c => mirrorCell(c, MIRROR_H)), Object.assign({}, row[w - 1])];
+  });
+}
+function expandCellsV(cells){
+  const h = cells.length, inner = cells.slice(1, h - 1);
+  const copy = row => row.map(c => mirrorCell(c, {}));
+  return [copy(cells[0]), ...inner.map(copy),
+          ...inner.slice().reverse().map(row => row.map(c => mirrorCell(c, MIRROR_V))), copy(cells[h - 1])];
+}
+function expandStageForPlayers(cells, n){
+  if (n <= 4) return cells;
+  let out = cells;
+  const w = out[0].length, h = out.length;
+  const both = n >= 7;
+  const doH = both || w <= h, doV = both || h < w;
+  if (doH && (2 * w - 2) <= MAX_SIZE) out = expandCellsH(out);
+  if (doV && (2 * h - 2) <= MAX_SIZE) out = expandCellsV(out);
+  return out;
+}
+function currentStageCells(n = 1){
+  const rnd = () => { const sz = n > 1 ? randomStageSize(n) : DEFAULT_W; return generateRandomStage(mulberry32((Math.random()*1e9) | 0), sz, sz); };
+  if (selectedStageId === 'random') return rnd();
   const s = STAGES.find(s => s.id === selectedStageId);
-  return s ? s.cells : generateRandomStage(mulberry32((Math.random()*1e9) | 0));
+  return s ? expandStageForPlayers(s.cells, n) : rnd();
 }
 
 /* ============ オンライン対戦（ステップ5） ============ */
@@ -3334,7 +3531,7 @@ function handleNet(m){
     // ホスト自身は開始ボタンの時点で既にローカルで開始済み。他プレイヤーはここで開始する。
     if (m.from === myId || m.from !== hostId) return;
     applyConfig({ mode:m.mode, target:m.target, teams:m.teams, stageName:CUSTOM.stageName });
-    beginMatchLocal(m.cells, m.spawns);
+    beginMatchLocal(m.cells, m.spawns, Number.isFinite(m.fogSeed) ? m.fogSeed : null);
     return;
   }
   if (m.type === 'peer_left'){
@@ -3397,6 +3594,7 @@ function handleNet(m){
     // HPが尽きたら再出現待ちにし、「誰が誰を倒したか」を全員へ知らせる（スコア・キル表示は全員がこの通知で更新する）
     if (P.hp <= 0){
       P.hp = 0;
+      P.deathX = player.x; P.deathY = player.y;   // 再出現位置を決めるため、倒された場所を覚える
       P.deadUntil = performance.now() + RESPAWN_DELAY_MS;
       P.vault = null; P.sliding = false; mouseFire = false; firing = false;
       P.killerId = m.from;
@@ -3423,21 +3621,21 @@ function hostBeginMatch(){
     for (const id of [myId, ...REMOTES.keys()]) c[teamOf(id)]++;
     if (!c.A || !c.B) return;   // 両チームに1人以上必要
   }
-  const cells = currentStageCells();
+  const cells = currentStageCells(1 + REMOTES.size);   // 参加人数に応じた広さのステージ
   // 出現位置は「これから使うステージ」の上で決める。先に切り替えておかないと、直前まで使っていた
   // 別ステージ（ランダムなら別の迷路）のgridで座標を決めてしまい、新しいステージでは壁の上などになる。
   setGrid(cells);
   const ids = [myId, ...REMOTES.keys()];
-  const placed = [];
   const spawns = {};
-  for (const id of ids){
-    const s = freeSpot(Math.random, placed);
-    spawns[id] = s; placed.push(s);
-  }
-  send({ type:'start', cells, spawns, mode:CUSTOM.mode, target:CUSTOM.target, teams:CUSTOM.mode === 'team' ? CUSTOM.teams : {} });
-  beginMatchLocal(cells, spawns);
+  const spots = spreadSpots(ids.length);                    // 全員がお互いに最も遠くなる配置
+  for (let i = spots.length - 1; i > 0; i--){ const j = (Math.random() * (i + 1)) | 0; [spots[i], spots[j]] = [spots[j], spots[i]]; }   // 誰がどこかはランダム
+  ids.forEach((id, i) => { spawns[id] = spots[i]; });
+  const fogSeedNew = (Math.random() * 1e9) | 0;
+  send({ type:'start', cells, spawns, fogSeed:fogSeedNew, mode:CUSTOM.mode, target:CUSTOM.target, teams:CUSTOM.mode === 'team' ? CUSTOM.teams : {} });
+  beginMatchLocal(cells, spawns, fogSeedNew);
 }
-function beginMatchLocal(cells, spawns){
+function beginMatchLocal(cells, spawns, fogSeedIn){
+  startFog(fogSeedIn);
   stopResultTimer();
   CFG.target = CUSTOM.target;
   SCORE.clear(); clearFeed();
@@ -3549,7 +3747,9 @@ function respawnSelf(){
   clearHitMarks();
   P.deadUntil = 0; clearDeathView();
   pitch = 0;   // 観戦中の視線を水平に戻す
-  const spot = freeSpot(Math.random, [...REMOTES.values()]);
+  let foes = [...REMOTES.values()].filter(r => !r.dead);
+  if (!foes.length) foes = [...REMOTES.values()];
+  const spot = respawnSpot(foes, P.deathX ?? player.x, P.deathY ?? player.y);   // 敵から離れ、倒された場所から最も遠い所
   player.x = spot.x; player.y = spot.y; player.z = heightAt(spot.x, spot.y); player.vz = 0; player.onGround = true;
   P.hp = 100; ammoStash = {}; P.ammo = curW().mag; P.reload = 0; P.flash = 0; P.kick = 0;
   P.invulnUntil = performance.now() + SPAWN_PROTECT_MS;
@@ -3687,6 +3887,7 @@ if (location.protocol === 'http:' || location.protocol === 'https:'){
 /* ============ 画面フロー ============ */
 const veil = el('veil');
 function resetLevel(){
+  startFog(null);
   setGrid(currentStageCells());
   buildScene();
   const spot = freeSpot(Math.random);
@@ -3747,6 +3948,7 @@ function frame(now){
   updateBowVM(dt);
   updateGunVM(dt);
   tickMap(dt);
+  updateFog();
   renderer.autoClear = false; renderer.clear();
   renderer.render(scene, camera);
   if (bowVM.root.visible || gunVM.root.visible){ renderer.clearDepth(); renderer.render(vmScene, vmCam); }   // 手に持った弓・銃はゲーム世界の上に重ねる

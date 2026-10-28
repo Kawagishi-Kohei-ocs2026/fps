@@ -90,6 +90,8 @@
   <div class="slot" data-id="platform"><b>3</b>箱（ジャンプ台）</div>
   <div class="slot" data-id="ramp"><b>4</b>坂 <span class="dir">→</span></div>
   <div class="slot" data-id="window"><b>5</b>窓 <span class="dir">→</span></div>
+  <div class="slot" data-id="ceiling"><b>6</b>天井</div>
+  <div class="slot" data-id="stairs"><b>7</b>階段 <span class="dir">→</span></div>
 </div>
 <div id="editPanel">
   <button id="exportBtn" type="button">書き出す</button>
@@ -103,8 +105,11 @@
   <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ（窓に触れていれば乗り越え）／
      <kbd>Shift</kbd> 走る ／ <kbd>Esc</kbd> 一時停止<br><br>
      左クリック：壊す（床に戻す）／ 右クリック：選択中のブロックを設置<br>
-     <kbd>1</kbd> 壁 ／ <kbd>2</kbd> 薄い壁 ／ <kbd>3</kbd> 箱 ／ <kbd>4</kbd> 坂 ／ <kbd>5</kbd> 窓 ／
-     <kbd>R</kbd> 薄い壁・坂・窓の向きを回転<br><br>
+     <kbd>1</kbd> 壁 ／ <kbd>2</kbd> 薄い壁 ／ <kbd>3</kbd> 箱 ／ <kbd>4</kbd> 坂 ／ <kbd>5</kbd> 窓 ／ <kbd>6</kbd> 天井 ／ <kbd>7</kbd> 階段 ／
+     <kbd>R</kbd> 薄い壁・坂・窓・階段の向きを回転<br><br>
+     <b>二階建て：</b>天井を置くと、その上面が上の階（2階・3階まで）の床になります。上の階にも壁・薄い壁・窓・箱・坂・天井を置けます。
+     階段は同じ向きで4マス並べるとちょうど1階分（上り口の真上には天井を置かない）。
+     ミニマップは今いる階を表示し、<b>天井のあるマスは中身を隠して壁と同じ塗りつぶし</b>になります。<br><br>
      窓は普段は薄い壁と同じく通行不可（弾は素通り）ですが、窓枠に接した状態で<kbd>Space</kbd>を押すと乗り越えて反対側へ抜けられます。<br><br>
      クロスヘアの先に、置こうとしているブロックが薄く表示されます（置けない場所は赤色）。
      画面右上から、作ったステージをJSONファイルとして書き出し・読み込みできます。</p>
@@ -163,6 +168,12 @@ const EYE_HEIGHT = 1.55;
 const JUMP_V = 6.0, GRAVITY = 16.0;      // ジャンプ頂点 = JUMP_V^2/(2*GRAVITY) ≈ 1.125
 const MOVE_SPEED = 10, RUN_MULT = 1.35;
 const STEP_TOL = 0.16;        // これ以下の段差はジャンプ無しで乗り越えられる
+const LEVEL_H = WALL_H;       // 1階分の高さ（床から上の階の床まで）。壁はちょうどこの高さ
+const SLAB_T = 0.3;          // 天井(スラブ)の厚み。上の面が上の階の床になる
+const MAX_LEVELS = 3;        // 階数の上限（1階・2階・3階）
+const STAIR_STEPS = 6;       // 階段1マスの段数
+const STAIR_RISE = LEVEL_H / 4;   // 階段1マスで上る高さ。4マスでちょうど1階分
+const PLAYER_H = 1.8;        // 頭ぶつけ判定に使うプレイヤーの背の高さ
 const PLAYER_R = 0.28;        // プレイヤーの当たり判定の半径
 
 /* ============ ステージデータ ============ */
@@ -179,12 +190,35 @@ function flatGrid(w, h){
 function initFlatLevel(){ grid = flatGrid(W, H); }
 
 // グリッド1マスぶんの直列化・復元（書き出し／読み込み／ネットワーク同期で共通して使う）
+// セルは「1階のセル」と、その上に積む「2階のセル(up)」「3階のセル(up.up)」…でできている（fps.html と同じ形式）。
+//   { type, dir?, k?, ceil?, up? }   ceil:true … そのセルの上に天井があり、天井の上面が上の階の床になる
+//   ファイル上は {t, d?, k?, c?, u?}。 c=1 が天井あり、u が1つ上の階のセル。
+// 壁(wall)は1階分の高さいっぱいなので、壁の上もそのまま上の階の床になる。
 function serializeCell(c){
-  return (c.type==='ramp' || c.type==='thinwall' || c.type==='window') ? {t:c.type, d:c.dir} : {t:c.type};
+  const o = { t:c.type };
+  if (c.type==='ramp' || c.type==='thinwall' || c.type==='window' || c.type==='stairs') o.d = c.dir || 'E';
+  if (c.type==='stairs') o.k = c.k | 0;
+  if (c.ceil) o.c = 1;
+  if (c.up) o.u = serializeCell(c.up);
+  return o;
 }
 function deserializeCell(c){
   if (!c) return {type:'floor'};
-  return (c.t==='ramp' || c.t==='thinwall' || c.t==='window') ? {type:c.t, dir:c.d||'E'} : {type:c.t||'floor'};
+  const t = c.t || 'floor', o = { type:t };
+  if (t==='ramp' || t==='thinwall' || t==='window' || t==='stairs') o.dir = c.d || 'E';
+  if (t==='stairs') o.k = c.k | 0;
+  if (c.c) o.ceil = true;
+  if (c.u) o.up = deserializeCell(c.u);
+  return o;
+}
+// 何も無いセル（床だけ・天井なし・上の階なし）か
+function isEmptyCell(c){ return c.type === 'floor' && !c.ceil && !c.up; }
+// 柱の整理：支え（壁か天井）の無い階より上は捨て、空っぽの階は消す
+function tidyCol(c){
+  if (!c.up) return;
+  if (!(c.type === 'wall' || c.ceil)){ delete c.up; return; }
+  tidyCol(c.up);
+  if (isEmptyCell(c.up)) delete c.up;
 }
 function serializeGrid(){ return grid.map(row => row.map(serializeCell)); }
 // 渡されたグリッドの大きさに W・H を合わせて差し替える（読み込み／ネットワーク同期／サイズ変更で共通）
@@ -222,7 +256,7 @@ function resizedGrid(nw, nh, dx, dy){
 function countLost(nw, nh, dx, dy){
   let n = 0;
   for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++){
-    if (grid[y][x].type === 'floor') continue;
+    if (isEmptyCell(grid[y][x])) continue;
     const nx = x + dx, ny = y + dy;
     if (!(nx >= 1 && nx <= nw - 2 && ny >= 1 && ny <= nh - 2)) n++;
   }
@@ -241,47 +275,116 @@ function syncSizeInputs(){
   if (typeof drawSizePreview === 'function') drawSizePreview();
 }
 
-// 座標(x,y)の「地面の高さ」。薄い壁は板そのものが薄いので、床の高さとしては通常の床(0)のまま扱い、
-// 板による通行止めは collidesSolid() 側の水平方向の当たり判定だけで行う。
+/* ============ 階（フロア）の仕組み ============ */
+// 1マス（柱）は「1階のセル」と、その上に積む「2階のセル(up)」「3階のセル(up.up)」…でできている。
+//   セル = { type, dir?, k?, ceil?, up? }
+//   ceil:true … そのセルの上に天井(スラブ)がある。天井の上面が、上の階の床になる。
+//   up         … 1つ上の階のセル（無ければ空っぽの床）
+// 壁(wall)は1階分の高さ(LEVEL_H)いっぱいあるので、壁の上面もそのまま上の階の床として使える。
+// 上の階のセルは、真下が壁か天井で支えられている時だけ有効（支えが無い所は吹き抜け＝何も無い）。
+// 階段(stairs)は1マスで STAIR_RISE だけ上り、4マス並べるとちょうど1階分。k は「何マス目か(0〜3)」。
+const FLOOR_CELL = { type:'floor' }, WALL_CELL = { type:'wall' };
+function isBorder(x, y){ return x <= 0 || y <= 0 || x >= W-1 || y >= H-1; }
+function cellAt(x, y){
+  const cx = Math.floor(x), cy = Math.floor(y);
+  if (cx<0 || cy<0 || cx>=W || cy>=H) return WALL_CELL;
+  return grid[cy][cx];
+}
+// 柱 col の l 階のセルを、支えの有無に関係なくそのまま取り出す（編集用）
+function levelCell(col, l){
+  let c = col;
+  for (let i = 0; i < l; i++){ c = c && c.up; if (!c) return FLOOR_CELL; }
+  return c || FLOOR_CELL;
+}
+// マス(gx,gy)の l 階のセル（支えが無い階は空っぽの床として扱う）
+function cellLevel(gx, gy, l){
+  if (gx<0 || gy<0 || gx>=W || gy>=H) return WALL_CELL;
+  const col = grid[gy][gx];
+  if (l === 0) return col;
+  if (col.type === 'wall' && isBorder(gx, gy)) return WALL_CELL;   // 外周の壁は最上階まで続く
+  const below = cellLevel(gx, gy, l-1);
+  if (!(below.type === 'wall' || below.ceil)) return FLOOR_CELL;
+  return levelCell(col, l);
+}
+function supportedAt(gx, gy, l){
+  if (l <= 0) return true;
+  const b = cellLevel(gx, gy, l-1);
+  return b.type === 'wall' || !!b.ceil;
+}
+function levelOfZ(z){ return Math.max(0, Math.min(MAX_LEVELS-1, Math.floor((z + STEP_TOL) / LEVEL_H))); }
+function slopeT(dir, fx, fy){
+  const t = dir==='E' ? fx : dir==='W' ? 1-fx : dir==='S' ? fy : 1-fy;
+  return Math.max(0, Math.min(1, t));
+}
+function rampH(cell, fx, fy){ return slopeT(cell.dir, fx, fy) * PLATFORM_H; }
+function stairH(cell, fx, fy){
+  const i = Math.min(STAIR_STEPS-1, Math.floor(slopeT(cell.dir, fx, fy) * STAIR_STEPS));
+  return (((cell.k|0) * STAIR_STEPS + i + 1) / STAIR_STEPS) * STAIR_RISE;
+}
+// 地点(x,y)の柱にある「固体の区間」[下,上] を、全階ぶん cb(下, 上, 種類) で列挙する。
+// 種類: wall / solid(箱) / ramp(坂) / stairs(階段) / slab(天井)
+function eachSolid(x, y, cb){
+  const gx = Math.floor(x), gy = Math.floor(y), fx = x-gx, fy = y-gy;
+  for (let l = 0; l < MAX_LEVELS; l++){
+    const c = cellLevel(gx, gy, l), base = l * LEVEL_H;
+    if (c.type === 'wall') cb(base, base + LEVEL_H, 'wall');
+    else if (c.type === 'platform') cb(base, base + PLATFORM_H, 'solid');
+    else if (c.type === 'ramp') cb(base, base + rampH(c, fx, fy), 'ramp');
+    else if (c.type === 'stairs') cb(base, base + stairH(c, fx, fy), 'stairs');
+    if (c.ceil && c.type !== 'wall') cb(base + LEVEL_H - SLAB_T, base + LEVEL_H, 'slab');
+  }
+}
+// 足元の高さが z の人が立てる地面の高さ（足元＋STEP_TOL 以下で一番高い面）。坂は高さに関わらず歩ける地面。
+let groundRamp = false, groundStairs = false;   // 直前の groundAt() で選ばれた面が 坂 / 階段 だったか
+function groundAt(x, y, z){
+  const lim = z + STEP_TOL + 1e-4;
+  let g = 0; groundRamp = false; groundStairs = false;
+  eachSolid(x, y, (a, b, k) => {
+    if (k === 'ramp'){ if (a > lim) return; }
+    else if (b > lim) return;
+    if (b > g){ g = b; groundRamp = (k === 'ramp'); groundStairs = (k === 'stairs'); }
+  });
+  return g;
+}
+// 足元 z の人が(x,y)へ入ろうとした時、箱・階段の段差・天井の縁に阻まれるか（坂は常に通れる）
+function pointBlocked(x, y, z){
+  const top = z + PLAYER_H - 0.02, lo = z + STEP_TOL + 1e-4;
+  let blk = false;
+  eachSolid(x, y, (a, b, k) => { if (k !== 'ramp' && a < top && b > lo) blk = true; });
+  return blk;
+}
+// 頭上で一番低い天井（固体の下面）の高さ。無ければ Infinity
+function ceilingAbove(x, y, z){
+  const top = z + PLAYER_H - 0.05;
+  let c = Infinity;
+  eachSolid(x, y, (a, b, k) => { if (k !== 'ramp' && a >= top && a < c) c = a; });
+  return c;
+}
+// 矢のように「点」が箱・坂・階段の中に入ったか見る。点(x,y,z)より下から立ち上がる固体の一番高い上面（壁・天井は別に判定）
+function solidTopAt(x, y, z){
+  let g = 0;
+  eachSolid(x, y, (a, b, k) => { if (k !== 'wall' && k !== 'slab' && a <= z + 0.02 && b > g) g = b; });
+  return g;
+}
+// 1階（地面）のセルそのものの高さ。出現位置・的の置き場所など「地面の上」を決める時に使う
 function heightAt(x, y){
   const cx = Math.floor(x), cy = Math.floor(y);
   if (cx<0 || cy<0 || cx>=W || cy>=H) return WALL_H;
-  const cell = grid[cy][cx];
+  const cell = grid[cy][cx], fx = x-cx, fy = y-cy;
   if (cell.type === 'wall') return WALL_H;
   if (cell.type === 'platform') return PLATFORM_H;
-  if (cell.type === 'ramp'){
-    const fx = x-cx, fy = y-cy;
-    let t;
-    if (cell.dir==='E') t=fx; else if (cell.dir==='W') t=1-fx;
-    else if (cell.dir==='S') t=fy; else t=1-fy;
-    return Math.max(0, Math.min(1,t)) * PLATFORM_H;
-  }
-  return 0; // 'floor'・'thinwall'・'window' はどれも床の高さとしては 0（薄い板/窓枠自体は水平方向の当たり判定だけで塞ぐ）
+  if (cell.type === 'ramp') return rampH(cell, fx, fy);
+  if (cell.type === 'stairs') return stairH(cell, fx, fy);
+  return 0;
 }
-
-// 弾（レイキャストによる射撃など）を止めるかどうか。窓は見た目に隙間があるので弾は素通りする。
-// ※このファイルには銃・弾のロジックはまだ無いが、将来そちらを実装するときはこの関数で判定する。
+// 弾を止めるか
 function blocksProjectile(type){ return type === 'wall' || type === 'thinwall'; }
-
-// (x,y)を含むマスのセル情報。範囲外は壁扱い。
-function cellAt(x, y){
-  const cx = Math.floor(x), cy = Math.floor(y);
-  if (cx<0 || cy<0 || cx>=W || cy>=H) return {type:'wall'};
-  return grid[cy][cx];
-}
-
-// 円(中心px,py・半径r)と矩形[x0,x1]×[y0,y1]が重なっているか。
 function circleRectOverlap(px, py, r, x0, y0, x1, y1){
   const cx = Math.max(x0, Math.min(px, x1));
   const cy = Math.max(y0, Math.min(py, y1));
   const dx = px-cx, dy = py-cy;
   return dx*dx + dy*dy < r*r;
 }
-
-// 薄い壁・窓 1枚ぶんの当たり判定用の矩形。見た目の板(cellGeometryのthinGeoNS/EW)と
-// まったく同じ位置・厚みにすることで、当たり判定を見た目通りにする。
-// 窓もこの「薄い板1枚ぶん」を歩行の当たり判定として使う＝普段は薄い壁と同じく通行不可で、
-// Spaceでの乗り越え(tryClimbThrough)だけがこれを迂回する。
 function thinWallRect(cell, cx, cy){
   const t = THIN_WALL_T;
   if (cell.dir === 'N') return { x0: cx,     y0: cy,       x1: cx+1,   y1: cy+t   };
@@ -289,38 +392,40 @@ function thinWallRect(cell, cx, cy){
   if (cell.dir === 'W') return { x0: cx,     y0: cy,       x1: cx+t,   y1: cy+1   };
   /* E */                return { x0: cx+1-t, y0: cy,      x1: cx+1,   y1: cy+1   };
 }
-
 function isThinPanel(type){ return type === 'thinwall' || type === 'window'; }
-
-// プレイヤー(半径r・円)が (px,py) にいるとして、周囲の壁・薄い壁・窓のどれかに重なっているか。
-// 薄い壁・窓はマス全体ではなく thinWallRect() の薄い板部分だけを塞ぐので、
-// 板が無い側からは普通にマスの中まで寄れる。
-function collidesSolid(px, py, r){
+// 壁・薄い壁・窓との水平方向の当たり判定。足元 z の人の体（足元+STEP_TOL 〜 頭）と、その階の壁の高さが重なる階だけ見る。
+function collidesSolid(px, py, r, z = 0){
+  const top = z + PLAYER_H - 0.02, lo = z + STEP_TOL + 1e-4;
   const gx0 = Math.floor(px-r), gx1 = Math.floor(px+r);
   const gy0 = Math.floor(py-r), gy1 = Math.floor(py+r);
-  for (let gy = gy0; gy <= gy1; gy++){
-    for (let gx = gx0; gx <= gx1; gx++){
-      const cell = cellAt(gx, gy);
-      if (cell.type === 'wall'){
-        if (circleRectOverlap(px, py, r, gx, gy, gx+1, gy+1)) return true;
-      } else if (isThinPanel(cell.type)){
-        const b = thinWallRect(cell, gx, gy);
-        if (circleRectOverlap(px, py, r, b.x0, b.y0, b.x1, b.y1)) return true;
+  for (let l = 0; l < MAX_LEVELS; l++){
+    const a = l * LEVEL_H, b = a + LEVEL_H;
+    if (!(a < top && b > lo)) continue;
+    for (let gy = gy0; gy <= gy1; gy++){
+      for (let gx = gx0; gx <= gx1; gx++){
+        const cell = cellLevel(gx, gy, l);
+        if (cell.type === 'wall'){
+          if (circleRectOverlap(px, py, r, gx, gy, gx+1, gy+1)) return true;
+        } else if (isThinPanel(cell.type)){
+          const bx = thinWallRect(cell, gx, gy);
+          if (circleRectOverlap(px, py, r, bx.x0, bx.y0, bx.x1, bx.y1)) return true;
+        }
       }
     }
   }
   return false;
 }
 
-// プレイヤー(半径r)が今まさに触れている窓を探す。当たり判定ぴったりの半径だと
+// プレイヤー(半径r)が今まさに触れている窓を探す（今いる階の窓だけ）。当たり判定ぴったりの半径だと
 // 「ぶつかって止まった直後」は距離=r で厳密には非接触になってしまうので、少しだけ広げて判定する。
-function findTouchingWindow(px, py, r){
+function findTouchingWindow(px, py, r, z = 0){
+  const lv = levelOfZ(z);
   const pad = r + 0.08;
   const gx0 = Math.floor(px-pad), gx1 = Math.floor(px+pad);
   const gy0 = Math.floor(py-pad), gy1 = Math.floor(py+pad);
   for (let gy = gy0; gy <= gy1; gy++){
     for (let gx = gx0; gx <= gx1; gx++){
-      const cell = cellAt(gx, gy);
+      const cell = cellLevel(gx, gy, lv);
       if (cell.type !== 'window') continue;
       const b = thinWallRect(cell, gx, gy);
       if (circleRectOverlap(px, py, pad, b.x0, b.y0, b.x1, b.y1)) return { cell, rect:b };
@@ -333,7 +438,7 @@ function findTouchingWindow(px, py, r){
 // 抜けた先が別の何かで塞がっていたら(裏に壁を置かれていた等)、失敗としてその場に留める。
 function tryClimbThrough(){
   if (!alive) return false;
-  const hit = findTouchingWindow(player.x, player.y, PLAYER_R);
+  const hit = findTouchingWindow(player.x, player.y, PLAYER_R, player.z);
   if (!hit) return false;
   const { cell, rect } = hit;
   const margin = PLAYER_R + 0.06;
@@ -345,10 +450,11 @@ function tryClimbThrough(){
     const mid = (rect.x0 + rect.x1) / 2;
     nx = player.x < mid ? rect.x1 + margin : rect.x0 - margin;
   }
-  if (collidesSolid(nx, ny, PLAYER_R)) return false;
+  if (collidesSolid(nx, ny, PLAYER_R, player.z)) return false;
+  const gz = groundAt(nx, ny, player.z);
   player.x = nx; player.y = ny;
-  player.z = heightAt(nx, ny);
-  player.vz = 0; player.onGround = true;
+  if (gz < player.z - STEP_TOL){ player.vz = 0; player.onGround = false; }   // 反対側に床が無ければ、高さはそのままで落下
+  else { player.z = gz; player.vz = 0; player.onGround = true; }
   return true;
 }
 
@@ -402,6 +508,40 @@ const thinMat  = new THREE.MeshStandardMaterial({ color:0x9aa3ab, roughness:0.88
 const platMat  = new THREE.MeshStandardMaterial({ color:0xc4a37a, roughness:0.85 });
 const rampMat  = new THREE.MeshStandardMaterial({ color:0x7fb0a3, roughness:0.85, side:THREE.DoubleSide });
 const floorMat = new THREE.MeshStandardMaterial({ color:0x232b31, roughness:1 });
+const slabMat  = new THREE.MeshStandardMaterial({ color:0x6f7a82, roughness:0.92 });
+const stairMat = new THREE.MeshStandardMaterial({ color:0xb59f7f, roughness:0.9 });
+const slabGeo  = new THREE.BoxGeometry(1, SLAB_T, 1);
+const slabEdges = new THREE.EdgesGeometry(slabGeo);
+// 階段：1マスを STAIR_STEPS 段に区切った段々の形（中身は詰まった塊）。k マス目なら、地面から (k+段/段数)*STAIR_RISE の高さまで
+const stairGeoCache = {};
+function stairGeo(dir, k){
+  const key = dir + (k|0);
+  if (stairGeoCache[key]) return stairGeoCache[key];
+  const pos = [];
+  const quad = (a, b, c, d) => { pos.push(...a, ...b, ...c, ...a, ...c, ...d); };
+  const box = (x0, x1, y0, y1, z0, z1) => {
+    quad([x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]);   // 上
+    quad([x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]);   // 下
+    quad([x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]);   // +X
+    quad([x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]);   // -X
+    quad([x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]);   // +Z
+    quad([x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]);   // -Z
+  };
+  for (let i = 0; i < STAIR_STEPS; i++){
+    const h = (((k|0) * STAIR_STEPS + i + 1) / STAIR_STEPS) * STAIR_RISE;
+    const a = -0.5 + i / STAIR_STEPS, b = -0.5 + (i + 1) / STAIR_STEPS;
+    if (dir === 'E') box(a, b, 0, h, -0.5, 0.5);
+    else if (dir === 'W') box(-b, -a, 0, h, -0.5, 0.5);
+    else if (dir === 'S') box(-0.5, 0.5, 0, h, a, b);
+    else box(-0.5, 0.5, 0, h, -b, -a);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  return (stairGeoCache[key] = geo);
+}
+const stairEdgesCache = {};
+function stairEdges(dir, k){ const key = dir + (k|0); return stairEdgesCache[key] || (stairEdgesCache[key] = new THREE.EdgesGeometry(stairGeo(dir, k))); }
 
 const wallGeo   = new THREE.BoxGeometry(1, WALL_H, 1);
 const platGeo   = new THREE.BoxGeometry(1, PLATFORM_H, 1);
@@ -474,6 +614,8 @@ function cellGeometry(cell, x, y){
   if (cell.type === 'wall') return { geo: wallGeo, pos: [cx, WALL_H/2, cz] };
   if (cell.type === 'platform') return { geo: platGeo, pos: [cx, PLATFORM_H/2, cz] };
   if (cell.type === 'ramp') return { geo: rampGeo[cell.dir], pos: [cx, 0, cz] };
+  if (cell.type === 'stairs') return { geo: stairGeo(cell.dir || 'E', cell.k), pos: [cx, 0, cz] };
+  if (cell.type === 'ceiling') return { geo: slabGeo, pos: [cx, LEVEL_H - SLAB_T/2, cz] };   // 設置プレビュー用（天井は実際はセルの ceil フラグ）
   // 窓(window)もゴースト表示・破壊アウトラインは薄い壁と同じ「板1枚」の箱で代用する
   // （実際に設置される見た目は buildWindowGroup() が作る窓枠+ガラスの組み合わせ）。
   if (cell.type === 'thinwall' || cell.type === 'window'){
@@ -489,6 +631,8 @@ function edgesForCell(cell){
   if (cell.type === 'wall') return wallEdges;
   if (cell.type === 'platform') return platEdges;
   if (cell.type === 'ramp') return rampEdges[cell.dir];
+  if (cell.type === 'stairs') return stairEdges(cell.dir || 'E', cell.k);
+  if (cell.type === 'ceiling') return slabEdges;
   if (cell.type === 'thinwall' || cell.type === 'window') return (cell.dir==='E'||cell.dir==='W') ? thinEWEdges : thinNSEdges;
   return null;
 }
@@ -498,19 +642,43 @@ function matForType(type){
   if (type==='platform') return platMat;
   if (type==='ramp') return rampMat;
   if (type==='window') return windowFrameMat;
+  if (type==='stairs') return stairMat;
   return null;
 }
 
-function meshForCell(cell, x, y){
-  if (cell.type === 'window') return buildWindowGroup(cell, x, y);
+function meshForCell(cell, x, y, base = 0){      // base = その階の床の高さ
+  if (cell.type === 'window'){ const w = buildWindowGroup(cell, x, y); w.position.y += base; return w; }
   const g = cellGeometry(cell, x, y);
   if (!g) return null; // floor
   const m = new THREE.Mesh(g.geo, matForType(cell.type));
-  m.position.set(g.pos[0], g.pos[1], g.pos[2]);
+  m.position.set(g.pos[0], g.pos[1] + base, g.pos[2]);
   return m;
 }
 
-// マス目(x,y) -> そこに置いてあるメッシュ。床(floor)はメッシュを持たない（土台の床プレーンがそのまま見える）。
+// 置いたり壊したりするとき「どのマスの何階の何か」を知るため、メッシュ（窓なら子メッシュ全部）に印を付ける
+function tagParts(obj, x, y, l, part){
+  obj.traverse(o => { o.userData.gx = x; o.userData.gy = y; o.userData.lv = l; o.userData.part = part; });
+}
+// マス(x,y)の全階ぶんの見た目（壁・箱・坂・階段・窓…と、天井のスラブ）を配列で返す
+function columnParts(x, y){
+  const out = [];
+  for (let l = 0; l < MAX_LEVELS; l++){
+    const c = cellLevel(x, y, l), base = l * LEVEL_H;
+    if (c.type !== 'floor'){
+      const m = meshForCell(c, x, y, base);
+      if (m){ tagParts(m, x, y, l, 'cell'); out.push(m); }
+    }
+    if (c.ceil && c.type !== 'wall'){
+      const s = new THREE.Mesh(slabGeo, slabMat);
+      s.position.set(x + 0.5, base + LEVEL_H - SLAB_T / 2, y + 0.5);
+      tagParts(s, x, y, l, 'slab');
+      out.push(s);
+    }
+  }
+  return out;
+}
+
+// マス目(x,y) -> そこにあるメッシュ（全階ぶん）の配列。床(floor)はメッシュを持たない（土台の床プレーンがそのまま見える）。
 const cellMeshes = new Map();
 const keyOf = (x,y) => x+','+y;
 
@@ -521,8 +689,10 @@ function buildScene(){
   levelGroup.clear();
   cellMeshes.clear();
   for (let y=0; y<H; y++) for (let x=0; x<W; x++){
-    const m = meshForCell(grid[y][x], x, y);
-    if (m){ levelGroup.add(m); cellMeshes.set(keyOf(x,y), m); }
+    const parts = columnParts(x, y);
+    if (!parts.length) continue;
+    for (const m of parts) levelGroup.add(m);
+    cellMeshes.set(keyOf(x,y), parts);
   }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H), floorMat);
   floor.rotation.x = -Math.PI/2;
@@ -530,14 +700,14 @@ function buildScene(){
   levelGroup.add(floor);
 }
 
-// 1マスだけ張り替える（編集のたびにシーン全体を作り直さないため）
+// 1マス（の全階）だけ張り替える（編集のたびにシーン全体を作り直さないため）
 function updateCell(x, y){
   mapDirty = true;
   const k = keyOf(x,y);
   const old = cellMeshes.get(k);
-  if (old){ levelGroup.remove(old); cellMeshes.delete(k); }
-  const m = meshForCell(grid[y][x], x, y);
-  if (m){ levelGroup.add(m); cellMeshes.set(k, m); }
+  if (old){ for (const m of old) levelGroup.remove(m); cellMeshes.delete(k); }
+  const parts = columnParts(x, y);
+  if (parts.length){ for (const m of parts) levelGroup.add(m); cellMeshes.set(k, parts); }
 }
 
 /* ---- 設置プレビュー（半透明ゴースト）と 破壊対象アウトライン ---- */
@@ -550,6 +720,8 @@ const ghostMats = {
   platform: makeGhostMat(0xc4a37a),
   ramp: makeGhostMat(0x7fb0a3),
   window: makeGhostMat(0xbfe6f0),
+  ceiling: makeGhostMat(0x8a98a2),
+  stairs: makeGhostMat(0xb59f7f),
 };
 const ghostInvalidMat = makeGhostMat(0xc0453a);
 
@@ -582,6 +754,7 @@ function doJump(){
 }
 
 const _fwd = new THREE.Vector3(), _right = new THREE.Vector3();
+let eyeLag = 0;   // 階段で視点をなめらかにするための遅れ（m）
 function step(dt){
   if (!alive) return;
   // 先に視点を回転させ、その「実際にカメラが向いているベクトル」を three.js 自身から
@@ -595,64 +768,71 @@ function step(dt){
   _right.set(-_fwd.z, 0, _fwd.x); // 前方ベクトルを90度回した「右」ベクトル
 
   // ---- 水平方向：WASD ----
-  // 「壁で止まるか」の判定と「その場所の高さ」の判定を分ける。
-  // 坂(ramp)は常に歩行OK（ジャンプ無しで登り降りできる）にし、
-  // 箱など段差のある床(platform)は従来どおり STEP_TOL を超えたらジャンプ必須にする。
   let fwd=0, str=0;
   if (keys.KeyW) fwd+=1; if (keys.KeyS) fwd-=1;
   if (keys.KeyD) str+=1; if (keys.KeyA) str-=1;
+  let vx = 0, vy = 0;
   if (fwd || str){
     const len = Math.hypot(fwd,str); fwd/=len; str/=len;
     const run = (keys.ShiftLeft || keys.ShiftRight) ? RUN_MULT : 1;
     const speed = MOVE_SPEED * run;
-    const vx = (_fwd.x*fwd + _right.x*str) * speed;
-    const vy = (_fwd.z*fwd + _right.z*str) * speed;
-    const r = PLAYER_R;
-
-    // 「壁で止まるか」は移動先での当たり判定(プレイヤーを半径rの円として、壁・薄い壁の
-    // 実際の見た目の形と重なるか)で判定する。薄い壁は板の部分だけを塞ぐので、
-    // 板が無い側からは(そのマスの中までなら)ぴったり近づける。
-    // 「段差を登れるか」は移動先そのもの(半径オフセット無し)の高さで判定する。
-    const stepOk = (cx, cy) => {
-      const cell = cellAt(cx, cy);
-      if (cell.type === 'ramp') return true; // 坂は常に通行可
-      return heightAt(cx, cy) <= player.z + STEP_TOL; // 箱の直登りは不可（ジャンプが必要）
-    };
-
-    const nx = player.x + vx*dt;
-    const ny = player.y + vy*dt;
-    if (stepOk(nx, player.y) && !collidesSolid(nx, player.y, r)) player.x = nx;
-    if (stepOk(player.x, ny) && !collidesSolid(player.x, ny, r)) player.y = ny;
+    vx = (_fwd.x*fwd + _right.x*str) * speed;
+    vy = (_fwd.z*fwd + _right.z*str) * speed;
   }
 
-  // ---- 垂直方向：重力・ジャンプ・地面追従 ----
-  const standingCell = cellAt(player.x, player.y);
-  const groundH = heightAt(player.x, player.y);
-  if (player.onGround && standingCell.type === 'ramp'){
-    // 坂の上を歩いている間は、毎フレーム斜面の高さにぴったりスナップさせる。
-    player.z = groundH;
-    player.vz = 0;
-  } else {
-    player.vz -= GRAVITY*dt;
-    let nz = player.z + player.vz*dt;
-    if (nz <= groundH){ nz = groundH; player.vz = 0; player.onGround = true; } else player.onGround = false;
-    player.z = nz;
-  }
+  // 足元の高さ(player.z)を基準に、壁・薄い壁・窓（階ごとの高さ）、箱・階段の段差、天井の縁との当たりを見る。
+  // 坂は常に通れる。階段は1段 0.15 なのでジャンプ無しで上れる。
+  // 速く動いても階段の段を飛ばして「段差が高すぎる」と判定されないよう、移動を細かく刻んで進める。
+  const r = PLAYER_R;
+  const nsub = Math.max(1, Math.ceil(dt / 0.01)), sdt = dt / nsub;
+  for (let si = 0; si < nsub; si++){
+    const z0 = player.z;
+    if (vx || vy){
+      const nx = player.x + vx*sdt;
+      const ny = player.y + vy*sdt;
+      if (!pointBlocked(nx, player.y, z0) && !collidesSolid(nx, player.y, r, z0)) player.x = nx;
+      if (!pointBlocked(player.x, ny, z0) && !collidesSolid(player.x, ny, r, z0)) player.y = ny;
+    }
 
-  camera.position.set(player.x, player.z + EYE_HEIGHT, player.y);
+    // ---- 垂直方向：重力・ジャンプ・地面追従 ----
+    const groundH = groundAt(player.x, player.y, player.z);
+    if (player.onGround && groundRamp){
+      player.z = groundH; player.vz = 0;      // 坂の上は斜面の高さにぴったりスナップ
+    } else {
+      player.vz -= GRAVITY*sdt;
+      let nz = player.z + player.vz*sdt;
+      if (player.vz > 0){                      // 上昇中に天井へ頭をぶつける
+        const cl = ceilingAbove(player.x, player.y, player.z);
+        if (nz + PLAYER_H > cl){ nz = cl - PLAYER_H; player.vz = 0; }
+      }
+      if (nz <= groundH){ nz = groundH; player.vz = 0; player.onGround = true; } else player.onGround = false;
+      player.z = nz;
+    }
+    const dzs = player.z - z0;
+    if (player.onGround && groundStairs && dzs !== 0 && Math.abs(dzs) < 0.3) eyeLag = Math.max(-0.22, Math.min(0.22, eyeLag - dzs));
+  }
+  eyeLag *= Math.exp(-18 * dt); if (Math.abs(eyeLag) < 0.002) eyeLag = 0;
+
+  camera.position.set(player.x, player.z + EYE_HEIGHT + eyeLag, player.y);
 }
 
-/* ============ ステージ編集（Minecraft風・置く/壊す） ============ */
+/* ============ ステージ編集（Minecraft風・置く/壊す） ============
+   二階建て：置く場所の「階」は、クロスヘアが当たった面の高さで決まる。
+     ・床や箱の上面を狙う → その階に置く ／ 天井の上面や壁の上面を狙う → 1つ上の階に置く
+     ・天井の下面を狙う → 天井の下（その階）に置く
+   上の階に置けるのは、真下が壁か天井のマスだけ。天井（6）は、その上面が上の階の床になる。
+   壊すのは、狙っている「そのもの」だけ（天井を狙えば天井だけが消える）。支えを失った上の階のものは一緒に消える。 */
 let selectedBlock = 'wall';
-let selDir = 'E'; // 薄い壁・坂で使う向き
+let selDir = 'E'; // 薄い壁・坂・窓・階段で使う向き
 const dirArrow = { E:'→', W:'←', S:'↓', N:'↑' };
+const DIR_BLOCKS = new Set(['ramp', 'thinwall', 'window', 'stairs']);
 
 function selectBlock(id){
   selectedBlock = id;
   document.querySelectorAll('#hotbar .slot').forEach(el => el.classList.toggle('active', el.dataset.id===id));
 }
 function rotateDir(){
-  if (selectedBlock !== 'ramp' && selectedBlock !== 'thinwall' && selectedBlock !== 'window') return; // 向きを持つブロックの時だけ回転
+  if (!DIR_BLOCKS.has(selectedBlock)) return; // 向きを持つブロックの時だけ回転
   const order = ['E','S','W','N'];
   selDir = order[(order.indexOf(selDir)+1) % order.length];
   document.querySelectorAll('#hotbar .dir').forEach(el => el.textContent = dirArrow[selDir]);
@@ -672,48 +852,96 @@ function castTarget(){
   return hits.length ? hits[0] : null;
 }
 
-// hit: レイキャストの結果。into=true なら当たったブロック自身のマス、
-// into=false ならその面のすぐ外側（隣の空きマス）を返す。
-function cellFromHit(hit, into){
+// 当たった面のすぐ外側（面の法線方向へ少しだけ出した点）を「置く場所」とする：{x, y, l(階)}
+function placeTarget(hit){
   const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
-  const nudge = into ? -0.01 : 0.01;
-  return { x: Math.floor(hit.point.x + n.x*nudge), y: Math.floor(hit.point.z + n.z*nudge) };
+  const px = hit.point.x + n.x*0.01, py = hit.point.y + n.y*0.01, pz = hit.point.z + n.z*0.01;
+  return { x: Math.floor(px), y: Math.floor(pz), l: Math.floor(py / LEVEL_H) };
 }
 
 function inEditableBounds(x, y){ return x>0 && y>0 && x<W-1 && y<H-1; }
 
+// ---- 柱の書き換え ----
+// マス(x,y)の l 階のセルを mut(今のセル) が返す新しいセルに置き換える。
+// 上の階(up)は、置き換え後も「壁か天井」で支えられている時だけ引き継ぐ（支えを失ったら上の階ごと消える）。
+function ensureLevel(x, y, l){
+  let c = grid[y][x];
+  for (let i = 0; i < l; i++){ if (!c.up) c.up = { type:'floor' }; c = c.up; }
+  return c;
+}
+function setCellAt(x, y, l, mut){
+  let parent = null, old;
+  if (l === 0) old = grid[y][x];
+  else { parent = ensureLevel(x, y, l-1); old = parent.up || { type:'floor' }; }
+  const n = mut(old);
+  delete n.up;
+  if (old.up && (n.type === 'wall' || n.ceil)) n.up = old.up;
+  if (l === 0) grid[y][x] = n; else parent.up = n;
+  tidyCol(grid[y][x]);
+  updateCell(x, y);
+  broadcastEdit(x, y, grid[y][x]);   // 柱まるごと（全階ぶん）を相手に送る
+}
+
+// 階段：同じ向きの階段が隣にあれば、その続き（k=何マス目か 0〜3）にする
+const DIRV = { E:[1,0], W:[-1,0], S:[0,1], N:[0,-1] };
+function stairK(x, y, l, dir){
+  const [dx, dy] = DIRV[dir];
+  const sAt = (gx, gy) => {
+    if (gx<0 || gy<0 || gx>=W || gy>=H) return null;
+    const c = levelCell(grid[gy][gx], l);
+    return (c.type === 'stairs' && c.dir === dir) ? c : null;
+  };
+  const back = sAt(x-dx, y-dy);  if (back)  return Math.min(3, (back.k|0) + 1);
+  const ahead = sAt(x+dx, y+dy); if (ahead) return Math.max(0, (ahead.k|0) - 1);
+  return 0;
+}
+
+function currentGhostCell(t){
+  if (selectedBlock === 'ramp' || selectedBlock === 'thinwall' || selectedBlock === 'window')
+    return { type:selectedBlock, dir:selDir };
+  if (selectedBlock === 'stairs') return { type:'stairs', dir:selDir, k: t ? stairK(t.x, t.y, t.l, selDir) : 0 };
+  return { type:selectedBlock };   // wall / platform / ceiling
+}
+
+function playerInCell(x, y, l){
+  return Math.floor(player.x)===x && Math.floor(player.y)===y && levelOfZ(player.z)===l;
+}
+function canPlaceAt(x, y, l){
+  if (!inEditableBounds(x, y)) return false;
+  if (l < 0 || l >= MAX_LEVELS) return false;
+  if (l > 0 && !supportedAt(x, y, l)) return false;   // 上の階は、真下が壁か天井のマスにだけ置ける
+  if (playerInCell(x, y, l)) return false;             // 自分の足元（同じ階）には置けない（挟まり防止）
+  const c = levelCell(grid[y][x], l);
+  if (selectedBlock === 'ceiling') return c.type !== 'wall' && !c.ceil;   // 天井は、壁以外で天井がまだ無いマスに
+  return c.type === 'floor';          // 何か置いてある場所には重ねて置けない（天井だけ付いている床はOK）
+}
+
 function breakBlock(){
   const hit = castTarget();
   if (!hit) return;
-  const c = cellFromHit(hit, true);
-  if (!inEditableBounds(c.x, c.y)) return; // 外周の壁は壊せない（外に出られてしまうため）
-  if (grid[c.y][c.x].type === 'floor') return;
-  grid[c.y][c.x] = {type:'floor'};
-  updateCell(c.x, c.y);
-  broadcastEdit(c.x, c.y, null);
-}
-
-function currentGhostCell(){
-  return selectedBlock === 'ramp' ? {type:'ramp', dir:selDir}
-       : selectedBlock === 'thinwall' ? {type:'thinwall', dir:selDir}
-       : selectedBlock === 'window' ? {type:'window', dir:selDir}
-       : {type:selectedBlock};
-}
-
-function canPlaceAt(x, y){
-  if (!inEditableBounds(x, y)) return false;
-  if (Math.floor(player.x)===x && Math.floor(player.y)===y) return false; // 自分の足元には置けない（挟まり防止）
-  return grid[y][x].type === 'floor'; // 何か置いてある場所には重ねて置けない
+  const u = hit.object.userData;
+  if (u.gx === undefined) return;                       // 土台の床プレーン
+  const x = u.gx, y = u.gy, l = u.lv;
+  if (!inEditableBounds(x, y)) return;                  // 外周の壁は壊せない（外に出られてしまうため）
+  if (u.part === 'slab'){
+    setCellAt(x, y, l, c => { const n = Object.assign({}, c); delete n.ceil; return n; });   // 天井だけ消す
+  } else {
+    if (levelCell(grid[y][x], l).type === 'floor') return;
+    setCellAt(x, y, l, c => c.ceil ? { type:'floor', ceil:true } : { type:'floor' });          // 天井は残して中身だけ消す
+  }
 }
 
 function placeBlock(){
   const hit = castTarget();
   if (!hit) return;
-  const c = cellFromHit(hit, false);
-  if (!canPlaceAt(c.x, c.y)) return;
-  grid[c.y][c.x] = currentGhostCell();
-  updateCell(c.x, c.y);
-  broadcastEdit(c.x, c.y, grid[c.y][c.x]);
+  const t = placeTarget(hit);
+  if (!canPlaceAt(t.x, t.y, t.l)) return;
+  const nc = currentGhostCell(t);
+  setCellAt(t.x, t.y, t.l, old => {
+    if (selectedBlock === 'ceiling') return Object.assign({}, old, { ceil:true });
+    if (old.ceil && nc.type !== 'wall') nc.ceil = true;                    // 天井つきの床に置いても天井は残す
+    return nc;
+  });
 }
 
 // 毎フレーム：ゴースト(設置予定表示)とアウトライン(破壊対象表示)を更新
@@ -724,27 +952,35 @@ function updatePreview(){
   const hit = castTarget();
   if (!hit){ ghostMesh.visible = false; outlineMesh.visible = false; return; }
 
-  // 破壊対象のアウトライン
-  const bc = cellFromHit(hit, true);
-  if (inEditableBounds(bc.x, bc.y) && grid[bc.y][bc.x].type !== 'floor'){
-    const cell = grid[bc.y][bc.x];
-    const g = cellGeometry(cell, bc.x, bc.y);
-    outlineMesh.geometry = edgesForCell(cell);
-    outlineMesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
-    outlineMesh.visible = true;
-  } else {
-    outlineMesh.visible = false;
+  // 破壊対象のアウトライン（天井を狙っていれば天井、それ以外はそのブロック）
+  const u = hit.object.userData;
+  outlineMesh.visible = false;
+  if (u.gx !== undefined && inEditableBounds(u.gx, u.gy)){
+    const base = u.lv * LEVEL_H;
+    if (u.part === 'slab'){
+      outlineMesh.geometry = slabEdges;
+      outlineMesh.position.set(u.gx + 0.5, base + LEVEL_H - SLAB_T/2, u.gy + 0.5);
+      outlineMesh.visible = true;
+    } else {
+      const cell = levelCell(grid[u.gy][u.gx], u.lv);
+      if (cell.type !== 'floor'){
+        const g = cellGeometry(cell, u.gx, u.gy);
+        outlineMesh.geometry = edgesForCell(cell);
+        outlineMesh.position.set(g.pos[0], g.pos[1] + base, g.pos[2]);
+        outlineMesh.visible = true;
+      }
+    }
   }
 
   // 設置プレビュー(半透明ゴースト)
-  const pc = cellFromHit(hit, false);
-  if (inEditableBounds(pc.x, pc.y)){
-    const ghostCell = currentGhostCell();
-    const g = cellGeometry(ghostCell, pc.x, pc.y);
-    const valid = canPlaceAt(pc.x, pc.y);
+  const t = placeTarget(hit);
+  if (inEditableBounds(t.x, t.y) && t.l >= 0 && t.l < MAX_LEVELS){
+    const ghostCell = currentGhostCell(t);
+    const g = cellGeometry(ghostCell, t.x, t.y);
+    const valid = canPlaceAt(t.x, t.y, t.l);
     ghostMesh.geometry = g.geo;
     ghostMesh.material = valid ? ghostMats[ghostCell.type] : ghostInvalidMat;
-    ghostMesh.position.set(g.pos[0], g.pos[1], g.pos[2]);
+    ghostMesh.position.set(g.pos[0], g.pos[1] + t.l * LEVEL_H, g.pos[2]);
     ghostMesh.visible = true;
   } else {
     ghostMesh.visible = false;
@@ -957,6 +1193,8 @@ addEventListener('keydown', e => {
   if (e.code === 'Digit3') selectBlock('platform');
   if (e.code === 'Digit4') selectBlock('ramp');
   if (e.code === 'Digit5') selectBlock('window');
+  if (e.code === 'Digit6') selectBlock('ceiling');
+  if (e.code === 'Digit7') selectBlock('stairs');
   if (e.code === 'KeyR') rotateDir();
 });
 addEventListener('keyup', e => keys[e.code] = false);
@@ -984,22 +1222,42 @@ const mapBase = document.createElement('canvas');
 mapBase.width = mapBase.height = mapEl.width;
 const mapBaseCtx = mapBase.getContext('2d');
 let mapDirty = true;
-const MAP_COL = { wall:'#7a848c', platform:'#b39468', thin:'#c3cad0', window:'#6fd0d6' };
-// グリッド g(gw×gh)を、1マスの大きさ t で c に描く。ミニマップとサイズ変更のプレビューで共通。
-function paintCells(c, g, gw, gh, t){
+const MAP_COL = { wall:'#7a848c', platform:'#b39468', thin:'#c3cad0', window:'#6fd0d6', upper:'rgba(150,170,185,.20)' };
+let mapLv = 0;   // いまミニマップに出している階
+// 任意のグリッドの柱 col の l 階のセル（支えが無い階は空っぽの床）。cellLevel() と同じ規則で、サイズ変更プレビューにも使える。
+function colLevel(col, l, border){
+  if (l === 0) return col;
+  if (border && col.type === 'wall') return WALL_CELL;   // 外周の壁は最上階まで続く
+  let c = col;
+  for (let i = 1; i <= l; i++){
+    if (!(c.type === 'wall' || c.ceil)) return FLOOR_CELL;
+    c = c.up; if (!c) return FLOOR_CELL;
+  }
+  return c;
+}
+// グリッド g(gw×gh)の lv 階を、1マスの大きさ t で c に描く。ミニマップとサイズ変更のプレビューで共通。
+// 上から見た図なので、天井のあるマスは「屋根」として中身を隠し、壁と同じ色で塗りつぶす。天井が無ければ今まで通り。
+function paintCells(c, g, gw, gh, t, lv = 0){
   const th = Math.max(2 * MAP_DPR, t * 0.3);        // 薄い壁・窓の線の太さ
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++){
-    const cell = g[y][x], X = x * t, Y = y * t;
-    if (cell.type === 'wall'){ c.fillStyle = MAP_COL.wall; c.fillRect(X, Y, t, t); }
+    const border = x === 0 || y === 0 || x === gw - 1 || y === gh - 1;
+    const col = g[y][x], cell = colLevel(col, lv, border), X = x * t, Y = y * t;
+    if (lv > 0){   // 上の階の床（下の階の天井・壁の上面）。支えが無い所は吹き抜けなので何も描かない
+      const b = colLevel(col, lv - 1, border);
+      if (b.type === 'wall' || b.ceil){ c.fillStyle = MAP_COL.upper; c.fillRect(X, Y, t, t); }
+    }
+    const roofed = !!cell.ceil && cell.type !== 'wall';
+    if (cell.type === 'wall' || roofed){ c.fillStyle = MAP_COL.wall; c.fillRect(X, Y, t, t); }
     else if (cell.type === 'platform'){ c.fillStyle = MAP_COL.platform; c.fillRect(X, Y, t, t); }
-    else if (cell.type === 'ramp'){
-      // 坂は、低い側→高い側へ色が明るくなる（向きが分かるように）
+    else if (cell.type === 'ramp' || cell.type === 'stairs'){
+      // 坂・階段は、低い側→高い側へ色が明るくなる（向きが分かるように）
       const d = cell.dir;
       const gr = d === 'E' ? c.createLinearGradient(X, 0, X + t, 0)
                : d === 'W' ? c.createLinearGradient(X + t, 0, X, 0)
                : d === 'S' ? c.createLinearGradient(0, Y, 0, Y + t)
                :             c.createLinearGradient(0, Y + t, 0, Y);
-      gr.addColorStop(0, '#3f7a6e'); gr.addColorStop(1, '#9fd6c8');
+      if (cell.type === 'ramp'){ gr.addColorStop(0, '#3f7a6e'); gr.addColorStop(1, '#9fd6c8'); }
+      else { gr.addColorStop(0, '#7d6a48'); gr.addColorStop(1, '#e2cfa0'); }
       c.fillStyle = gr; c.fillRect(X, Y, t, t);
     }
     else if (cell.type === 'thinwall' || cell.type === 'window'){   // マスの縁に細く描く（dir=N/S/W/E）
@@ -1014,7 +1272,7 @@ function paintCells(c, g, gw, gh, t){
 function redrawMapBase(){
   const c = mapBaseCtx, S = mapBase.width;
   c.clearRect(0, 0, S, S);
-  paintCells(c, grid, W, H, S / Math.max(W, H));
+  paintCells(c, grid, W, H, S / Math.max(W, H), mapLv);
 }
 // ===== サイズ変更のプレビュー =====
 // 入力中の 横×縦 にしたときのステージを、ミニマップと同じ描き方で小さく表示する。
@@ -1052,7 +1310,7 @@ function drawSizePreview(){
   c.fillStyle = 'rgba(229,118,107,.9)';
   const m = Math.max(t, 2 * MAP_DPR);
   for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++){
-    if (grid[y][x].type === 'floor') continue;
+    if (isEmptyCell(grid[y][x])) continue;
     const nx = x + dx, ny = y + dy;
     if (nx >= 1 && nx <= nw - 2 && ny >= 1 && ny <= nh - 2) continue;
     lost++;
@@ -1098,14 +1356,21 @@ document.getElementById('sizeW').addEventListener('input', drawSizePreview);
 document.getElementById('sizeH').addEventListener('input', drawSizePreview);
 
 function drawMap(){
+  const lv = levelOfZ(player.z);                       // 今いる階だけを描く
+  if (lv !== mapLv){ mapLv = lv; mapDirty = true; }
   if (mapDirty){ redrawMapBase(); mapDirty = false; }
   const c = mapCtx, S = mapEl.width, t = S / Math.max(W, H), px = player.x * t, py = player.y * t;
   c.clearRect(0, 0, S, S);
   c.drawImage(mapBase, 0, 0);
   if (CFG.mode === 'online'){
     c.fillStyle = '#6fd0d6';
-    for (const r of REMOTES.values()){ c.beginPath(); c.arc(r.x*t, r.y*t, 2.6*MAP_DPR, 0, 7); c.fill(); }
+    for (const r of REMOTES.values()){
+      if (levelOfZ(r.z) !== lv) continue;              // 別の階にいる人は映さない
+      c.beginPath(); c.arc(r.x*t, r.y*t, 2.6*MAP_DPR, 0, 7); c.fill();
+    }
   }
+  c.fillStyle = '#f2b544'; c.font = 'bold ' + (12 * MAP_DPR) + 'px sans-serif'; c.textBaseline = 'top';
+  c.fillText((lv + 1) + 'F', 6 * MAP_DPR, 5 * MAP_DPR);
   c.strokeStyle = '#f2b544'; c.fillStyle = '#f2b544'; c.lineWidth = 1.6 * MAP_DPR;
   c.beginPath(); c.arc(px, py, 3 * MAP_DPR, 0, 7); c.fill();
   c.beginPath(); c.moveTo(px, py);
