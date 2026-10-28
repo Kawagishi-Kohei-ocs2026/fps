@@ -24,10 +24,16 @@
   #cross::before{left:50%;top:0;width:2px;height:100%;margin-left:-1px}
   #cross::after{top:50%;left:0;height:2px;width:100%;margin-top:-1px}
 
-  /* 弓：引き絞りゲージ（照準の少し下） */
-  #drawbar{position:fixed;left:50%;top:calc(50% + 28px);width:90px;height:5px;margin-left:-45px;display:none;
-    background:rgba(255,255,255,.18);pointer-events:none}
+  /* 弓：引き絞りゲージ。照準・矢・弓とかぶらないよう、画面下部の中央に大きめに出す。
+     位置は --draw-bottom（下からの距離）、大きさは --draw-w / --draw-h で調整できる。 */
+  #drawbar{--draw-bottom:15vh; --draw-w:min(320px,48vw); --draw-h:12px;
+    position:fixed;left:50%;bottom:var(--draw-bottom);width:var(--draw-w);height:var(--draw-h);
+    margin-left:calc(var(--draw-w) / -2);display:none;pointer-events:none;
+    background:rgba(10,14,18,.72);border:2px solid rgba(255,255,255,.85);border-radius:3px;
+    box-shadow:0 0 0 2px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.6);overflow:hidden}
   #drawfill{height:100%;width:0;background:var(--sodium)}
+  #drawbar .minmark{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,255,255,.7)}   /* これより浅いと威力が最小 */
+  #drawbar.full{border-color:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.55),0 0 14px 2px rgba(255,255,255,.75)}
   #drawbar.full #drawfill{background:#fff}
   #hud{position:fixed;inset:0;pointer-events:none}
   #top{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.28em;color:#b4bcc1;text-shadow:0 0 4px rgba(0,0,0,.55)}
@@ -193,7 +199,7 @@
 <canvas id="view"></canvas>
 <div id="scopeV"></div>
 <div id="cross"></div>
-<div id="drawbar"><div id="drawfill"></div></div>
+<div id="drawbar"><div id="drawfill"></div><div class="minmark" id="drawmin"></div></div>
 <div id="hurtflash"></div>
 
 <div id="hud">
@@ -1623,6 +1629,7 @@ function updateArrows(dt){
   }
 }
 const drawBarEl = el('drawbar'), drawFillEl = el('drawfill');
+el('drawmin').style.left = (WEAPONS.bow.minPower * 100).toFixed(0) + '%';
 function updDrawBar(){
   const W = curW();
   const on = W.bow && alive && !P.deadUntil && P.draw >= 0;
@@ -1699,11 +1706,15 @@ const bowVM = (() => {
     mesh.quaternion.setFromUnitVectors(_Y, _d.normalize());
   }
   const PULL = 0.28;              // 弦を引く距離（m）
-  const VM_DRAW_OPACITY = 0.35;   // 引き絞り中の濃さ（1で不透明）
+  const VM_DRAW_OPACITY = 1;      // 引き絞り中の濃さ（1で不透明。下げると向こうが透けて見える）
+  const AIM_POS = { x: 0.1, y: -0.15, z: -0.74 };   // 構えた時の位置（右へ・下へ・手前へ）
+  const AIM_ROT = { x: 0.08, y: 0.03, z: -0.38 };   // 構えた時の向き（zが負＝上端が右へ傾く）
   function pose(draw, aim, ready, t){
     const lerp = (a, b, k) => a + (b - a) * k;
-    root.position.set(lerp(-0.22, 0.03, aim), lerp(-0.22, -0.04, aim), lerp(-0.68, -0.78, aim) + Math.max(0, P.kick) * 0.02);
-    root.rotation.set(lerp(0.12, 0, aim), lerp(0.3, 0, aim), lerp(-0.5, 0, aim));
+    // 構え：弓を右へ傾け（上端が右へ倒れる）、画面の右寄り・下寄りに大きく構える。
+    // 矢は手前の下側から中央（照準）へ向かって伸びて見えるよう、全体をわずかに上へ向ける。
+    root.position.set(lerp(-0.22, AIM_POS.x, aim), lerp(-0.22, AIM_POS.y, aim), lerp(-0.68, AIM_POS.z, aim) + Math.max(0, P.kick) * 0.02);
+    root.rotation.set(lerp(0.12, AIM_ROT.x, aim), lerp(0.3, AIM_ROT.y, aim), lerp(-0.5, AIM_ROT.z, aim));
     if (draw >= 1) root.position.x += Math.sin(t * 0.05) * 0.0007;      // 引き切るとわずかに震える
     else root.position.y += Math.sin(t * 0.0015) * 0.004 * (1 - aim);   // 構えていない間はゆっくり揺れる
     const nz = TIP.z + PULL * draw;
@@ -1711,7 +1722,7 @@ const bowVM = (() => {
     _a.set(0, -TIP.y, TIP.z); seg(strB, _a, _b);
     arrow.position.set(ARROW_X, 0, nz); arrow.visible = ready;
     rhand.position.set(ARROW_X + 0.075, -0.055, nz); rhand.visible = aim > 0.15 && draw > 0.02;
-    const op = lerp(1, VM_DRAW_OPACITY, aim);          // 引き絞っている間は半透明にして、向こう側を見やすくする
+    const op = lerp(1, VM_DRAW_OPACITY, aim);          // 引き絞り中の濃さ
     for (const m of mats){ m.opacity = op; m.depthWrite = op > 0.99; }
   }
   return { root, pose };
@@ -2271,6 +2282,7 @@ const REMOTES = new Map();
 function createRemote(id){
   return { id, x:4.5, y:4.5, z:0, yaw:0, hp:100, ammo:MAG, dead:false, kills:0,
     crouch:false, sliding:false, crouchEase:0, speed:0,
+    pitchT:0, pitchV:0, adsT:0, adsV:0, drawT:-1, drawV:0, bowV:0, // 視線の上下／スコープ／弓の引き絞り（T=受信値, V=なめらかに追従させた表示値）
     vaultU:0, vyaw:0, _p0vu:0, _p1vu:0, // 窓の乗り越え：進行度(0=していない, 0〜1=途中)と越える向き
     // 位置・向き・しゃがみ量は前回値(_p0*)→最新値(_p1*)へ_dur ms かけて補間して滑らかに動かす
     _p0x:4.5, _p0y:4.5, _p0z:0, _p0yaw:0, _p0ce:0,
@@ -2308,9 +2320,13 @@ function netLoop(dt){
     // vu：窓の乗り越えの進行度。終わった直後の1回だけ 1 を送り、相手側で最後まで動かして止める。
     const vu = P.vault ? Math.max(0.001, Math.min(1, P.vault.t / VAULT_DUR)) : (P.vaultEnd ? 1 : 0);
     P.vaultEnd = false;
+    // pt：視線の上下（銃口・矢の向き）／ads：スコープを覗いている深さ(0〜1)／dr：弓の引き絞り(0〜1、引いていなければ-1)
+    const Wn = curW();
+    const dr = (Wn.bow && P.draw >= 0) ? Math.min(1, P.draw / Wn.draw) : -1;
     send({ type:'state', x:player.x, y:player.y, z:player.z, yaw, crouchEase:P.crouchEase,
            hp:P.hp, ammo:P.ammo, kills:P.kills, crouch:P.crouch, sliding:P.sliding, w:CFG.weapon,
-           vu, vyaw: P.vault ? P.vault.yaw : 0 });
+           vu, vyaw: P.vault ? P.vault.yaw : 0,
+           pt:+pitch.toFixed(3), ads:+(Wn.bow ? 0 : P.scopeEase).toFixed(2), dr:+dr.toFixed(2) });
     updHUD(); // スコアボードに相手のキル数（state経由で届く）を反映する
   }
 }
@@ -2708,10 +2724,12 @@ function buildCharacter3D(colors){
     box(5,7,7,mBody,0,0,0,'top',kn);
     return { th, kn };
   });
+  gun.rotation.order = 'YXZ'; head.rotation.order = 'YXZ';   // 構え中に胴をひねっても、頭と銃は照準方向を向けたままにする
   gun.position.set(0,19,0); torso.add(gun);                 // 銃：胸の前で構える。武器ごとの見た目は下の gunSets に作る
   const mWood = new THREE.MeshStandardMaterial({ color:0xd9b583, roughness:.8 });
   const mStr = new THREE.MeshBasicMaterial({ color:0xf2efe0 });
   solids.push(mWood);
+  let bowStrU = null, bowStrL = null, bowArrow = null;      // 弓の弦（上下2本）と、つがえた矢
   const gunSets = { rifle:G(), sniper:G(), shotgun:G(), bow:G() };
   for (const k in gunSets) gun.add(gunSets[k]);
   { // ライフル（従来の見た目）
@@ -2739,7 +2757,14 @@ function buildCharacter3D(colors){
       const l1 = box(2,13,2,mWood,0,0,0,0,g); l1.position.set(0,s*10.5,-11.5); l1.rotation.x = s*0.32;
       const l2 = box(1.6,10,1.6,mWood,0,0,0,0,g); l2.position.set(0,s*19.5,-8.6); l2.rotation.x = s*0.62;
     }
-    box(0.6,40,0.6,mStr,0,0,-5.5,0,g);
+    bowStrU = box(0.6,1,0.6,mStr,0,0,0,0,g); bowStrL = box(0.6,1,0.6,mStr,0,0,0,0,g);   // 弦：上下の弓先から「つがえ位置」へ引く（引くとV字になる）
+    bowArrow = G(); bowArrow.visible = false; g.add(bowArrow);                              // 矢：原点=筈(はず)、-Z方向へ伸びる
+    const mArrow = new THREE.MeshStandardMaterial({ color:0xe8d9b0, roughness:.8 });
+    const mTip   = new THREE.MeshStandardMaterial({ color:0xdfe6ea, roughness:.4 });
+    const mFeath = new THREE.MeshStandardMaterial({ color:0xc4462c, roughness:.9 });
+    solids.push(mArrow, mTip, mFeath);
+    box(.9,.9,27,mArrow,0,0,-13.5,0,bowArrow); box(1.8,1.8,3.6,mTip,0,0,-28.6,0,bowArrow);
+    box(.4,3.4,4.5,mFeath,0,0,-2.6,0,bowArrow); box(3.4,.4,4.5,mFeath,0,0,-2.6,0,bowArrow);
   }
   function setWeapon(name){
     const key = gunSets[name] ? name : 'rifle';
@@ -2753,9 +2778,130 @@ function buildCharacter3D(colors){
     torso.rotation.set(p.tRx, p.tw * side, 0);
     torsoMesh.scale.y = p.ts;                                   // 胴を縮める
     head.position.y = 28 * p.ts; head.rotation.set(p.hRx, 0, p.hRz * side);
-    gun.position.y = 19 * p.ts; gun.rotation.x = p.gRx; gun.visible = p.gun;
+    gun.position.set(0, 19 * p.ts, 0); gun.rotation.set(p.gRx, 0, 0); gun.visible = p.gun;
+    bowArrow.visible = false; setNock(NOCK_REST);              // 構えの上書き（applyAim）が毎回かけ直す
     arms.forEach((a,i) => { a.sh.position.y = 25 * p.ts; const q = i ? p.aL : p.aR; a.sh.rotation.set(q.s, q.y*a.s, 0); a.el.rotation.x = q.e; });
     legs.forEach((l,i) => { const q = i ? p.lL : p.lR, sg = i ? -1 : 1; l.th.rotation.set(q.t, 0, q.z*sg); l.kn.rotation.set(q.k, 0, q.kz*sg); });
+  }
+
+  /* ---- 構え：スコープを覗く姿勢／弓を引き絞る姿勢／視線の上下 ----
+     基本ポーズ(applyPose)のあとに重ねて上書きする。腕は2関節IK（上腕・前腕とも9）で銃や弦へ届かせる。
+     以下、座標は「骨盤座標＝モデルの正面が-Z・上が+Y」。pc=視線の上下角(ラジアン, +が上)。 */
+  const NOCK_REST = new THREE.Vector3(0, 0, -5.7);                 // 弦の中央（引いていない時）
+  const TIP_U = new THREE.Vector3(0, 23.6, -5.7), TIP_L = new THREE.Vector3(0, -23.6, -5.7);   // 弓の上下の先端
+  const _Yu = new THREE.Vector3(0, 1, 0), _Xu = new THREE.Vector3(1, 0, 0);
+  const _sd = new THREE.Vector3();
+  function setSeg(mesh, a, b){
+    _sd.subVectors(b, a); const len = _sd.length() || 1e-3;
+    mesh.position.addVectors(a, b).multiplyScalar(.5); mesh.scale.y = len;
+    mesh.quaternion.setFromUnitVectors(_Yu, _sd.multiplyScalar(1 / len));
+  }
+  function setNock(n){ setSeg(bowStrU, TIP_U, n); setSeg(bowStrL, TIP_L, n); }
+  const wrapPi = a => a - Math.PI * 2 * Math.floor((a + Math.PI) / (Math.PI * 2));
+  const _ik = { s:0, y:0, e:0 };
+  // 肩(0,0,0)から見た手の目標位置 t へ届く腕の角度を求める。届かない時は腕を伸ばしきる向きに止める。
+  function ikArm(t){
+    const L = 9; let d = t.length(); const k = d > 17.6 ? 17.6 / d : 1;
+    const tx = t.x * k, ty = t.y * k, tz = t.z * k; d *= k;
+    const e = 2 * Math.acos(Math.min(1, d / (2 * L)));
+    const vy = -L - L * Math.cos(e), vz = -L * Math.sin(e);
+    const h = Math.max(1e-3, Math.hypot(tx, tz));
+    _ik.s = wrapPi(Math.atan2(-h, ty) - Math.atan2(vz, vy));
+    _ik.y = Math.atan2(-tx, -tz); _ik.e = e;
+    return _ik;
+  }
+  // 銃ごとの構え：g=銃の位置(骨盤座標・立ち時)、rh/lh=右手/左手が握る銃ローカルの点
+  const ADS_TW = -0.4;                                             // 胴を右へひねる（左肩が前に出る射撃姿勢）
+  const ADS = {
+    rifle:   { g:[5.2, 27.5, -4], rh:[0,-5.5,-6], lh:[0,-2,-12.5] },
+    sniper:  { g:[5.2, 26.5, -5], rh:[0,-5,-6],   lh:[0,-2,-13]   },
+    shotgun: { g:[5.2, 27.5, -4], rh:[0,-5.5,-5], lh:[0,-2,-14]   },
+  };
+  const BOW_TW = -1.0;                                             // 弓は体をほぼ真横に向けて引く
+  const BOW_BRACE = 7.3;                                           // 握りから弦までの距離（引いていない時）
+  const BOW_GRIP = 13;                                             // 弓ローカルで、握りは原点の13手前(-Z)
+  const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3(), _e = new THREE.Vector3();
+  const _mT = new THREE.Matrix4(), _mI = new THREE.Matrix4(), _mH = new THREE.Matrix4(), _mG = new THREE.Matrix4();
+  const _piv = new THREE.Vector3();
+  // 点 v を、軸Xまわりに pc だけ回す（pivot 中心）
+  function pitchAbout(v, piv, pc){ return v.sub(piv).applyAxisAngle(_Xu, pc).add(piv); }
+  // 直線 P0 + t*dir が、中心 C・半径 R の球に入る t の範囲 [t0,t1]（無ければ null）
+  function lineSphere(P0, dir, C, R){
+    _e.subVectors(P0, C); const b = _e.dot(dir), c = _e.lengthSq() - R * R, D = b * b - c;
+    return D < 0 ? null : [-b - Math.sqrt(D), -b + Math.sqrt(D), -b];
+  }
+  function setArmAngles(arm, w, tgt){                              // tgt=胴ローカルの手の目標。w の割合だけIK解へ寄せる
+    _a.copy(tgt).sub(arm.sh.position);
+    const r = ikArm(_a);
+    arm.sh.rotation.x += (r.s - arm.sh.rotation.x) * w;
+    arm.sh.rotation.y += (r.y - arm.sh.rotation.y) * w;
+    arm.el.rotation.x += (r.e - arm.el.rotation.x) * w;
+  }
+  function applyAim(p, aim){
+    const pc = Math.max(-1.25, Math.min(1.25, aim.pitch || 0)), ts = p.ts;
+    // 1) 視線の上下：胴・頭・銃・腕に分担させ、銃口（矢）が実際の照準の高さを向くようにする
+    torso.rotation.x += 0.35 * pc; head.rotation.x += 0.45 * pc; gun.rotation.x += 0.65 * pc;
+    arms.forEach(a => { a.sh.rotation.x += 0.65 * pc; });
+    const isBow = aim.weapon === 'bow';
+    const w = Math.max(0, Math.min(1, isBow ? aim.bow : aim.ads));
+    if (w < 0.003) return;
+    // 2) 胴のひねり（頭と銃はひねりを打ち消して、常に正面＝照準方向を向く）
+    const twA = (isBow ? BOW_TW : ADS_TW) * w;
+    torso.rotation.y += twA; head.rotation.y = -twA; gun.rotation.y = -twA;
+    _piv.set(0, 25 * ts, 0);
+    if (!isBow){
+      // 頬づけ：頭を銃へ傾ける
+      head.rotation.x += -0.30 * w; head.rotation.z += -0.12 * w; head.position.y += 1.2 * ts * w;
+      torso.updateMatrix(); _mI.copy(torso.matrix).invert();
+      const c = ADS[aim.weapon] || ADS.rifle;
+      _b.set(c.g[0], c.g[1] * ts, c.g[2]); pitchAbout(_b, _piv, pc).applyMatrix4(_mI);
+      gun.position.lerp(_b, w);
+      gun.rotation.x += ((pc - torso.rotation.x) - gun.rotation.x) * w;
+      gun.updateMatrix();
+      setArmAngles(arms[0], w, _c.set(...c.rh).applyMatrix4(gun.matrix));
+      setArmAngles(arms[1], w, _c.set(...c.lh).applyMatrix4(gun.matrix));
+      return;
+    }
+    // ---- 弓 ----
+    head.rotation.x += -0.10 * w; head.rotation.z += -0.06 * w;
+    torso.updateMatrix(); head.updateMatrix();
+    _mI.copy(torso.matrix).invert();
+    _mH.multiplyMatrices(torso.matrix, head.matrix);
+    const A = _a.set(4.2, 3.5, -4).applyMatrix4(_mH).clone();         // 矢を引きつける位置（右頬のあたり）
+    const dir = _d.set(0, Math.sin(pc), -Math.cos(pc)).clone();       // 矢の向き＝視線
+    const SL = _b.set(-11, 25 * ts, 0).applyMatrix4(torso.matrix).clone();   // 左肩（弓を持つ側）
+    const SR = _c.set( 11, 25 * ts, 0).applyMatrix4(torso.matrix).clone();   // 右肩（弦を引く側）
+    // 弓の握りが矢の線上で左腕の届く限界(Lb)。右手が矢の線上で前へ届く限界(fMax)。
+    const r1 = lineSphere(A, dir, SL, 17.4), r2 = lineSphere(A, dir, SR, 17.4);
+    const Lb = r1 ? Math.max(12, Math.min(30, r1[1])) : 20;
+    const fMax = r2 ? Math.max(0, r2[1]) : 0;
+    // 引き絞り：右手(つがえ位置)は頬から前へ fMax まで出た位置から頬へ戻り、弓は前へ伸びる。
+    // 弦の引き量=BRACE(引く前)〜Lb(フルドロー)。右手だけでは動ける幅が小さいので、弓を前へ出す動きと合わせて見せる
+    const u = Math.max(0, Math.min(1, aim.draw));
+    const N = A.clone().addScaledVector(dir, fMax * (1 - u) * 0.92);  // 弦のつがえ位置（=右手の位置）
+    const tPull = BOW_BRACE + (Lb - BOW_BRACE) * u;
+    const sB = r1 ? Math.min(r1[1], fMax * (1 - u) * 0.92 + tPull) : fMax * (1 - u) * 0.92 + tPull;
+    const B = A.clone().addScaledVector(dir, sB);                      // 握り
+    // 弓を置く：握りが B に来て、向きは視線と同じ
+    const G0 = B.clone().addScaledVector(dir, -BOW_GRIP).applyMatrix4(_mI);
+    gun.position.lerp(G0, w);
+    gun.rotation.x += ((pc - torso.rotation.x) - gun.rotation.x) * w;
+    gun.updateMatrix();
+    const grip = _c.set(0, 0, -BOW_GRIP).applyMatrix4(gun.matrix).clone();
+    const nockT = _d.copy(NOCK_REST).applyMatrix4(gun.matrix).lerp(N.applyMatrix4(_mI), w).clone();   // 胴ローカルの弦の位置
+    setArmAngles(arms[1], w, grip);
+    setArmAngles(arms[0], w, nockT);
+    _mG.copy(gun.matrix).invert();
+    const nockL = nockT.applyMatrix4(_mG);                             // 弓ローカルの弦の位置
+    setNock(nockL);
+    bowArrow.position.copy(nockL); bowArrow.visible = w > 0.25 && !!aim.arrow;
+  }
+  // 立ち／しゃがみ／スライディング＋構え。毎フレーム呼ぶ（aim = {pitch, ads, bow, draw, weapon}）
+  function setStance(name, aim){
+    const p = CHAR_POSES[name] || CHAR_POSES.stand;
+    applyPose(p, (name === 'slide') ? CHAR_SLIDE_SIDE : 1);
+    if (name !== 'slide' && aim) applyAim(p, aim);
+    cur = 'stance';
   }
   function setPose(name){
     if (name === cur) return; cur = name;
@@ -2786,7 +2932,7 @@ function buildCharacter3D(colors){
   function setFlash(on){ solids.forEach(m => m.emissive.set(on ? 0xffe9e2 : 0x000000)); }
   function dispose(){ root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); [...solids, mEye, mStr].forEach(m => m.dispose()); EYE_MATS.delete(mEye); }
   setPose('stand'); setWeapon('rifle');
-  return { group:root, setPose, setVault, vaultBoxes, setFlash, setWeapon, dispose };
+  return { group:root, arms, setPose, setStance, setVault, vaultBoxes, setFlash, setWeapon, dispose };
 }
 
 function buildRemoteMesh(id){
@@ -2853,7 +2999,14 @@ function updateRemoteMeshes(dt){
       m.group.visible = !r.dead;
       continue;
     }
-    m.model.setPose(pose);                              // 立ち／しゃがみ／スライディング
+    // 構え：受信値(16回/秒)へなめらかに追従させる。弓を離したら弦は素早く戻る。
+    const wpn = r.weapon || 'rifle', isBow = wpn === 'bow', ddt = Math.min(dt || 0.016, 0.1);
+    r.pitchV += (r.pitchT - r.pitchV) * Math.min(1, ddt * 16);
+    r.adsV   += ((isBow ? 0 : r.adsT) - r.adsV) * Math.min(1, ddt * 14);
+    const drawing = isBow && r.drawT >= 0;
+    r.bowV   += ((drawing ? 1 : 0) - r.bowV) * Math.min(1, ddt * 10);
+    r.drawV  += ((drawing ? r.drawT : 0) - r.drawV) * Math.min(1, ddt * (drawing ? 14 : 35));
+    m.model.setStance(pose, { pitch:r.pitchV, ads:r.adsV, bow:r.bowV, draw:r.drawV, arrow:drawing, weapon:wpn });   // 立ち／しゃがみ／スライディング＋構え＋視線
     m.group.rotation.y = -r.yaw;                        // 3Dなのでビルボードではなく、向きに合わせて回すだけ
 
     // 当たり判定の箱もモデルと一緒に回る。ポーズに合わせて高さ（スライディングは横幅）を変える。
@@ -3130,6 +3283,10 @@ function handleNet(m){
     r._lastMsgT = now; r._t0 = now;
     r.hp = m.hp; r.dead = m.hp <= 0; r.ammo = m.ammo; r.kills = sc(m.from).k; r.crouch = !!m.crouch; r.sliding = !!m.sliding;
     r.weapon = WEAPONS[m.w] ? m.w : 'rifle';   // 相手が持っている武器（見た目に反映）
+    // 構え（古いクライアントからは来ないので、無ければ構えなし・水平として扱う）
+    r.pitchT = (typeof m.pt === 'number' && isFinite(m.pt)) ? Math.max(-1.25, Math.min(1.25, m.pt)) : 0;
+    r.adsT   = (typeof m.ads === 'number' && isFinite(m.ads)) ? Math.max(0, Math.min(1, m.ads)) : 0;
+    r.drawT  = (typeof m.dr === 'number' && isFinite(m.dr)) ? Math.max(-1, Math.min(1, m.dr)) : -1;
     // 窓の乗り越え：進行度は位置と同じ区間補間で滑らかに動かす。0 が届いたら即座に通常ポーズへ戻す。
     let vu = typeof m.vu === 'number' ? m.vu : 0;
     if (vu >= 1 && !(r.vaultU > 0)) vu = 0;   // 途中を見ていない「終了」だけが届いた場合は無視
