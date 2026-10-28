@@ -1567,7 +1567,12 @@ function spawnGhostArrow(from, p, v, gm){
   const head = new THREE.Mesh(arrowHeadGeo, arrowHeadMat); head.position.y = 0.39;
   g.add(shaft, head); scene.add(g);
   const vel = new THREE.Vector3(...v);
-  const a = { mesh:g, from, pos:new THREE.Vector3(...p), vel, gm:Math.max(1, Math.min(6, gm)), life:40, stuck:false, dir:vel.clone().normalize() };
+  // 送られてくる位置は撃った人の目（カメラ）。そのままだと頭から出て見えるので、見た目だけ
+  // 敵モデルの「頬の高さにつがえた矢」の位置（目の右0.11m・下0.12m、矢の先が前へ0.54m）へずらす。当たり判定には使わない。
+  const fw = vel.clone().normalize(), hz = Math.hypot(fw.x, fw.z) || 1;
+  const rt = new THREE.Vector3(-fw.z / hz, 0, fw.x / hz);
+  const start = new THREE.Vector3(...p).addScaledVector(rt, 0.11).addScaledVector(new THREE.Vector3(0, 1, 0), -0.12).addScaledVector(fw, 0.54);
+  const a = { mesh:g, from, pos:start, vel, gm:Math.max(1, Math.min(6, gm)), life:40, stuck:false, dir:vel.clone().normalize() };
   ghostArrows.push(a);
   if (ghostArrows.length > GHOST_MAX) removeGhost(0);
 }
