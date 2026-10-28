@@ -1549,7 +1549,15 @@ function releaseFire(){
     const v = dir.clone().multiplyScalar(speed), p0 = camera.position;
     send({ type:'arrow', p:[+p0.x.toFixed(3), +p0.y.toFixed(3), +p0.z.toFixed(3)], v:[+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)], gm:+gm.toFixed(3) });
   }
-  arrows.push({ mesh:g, pos:camera.position.clone(), vel:dir.clone().multiplyScalar(speed), gm,
+  // 見た目：画面に見えている矢(一人称の弓)の位置から出て、すぐ照準の軌道へ合流する。軌道・当たり判定は変えない。
+  const visOff = new THREE.Vector3();
+  if (bowVM.root.visible){
+    bowVM.arrow.getWorldPosition(visOff);                       // 視点座標系（vmCam は原点・正面-Z）
+    const kf = Math.tan(camera.fov * Math.PI / 360) / Math.tan(Math.PI / 6);   // vmCam(60°)と本カメラの視野角の差を補正
+    visOff.x *= kf; visOff.y *= kf;
+    visOff.applyQuaternion(camera.quaternion).addScaledVector(dir, 0.65);
+  }
+  arrows.push({ mesh:g, visOff, age:0, pos:camera.position.clone(), vel:dir.clone().multiplyScalar(speed), gm,
                 power, life:40, stuck:false,
                 lob: dir.y >= Math.sin(W.lobAngle * Math.PI / 180) });   // lob=射出時の仰角が lobAngle 以上（上に撃った矢）   // life=空中にいられる秒数。真上に撃っても落ちてくるまで消えないよう長めにとる
   updHUD();
@@ -1558,6 +1566,7 @@ function releaseFire(){
 function removeArrow(i){ scene.remove(arrows[i].mesh); arrows.splice(i, 1); }
 /* 相手が放った矢（見た目だけ）。重力・空気抵抗は自分の矢と同じ。壁・床に刺さり、人に当たったら消える。 */
 const ghostArrows = [];
+const ARROW_BLEND = 0.2;   // 出発点（つがえた矢の位置）から本来の軌道へ合流するまでの秒数（見た目だけ）
 const GHOST_MAX = 40;
 function spawnGhostArrow(from, p, v, gm){
   if ([...p, ...v, gm].some(x => typeof x !== 'number' || !isFinite(x))) return;
@@ -1567,12 +1576,17 @@ function spawnGhostArrow(from, p, v, gm){
   const head = new THREE.Mesh(arrowHeadGeo, arrowHeadMat); head.position.y = 0.39;
   g.add(shaft, head); scene.add(g);
   const vel = new THREE.Vector3(...v);
-  // 送られてくる位置は撃った人の目（カメラ）。そのままだと頭から出て見えるので、見た目だけ
-  // 敵モデルの「頬の高さにつがえた矢」の位置（目の右0.11m・下0.12m、矢の先が前へ0.54m）へずらす。当たり判定には使わない。
-  const fw = vel.clone().normalize(), hz = Math.hypot(fw.x, fw.z) || 1;
-  const rt = new THREE.Vector3(-fw.z / hz, 0, fw.x / hz);
-  const start = new THREE.Vector3(...p).addScaledVector(rt, 0.11).addScaledVector(new THREE.Vector3(0, 1, 0), -0.12).addScaledVector(fw, 0.54);
-  const a = { mesh:g, from, pos:start, vel, gm:Math.max(1, Math.min(6, gm)), life:40, stuck:false, dir:vel.clone().normalize() };
+  // 軌道は送られてきた位置(撃った人の目)から。見た目だけ、引いていた時の矢の位置から出て、すぐ軌道へ合流させる。
+  const fw = vel.clone().normalize();
+  const rec = REMOTES.get(from);
+  let nock = (rec && rec.nockP && performance.now() - (rec.nockT || 0) < 700) ? rec.nockP.clone() : null;
+  const P0 = new THREE.Vector3(...p);
+  if (!nock){   // 記録が無い時の代わり：目の右0.11m・下0.12m・後ろ0.11m
+    const hz = Math.hypot(fw.x, fw.z) || 1;
+    nock = P0.clone().addScaledVector(new THREE.Vector3(-fw.z / hz, 0, fw.x / hz), 0.11).addScaledVector(new THREE.Vector3(0, 1, 0), -0.12).addScaledVector(fw, -0.11);
+  }
+  const visOff = nock.sub(P0).addScaledVector(fw, 0.65);   // 矢の尻がつがえ位置に来るようにずらす量
+  const a = { mesh:g, from, pos:P0, visOff, age:0, vel, gm:Math.max(1, Math.min(6, gm)), life:40, stuck:false, dir:vel.clone().normalize() };
   ghostArrows.push(a);
   if (ghostArrows.length > GHOST_MAX) removeGhost(0);
 }
@@ -1607,6 +1621,8 @@ function updateGhostArrows(dt){
     }
     a.mesh.quaternion.setFromUnitVectors(_Y, a.dir);
     a.mesh.position.copy(a.pos).addScaledVector(a.dir, -0.3);
+    a.age += dt; const k = Math.max(0, 1 - a.age / ARROW_BLEND);
+    if (k > 0 && !a.stuck) a.mesh.position.addScaledVector(a.visOff, k);   // つがえていた位置 → 軌道へ合流
   }
 }
 function clearArrows(){ while (arrows.length) removeArrow(arrows.length - 1); clearGhostArrows(); }
@@ -1683,6 +1699,8 @@ function updateArrows(dt){
     }
     a.mesh.quaternion.setFromUnitVectors(_Y, a.dir);
     a.mesh.position.copy(a.pos).addScaledVector(a.dir, -0.3);
+    a.age += dt; const k = Math.max(0, 1 - a.age / ARROW_BLEND);
+    if (k > 0 && !a.stuck) a.mesh.position.addScaledVector(a.visOff, k);
   }
 }
 const drawBarEl = el('drawbar'), drawFillEl = el('drawfill');
@@ -1782,7 +1800,7 @@ const bowVM = (() => {
     const op = lerp(1, VM_DRAW_OPACITY, aim);          // 引き絞り中の濃さ
     for (const m of mats){ m.opacity = op; m.depthWrite = op > 0.99; }
   }
-  return { root, pose };
+  return { root, pose, arrow };
 })();
 let bowDraw01 = 0, bowAim = 0, bowZoom01 = 0;   // bowZoom01=ズームの進み具合（引き絞り時間に合わせて0→1）
 function updateBowVM(dt){
@@ -2989,7 +3007,8 @@ function buildCharacter3D(colors){
   function setFlash(on){ solids.forEach(m => m.emissive.set(on ? 0xffe9e2 : 0x000000)); }
   function dispose(){ root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); [...solids, mEye, mStr].forEach(m => m.dispose()); EYE_MATS.delete(mEye); }
   setPose('stand'); setWeapon('rifle');
-  return { group:root, arms, setPose, setStance, setVault, vaultBoxes, setFlash, setWeapon, dispose };
+  function getNock(out){ if (!bowArrow || !bowArrow.visible) return false; bowArrow.getWorldPosition(out); return true; }   // つがえた矢の筈(はず)の世界座標
+  return { group:root, arms, getNock, setPose, setStance, setVault, vaultBoxes, setFlash, setWeapon, dispose };
 }
 
 function buildRemoteMesh(id){
@@ -3033,6 +3052,7 @@ function fitHitBox(mesh, box){                          // 当たり判定用の
   mesh.scale.copy(_fbSize); mesh.position.copy(_fbCenter);
 }
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const _nockTmp = new THREE.Vector3();
 const _remoteFwd = new THREE.Vector3();
 function updateRemoteMeshes(dt){
   const now = performance.now();
@@ -3080,6 +3100,7 @@ function updateRemoteMeshes(dt){
 
     m.group.position.set(r.x, r.z, r.y);
     m.group.visible = !r.dead;
+    if (drawing && m.model.getNock(_nockTmp)){ (r.nockP || (r.nockP = new THREE.Vector3())).copy(_nockTmp); r.nockT = now; }   // 矢を放つ瞬間の出発点に使う
   }
 }
 let socket = null, netState = 'idle', myId = null, hostId = null, isHost = false, roomMax = 8, room = '';
