@@ -35,13 +35,6 @@
   #drawbar .minmark{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,255,255,.7)}   /* これより浅いと威力が最小 */
   #drawbar.full{border-color:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.55),0 0 14px 2px rgba(255,255,255,.75)}
   #drawbar.full #drawfill{background:#fff}
-  /* ダメージ表示：敵の頭上に出る数字。連続ヒットは合計され、頭は橙・キルは赤 */
-  .dmgnum{position:absolute;left:0;top:0;pointer-events:none;will-change:transform}
-  .dmgnum span{display:inline-block;font-weight:800;font-size:clamp(18px,2.8vmin,32px);color:#fff;letter-spacing:.02em;
-    font-variant-numeric:tabular-nums;text-shadow:0 0 3px #000,0 1px 0 #000,0 0 10px rgba(0,0,0,.65)}
-  .dmgnum.head span{color:#ffb02e;font-size:clamp(22px,3.4vmin,40px)}
-  .dmgnum.kill span{color:#ff4a36;font-size:clamp(24px,3.8vmin,44px)}
-  @keyframes dmgpop{0%{transform:scale(1.8)}100%{transform:scale(1)}}
   #hud{position:fixed;inset:0;pointer-events:none}
   #top{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.28em;color:#b4bcc1;text-shadow:0 0 4px rgba(0,0,0,.55)}
   #top b{color:var(--dust);font-weight:600}
@@ -1385,50 +1378,9 @@ function targetHitMeshes(){
   for (const t of TARGETS) if (t.state === 'up') list.push(t.body, t.head);
   return list;
 }
-/* ============ ダメージ表示 ============ */
-// 同じ相手への連続ヒット(1.1秒以内)は1つの数字に合計する。オンラインの相手は頭上(身長+0.4m)、的は当たった点に出す。
-const dmgNums = new Map();
-const _dp = new THREE.Vector3();
-const DMG_LIFE = 1100;
-function showDamage(key, dmg, head, point, kill){
-  dmg = Math.round(dmg); if (!(dmg > 0) || !point) return;
-  const now = performance.now();
-  let d = dmgNums.get(key);
-  if (!d || now - d.t > DMG_LIFE){
-    if (d) d.el.remove();
-    const e = document.createElement('div'); e.className = 'dmgnum';
-    const sp = document.createElement('span'); e.appendChild(sp);
-    document.getElementById('hud').appendChild(e);
-    d = { el:e, sp, total:0, head:false, kill:false, p:new THREE.Vector3(), t:now };
-    dmgNums.set(key, d);
-  }
-  d.total += dmg; d.head = d.head || !!head; d.kill = d.kill || !!kill; d.t = now; d.p.copy(point);
-  d.sp.textContent = d.total;
-  d.el.classList.toggle('head', d.head && !d.kill); d.el.classList.toggle('kill', d.kill);
-  d.sp.style.animation = 'none'; void d.sp.offsetWidth; d.sp.style.animation = 'dmgpop .18s ease-out';   // ヒットのたびに弾ませる
-}
-function updateDamageNums(){
-  if (!dmgNums.size) return;
-  const now = performance.now();
-  for (const [k, d] of dmgNums){
-    const age = now - d.t;
-    if (age > DMG_LIFE){ d.el.remove(); dmgNums.delete(k); continue; }
-    const r = (typeof k === 'string') ? REMOTES.get(k) : null;
-    if (r) _dp.set(r.x, r.z + 2.05, r.y); else _dp.copy(d.p).y += 0.35;
-    _dp.project(camera);
-    if (_dp.z > 1){ d.el.style.display = 'none'; continue; }   // 背後
-    d.el.style.display = '';
-    const x = (_dp.x * .5 + .5) * innerWidth, y = (-_dp.y * .5 + .5) * innerHeight - (age / DMG_LIFE) * 16;
-    d.el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%,-50%)';
-    d.el.style.opacity = age > 700 ? String(Math.max(0, 1 - (age - 700) / (DMG_LIFE - 700))) : '1';
-  }
-}
-function hitTarget(t, headshot, dmg, pt){
+function hitTarget(t, headshot, dmg){
   if (t.state !== 'up') return;   // 散弾で同じ的に複数粒当たっても、キル数は1回だけ
-  const dd = (typeof dmg === 'number') ? dmg : (headshot ? curW().head : curW().body);
-  const hpBefore = t.hp;
-  t.hp -= dd;
-  if (pt) showDamage(t, Math.min(dd, hpBefore), headshot, pt, t.hp <= 0);
+  t.hp -= (typeof dmg === 'number') ? dmg : (headshot ? curW().head : curW().body);
   t.flash = 0.12;
   if (t.hp > 0){ beep(headshot ? 700 : 520, .07, 'triangle', .07); return; }
   t.state = 'falling'; t.timer = 0;
@@ -1531,21 +1483,20 @@ function shoot(){
         const map = hitIsTarget ? targetDmg : playerDmg;
         const key = hitIsTarget ? hit.object.userData.target : hit.object.userData.remoteId;
         const cur = map.get(key) || { dmg: 0, head: false };
-        cur.dmg += d; cur.head = cur.head || head; cur.pt = hit.point.clone();
+        cur.dmg += d; cur.head = cur.head || head;
         map.set(key, cur);
       }
     } else {
       spawnTracer(muzzle, camera.position.clone().addScaledVector(dir, shotRange));
     }
   }
-  for (const [t, v] of targetDmg) hitTarget(t, v.head, Math.round(v.dmg), v.pt);
+  for (const [t, v] of targetDmg) hitTarget(t, v.head, Math.round(v.dmg));
   for (const [remoteId, v] of playerDmg){
     const dmg = Math.round(v.dmg);
     if (dmg <= 0) continue;
     const remote = REMOTES.get(remoteId);
     if (remote) remote.flashUntil = performance.now() + 150;
     send({ type:'hit', to: remoteId, dmg });
-    if (remote) showDamage(remoteId, Math.min(dmg, Math.max(1, remote.hp)), v.head, v.pt, remote.hp - dmg <= 0);
     beep(v.head ? 700 : 520, .07, 'triangle', .07);
   }
   updHUD();
@@ -1728,13 +1679,12 @@ function updateArrows(dt){
         const head = !!hit.object.userData.isHead;
         const dmg = fallKill ? 9999 : Math.max(1, Math.round((head ? W.head : W.body) * a.power));
         spawnImpact(hit.point, null);
-        if (kind === 'target') hitTarget(hit.object.userData.target, head, dmg, hit.point);
+        if (kind === 'target') hitTarget(hit.object.userData.target, head, dmg);
         else {
           const remoteId = hit.object.userData.remoteId;
           const remote = REMOTES.get(remoteId);
           if (remote) remote.flashUntil = performance.now() + 150;
           send({ type:'hit', to: remoteId, dmg });
-          if (remote) showDamage(remoteId, Math.min(dmg, Math.max(1, remote.hp)), head, hit.point, remote.hp - dmg <= 0);
           beep(head ? 700 : 520, .07, 'triangle', .07);
         }
         removeArrow(i); continue;                   // 相手・的に当たった矢は消える
@@ -3800,7 +3750,6 @@ function frame(now){
   renderer.autoClear = false; renderer.clear();
   renderer.render(scene, camera);
   if (bowVM.root.visible || gunVM.root.visible){ renderer.clearDepth(); renderer.render(vmScene, vmCam); }   // 手に持った弓・銃はゲーム世界の上に重ねる
-  updateDamageNums();
   requestAnimationFrame(frame);
 }
 // stages.json の読み込みが終わるまでの仮表示（内蔵の練習ステージ）
