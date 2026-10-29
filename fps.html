@@ -234,7 +234,7 @@
     <kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（スライディング） ／ <kbd>Esc</kbd> 設定<br>
     左クリック／射撃／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ<br><br>
   </p>
-  <button id="go" disabled>読み込み中…</button>
+  <button id="go">進入する</button>
   <p id="score"></p>
 
   <div id="cfg">
@@ -244,10 +244,6 @@
         <button type="button" id="g_solo" aria-pressed="true">ソロ（練習）</button>
         <button type="button" id="g_online" aria-pressed="false">対人（オンライン）</button>
       </div>
-    </div>
-    <div class="field" id="stagefield">
-      <div class="row"><em>ステージ</em></div>
-      <div class="seg" id="stageSeg"></div>
     </div>
     <div class="field">
       <div class="row"><em>感度</em><b id="v_sens">1.00</b></div>
@@ -285,7 +281,7 @@
         <em>最大人数（部屋を作る側のみ有効）</em>
         <input type="number" id="maxp" min="2" max="8" value="4" style="width:52px">
       </div>
-      <p class="hint">同じサーバーアドレスとルームコードを、対戦する全員（最大8人）に入力する。入室するとカスタム画面に移り、そこで名前の変更・ルール（個人戦／チーム戦）・ステージの設定をして、最初に入室した人（ホスト）が「対戦開始」を押す。</p>
+      <p class="hint">同じサーバーアドレスとルームコードを、対戦する全員（最大8人）に入力する。入室するとカスタム画面に移り、そこで名前の変更・ルール（個人戦／チーム戦）の設定をして、最初に入室した人（ホスト）が「対戦開始」を押す。</p>
       <p id="netstatus">未接続</p>
     </div>
   </div>
@@ -311,10 +307,6 @@
     <div class="field" style="margin-top:12px">
       <div class="row"><em>決着のキル数（チーム戦は合計）</em></div>
       <div class="seg" id="targetSeg"></div>
-    </div>
-    <div class="field" style="margin-top:12px">
-      <div class="row"><em>ステージ</em></div>
-      <div class="seg" id="stageSeg2"></div>
     </div>
   </div>
   <div class="cpanel" id="guestCfg" style="display:none"></div>
@@ -347,7 +339,7 @@ const CFG = { sens: 1, mode: 'solo', target: 5, scopeMode: 'toggle', weapon: 'ri
 // setGrid() がステージデータ（stages.json の w/h → grid の実寸）から決め直す。
 let W = 50, H = 50;
 const DEFAULT_W = 50, DEFAULT_H = 50;   // 内蔵の練習ステージ・ランダムステージを作るときの大きさ
-const MIN_SIZE = 8, MAX_SIZE = 200;     // stages.json から読み込めるステージの大きさの範囲
+const MAX_SIZE = 200;                   // ステージの大きさの上限
 const WALL_H = 3.6;
 const PLATFORM_H = 1.05;
 const LEVEL_H = WALL_H;           // 1階分の高さ（床から上の階の床まで）。壁はちょうどこの高さ
@@ -400,51 +392,12 @@ const WEAPONS = {
 function curW(){ return WEAPONS[CFG.weapon] || WEAPONS.rifle; }
 
 /* ============ ステージ ============ */
-// 次のステップでstages.json化する前提の、手作りの練習用ステージ。
-// 通常の壁の区画に加えて、薄い壁／窓／坂＋箱を一通り試せるように配置してある。
+// ステージは毎回ランダム生成のみ。
 let grid = [];
 // ステージ（セルの2次元配列）を差し替え、その大きさに W・H を合わせる。grid を直接代入せず必ずこれを通す。
 function setGrid(cells){
   grid = cells;
   H = cells.length; W = cells[0].length;
-}
-function buildDefaultStage(){
-  const w = DEFAULT_W, h = DEFAULT_H;
-  const g = Array.from({length:h}, (_, y) => Array.from({length:w}, (_, x) => {
-    if (x===0 || y===0 || x===w-1 || y===h-1) return {type:'wall'};
-    return {type:'floor'};
-  }));
-  const wallRow = (y, x0, x1) => { for (let x=x0; x<=x1; x++) g[y][x] = {type:'wall'}; };
-
-  // 中央を貫く仕切り壁：通常の壁／薄い壁／窓／通路(床のまま)を並べて比較できるようにする
-  wallRow(12, 2, 9);
-  g[12][10] = {type:'thinwall', dir:'N'};
-  g[12][11] = {type:'window', dir:'N'};
-  wallRow(12, 13, 22);
-
-  // 坂→箱：ジャンプ無しで登れる坂と、ジャンプが要る箱を並べる
-  g[5][17] = {type:'ramp', dir:'E'};
-  g[5][18] = {type:'platform'};
-  g[5][19] = {type:'platform'};
-  g[9][3]  = {type:'platform'};
-
-  // 遮蔽物の柱をいくつか
-  for (const [x,y] of [[6,6],[6,7],[16,16],[17,16],[9,18],[9,19],[19,9]]) g[y][x] = {type:'wall'};
-
-  // 2階建ての小屋（階段・天井・2階の壁と箱の見本）。1階の壁の上にも2階の壁が載る。
-  {
-    const x0 = 26, y0 = 26, x1 = 37, y1 = 33;
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++){
-      const edge = (x === x0 || x === x1 || y === y0 || y === y1);
-      g[y][x] = edge ? {type:'wall', up:{type:'wall'}} : {type:'floor', ceil:true};   // 内側は天井つきの床（＝2階の床）
-    }
-    g[30][x0] = {type:'floor', ceil:true, up:{type:'wall'}};                            // 出入口（上に天井と2階の壁）
-    g[y1][33].up = {type:'window', dir:'S'};                                            // 2階の窓
-    for (let i = 0; i < 4; i++) g[28][x0 + 2 + i] = {type:'stairs', dir:'E', k:i};      // 階段（4マスで1階分。この真上は天井なし＝吹き抜け）
-    for (const y of [29, 30, 31]) g[y][34] = {type:'floor', ceil:true, up:{type:'wall'}};   // 2階の仕切り壁
-    g[28][35] = {type:'floor', ceil:true, up:{type:'platform'}};                        // 2階の箱
-  }
-  return g;
 }
 // シード付き乱数（ランダムステージ生成に使う）
 function mulberry32(seed){
@@ -1397,16 +1350,15 @@ function drawMap(){
       }
     }
   }
-  // 自分：点＋向きの矢印（点の外側へ向かう三角形）
+  // 自分：点＋向きの矢印（頂角の広い平たい二等辺三角形。底辺は点を囲む円弧に沿って丸い）
   const px = player.x * t, py = player.y * t;
-  const dx = Math.sin(yaw), dy = -Math.cos(yaw);          // 向いている方向（画面上）
-  const nx = -dy, ny = dx;                                 // それと直角の向き
-  const r0 = MAP_DOT_R + 1.8, r1 = MAP_DOT_R + 7.5, hw = 3.2;
+  const phi = yaw - Math.PI / 2;                           // 向いている方向（canvas上の角度。yaw=0で真上）
+  const r0 = MAP_DOT_R + 2.4, r1 = MAP_DOT_R + 5.0, spread = 0.9;   // 底辺の半径／先端の半径／底辺の開き（rad、片側）
   const tri = () => {
     mc.beginPath();
-    mc.moveTo(px + dx * r1, py + dy * r1);                 // 先端
-    mc.lineTo(px + dx * r0 + nx * hw, py + dy * r0 + ny * hw);
-    mc.lineTo(px + dx * r0 - nx * hw, py + dy * r0 - ny * hw);
+    mc.moveTo(px + Math.cos(phi) * r1, py + Math.sin(phi) * r1);                      // 先端
+    mc.lineTo(px + Math.cos(phi + spread) * r0, py + Math.sin(phi + spread) * r0);            // 底辺の片端
+    mc.arc(px, py, r0, phi + spread, phi - spread, true);                                      // 点に沿った円弧で反対側の端へ
     mc.closePath();
   };
   mc.lineJoin = 'round';
@@ -2432,117 +2384,17 @@ scBtns.toggle.onclick = () => setScopeMode('toggle', true);
 scBtns.hold.onclick   = () => setScopeMode('hold', true);
 try { setScopeMode(localStorage.getItem('sublevel7.scopeMode') || 'toggle', false); } catch(e){ setScopeMode('toggle', false); }
 
-/* ============ ステージ選択 ============ */
-// stages.json の {t,d} 形式を内部で使う {type,dir} 形式に変換する
-function cellFromJSON(c){
-  const o = (c.d !== undefined) ? {type:c.t, dir:c.d} : {type:c.t};
-  if (c.k !== undefined) o.k = c.k | 0;          // 階段：何マス目か(0〜3)
-  if (c.c) o.ceil = true;                        // 天井（スラブ）あり
-  if (c.u) o.up = cellFromJSON(c.u);             // 1つ上の階のセル
-  return o;
-}
-
-let STAGES = [];               // [{id, name, w, h, cells}]
-let selectedStageId = 'random';
-let stagesReady = false;
-
-async function loadStages(){
-  try {
-    const res = await fetch('stages.json', { cache:'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    // ステージの大きさは stages.json の各ステージの w(横)・h(縦) から決まる。
-    // w/h が無い旧形式は n（一辺）、それも無ければ grid の実寸を使う。
-    STAGES = [];
-    for (const s of (data.stages || [])){
-      const rows = s.grid;
-      const h = s.h ?? s.n ?? (rows && rows.length);
-      const w = s.w ?? s.n ?? (rows && rows[0] && rows[0].length);
-      const ok = Array.isArray(rows) && rows.length === h && rows.every(r => Array.isArray(r) && r.length === w)
-        && w >= MIN_SIZE && h >= MIN_SIZE && w <= MAX_SIZE && h <= MAX_SIZE;
-      if (!ok){
-        console.warn('stages.json の「' + (s.name || s.id) + '」は、w×h(' + w + '×' + h + ') と grid の大きさが合わないか範囲外のため読み込みません。');
-        continue;
-      }
-      STAGES.push({ id: s.id, name: s.name, w, h, cells: rows.map(row => row.map(cellFromJSON)) });
-    }
-  } catch (err){
-    // file:// で直接開いた場合などfetchできない時は、内蔵の練習ステージだけで動かす
-    console.warn('stages.json を読み込めなかったため、内蔵ステージのみ使用します。', err);
-    STAGES = [{ id:'practice-a', name:'練習場（内蔵）', w:DEFAULT_W, h:DEFAULT_H, cells: buildDefaultStage() }];
-  }
-  selectedStageId = STAGES[0] ? STAGES[0].id : 'random';
-  stagesReady = true;
-  renderStageSeg();
-  el('go').disabled = false;
-  el('go').textContent = '進入する';
-}
-function renderStageSeg(){
-  const items = [...STAGES.map(s => ({ id:s.id, label:s.name })), { id:'random', label:'ランダム' }];
-  for (const segId of ['stageSeg', 'stageSeg2']){
-    const seg = el(segId);
-    seg.innerHTML = '';
-    for (const it of items){
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = it.label;
-      b.setAttribute('aria-pressed', String(it.id === selectedStageId));
-      b.onclick = () => setStage(it.id);
-      seg.appendChild(b);
-    }
-  }
-}
-function setStage(id){
-  if (selectedStageId === id) return;
-  selectedStageId = id;
-  started = false; // 次に入場する時に選び直したステージを作り直す
-  renderStageSeg();
-  if (CFG.mode === 'online' && isHost && netState === 'custom'){ hostSetStageName(); broadcastConfig(); }
-}
+/* ============ ステージ ============ */
+let stagesReady = true;
 // ----- 人数に応じてステージを広くする -----
 // ランダムステージ：一辺を人数に応じて伸ばす（3人までは従来の大きさ、8人で約1.6倍）。
 function randomStageSize(n){
   const k = Math.max(1, Math.sqrt(Math.max(1, n) / 3));
   return Math.min(MAX_SIZE, Math.round(DEFAULT_W * k));
 }
-// 作り込んだステージ(stages.json)：外周の内側を鏡写しにして並べ、そのまま広げる。
-// 4人まで=そのまま／5〜6人=短い辺の方向に2倍／7〜8人=縦横とも2倍。
-// 鏡写しなので境目は必ずつながり、向きのあるもの（薄い壁・窓・坂・階段）は向きを反転させる。
-const MIRROR_H = { E:'W', W:'E' }, MIRROR_V = { N:'S', S:'N' };
-function mirrorCell(c, map){
-  const o = Object.assign({}, c);
-  if (o.dir && map[o.dir]) o.dir = map[o.dir];
-  if (o.up) o.up = mirrorCell(o.up, map);
-  return o;
-}
-function expandCellsH(cells){
-  return cells.map(row => {
-    const w = row.length, inner = row.slice(1, w - 1);
-    return [Object.assign({}, row[0]), ...inner.map(c => mirrorCell(c, {})),
-            ...inner.slice().reverse().map(c => mirrorCell(c, MIRROR_H)), Object.assign({}, row[w - 1])];
-  });
-}
-function expandCellsV(cells){
-  const h = cells.length, inner = cells.slice(1, h - 1);
-  const copy = row => row.map(c => mirrorCell(c, {}));
-  return [copy(cells[0]), ...inner.map(copy),
-          ...inner.slice().reverse().map(row => row.map(c => mirrorCell(c, MIRROR_V))), copy(cells[h - 1])];
-}
-function expandStageForPlayers(cells, n){
-  if (n <= 4) return cells;
-  let out = cells;
-  const w = out[0].length, h = out.length;
-  const both = n >= 7;
-  const doH = both || w <= h, doV = both || h < w;
-  if (doH && (2 * w - 2) <= MAX_SIZE) out = expandCellsH(out);
-  if (doV && (2 * h - 2) <= MAX_SIZE) out = expandCellsV(out);
-  return out;
-}
 function currentStageCells(n = 1){
-  const rnd = () => { const sz = n > 1 ? randomStageSize(n) : DEFAULT_W; return generateRandomStage(mulberry32((Math.random()*1e9) | 0), sz, sz); };
-  if (selectedStageId === 'random') return rnd();
-  const s = STAGES.find(s => s.id === selectedStageId);
-  return s ? expandStageForPlayers(s.cells, n) : rnd();
+  const sz = n > 1 ? randomStageSize(n) : DEFAULT_W;
+  return generateRandomStage(mulberry32((Math.random()*1e9) | 0), sz, sz);
 }
 
 /* ============ オンライン対戦（ステップ5） ============ */
@@ -3322,8 +3174,7 @@ function applyMyName(raw, fromUser){
 
 /* ---------- カスタム設定の共有 ---------- */
 function hostSetStageName(){
-  const s = STAGES.find(s => s.id === selectedStageId);
-  CUSTOM.stageName = selectedStageId === 'random' ? 'ランダム' : (s ? s.name : '');
+  CUSTOM.stageName = 'ランダム';
 }
 // チーム分け。rebalance=true なら全員をシャッフルして振り分け直し、false なら未所属の人だけ人数の少ないチームへ入れる。
 function assignTeams(rebalance){
@@ -3836,10 +3687,9 @@ function applyMode(){
   el('g_solo').setAttribute('aria-pressed', String(CFG.mode === 'solo'));
   el('g_online').setAttribute('aria-pressed', String(CFG.mode === 'online'));
   el('netfield').style.display = CFG.mode === 'online' ? '' : 'none';
-  el('stagefield').style.display = CFG.mode === 'online' ? 'none' : '';   // オンラインではステージもカスタム画面でホストが選ぶ
   el('quit').textContent = '切断する';
   el('blurb').innerHTML = CFG.mode === 'online'
-    ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。入室するとカスタム画面に移り、名前の変更・ルール（個人戦／チーム戦）・ステージの設定をして、ホスト（最初に入室した人）が対戦を開始する。'
+    ? 'サーバーに接続し、みんなと同じルームコードに入る（最大8人）。入室するとカスタム画面に移り、名前の変更・ルール（個人戦／チーム戦）の設定をして、ホスト（最初に入室した人）が対戦を開始する。'
     : '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動 ／ マウス 視点 ／ <kbd>Space</kbd> ジャンプ<br>'
     + '<kbd>Shift</kbd> 走る ／ <kbd>Ctrl</kbd><kbd>C</kbd> しゃがみ（走行中はスライディング） ／ <kbd>Esc</kbd> 設定<br>'
     + '左クリック／「撃つ」ボタン 射撃（長押しで連射。装弾切れで自動リロード）／ <kbd>R</kbd> 手動リロード<br>右クリック スコープ（設定で「クリックで入/切」か「長押しで覗く」を選べる。遠くが見えるが移動はしゃがみ速度）<br><br>'
@@ -3928,7 +3778,6 @@ function pause(){
 }
 el('go').onclick = start;
 el('gear').onclick = () => { if (alive) pause(); };
-loadStages();
 
 function resize(){
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
@@ -3954,8 +3803,7 @@ function frame(now){
   if (bowVM.root.visible || gunVM.root.visible){ renderer.clearDepth(); renderer.render(vmScene, vmCam); }   // 手に持った弓・銃はゲーム世界の上に重ねる
   requestAnimationFrame(frame);
 }
-// stages.json の読み込みが終わるまでの仮表示（内蔵の練習ステージ）
-setGrid(buildDefaultStage());
+setGrid(generateRandomStage(mulberry32((Math.random()*1e9) | 0)));   // 入場前の仮表示
 buildScene();
 camera.position.set(player.x, EYE_HEIGHT, player.y);
 requestAnimationFrame(frame);
