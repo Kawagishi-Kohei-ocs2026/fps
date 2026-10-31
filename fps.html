@@ -355,7 +355,7 @@ const EYE_HEIGHT = 1.55;
 const JUMP_V = 6.0, GRAVITY = 16.0;
 const MOVE_SPEED = 3.4, RUN_MULT = 2.0;
 const STEP_TOL = 0.16;
-const FALL_DMG = 5, FALL_DMG_MIN = 2.0;   // これ以上の高さ(m)から落ちて着地すると、FALL_DMG のダメージ（2階からの飛び降りは約3.6m。ジャンプや箱・坂からは入らない）
+const FALL_DMG = 0, FALL_DMG_MIN = 2.0;   // これ以上の高さ(m)から落ちて着地すると、FALL_DMG のダメージ（2階からの飛び降りは約3.6m。ジャンプや箱・坂からは入らない）
 let fallPeak = 0;                          // 空中にいる間の最高の足元の高さ
 const PLAYER_R = 0.28;
 const SCOPE_FOV = 30;          // スコープ中の視野角（小さいほど拡大）
@@ -2373,7 +2373,7 @@ function step(dt){
         if (nz <= groundH){ nz = groundH; player.vz = 0; player.onGround = true; } else player.onGround = false;
         player.z = nz;
         if (player.onGround){
-          if (!wasOn && fallPeak - nz >= FALL_DMG_MIN) applyFallDamage();
+          // 落下ダメージなし（無効化）
           fallPeak = nz;
         } else fallPeak = Math.max(fallPeak, nz);
       }
