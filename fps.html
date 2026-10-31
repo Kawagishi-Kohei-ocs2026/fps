@@ -381,7 +381,7 @@ const DMG_BODY = 12, DMG_HEAD = 24;
 const WEAPONS = {
   rifle:  { name:'ライフル',   mag:MAG, reload:RELOAD_TIME, interval:AUTO_FIRE_INTERVAL, body:DMG_BODY, head:DMG_HEAD, kick:1,   tone:320, vol:.11,
             hipMul:0.5 },   // hipMul=腰うちの散らばりにかける倍率（0.5で半分。省略時は1）
-  sniper: { name:'スナイパー', mag:1,   reload:1.8,         interval:AUTO_FIRE_INTERVAL, body:50,       head:100,      kick:2.2, tone:150, vol:.16 },
+  sniper: { name:'スナイパー', mag:1,   reload:1.5,         interval:AUTO_FIRE_INTERVAL, body:50,       head:100,      kick:2.2, tone:150, vol:.16 },
   // shotgun: 1発で pellets 粒の散弾を飛ばす。body・head は「1粒あたり」のダメージ。
   // spread=散らばり(ラジアン。スコープ中は半分) / range=有効射程(m) / falloff=射程の端でダメージが減る割合(0.65なら端で35%)
   shotgun:{ name:'ショットガン', mag:1, reload:1.0,                  interval:0.25,               body:8,        head:16,       kick:3.2, tone:95,  vol:.2,
