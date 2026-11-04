@@ -355,7 +355,7 @@ const EYE_HEIGHT = 1.55;
 const JUMP_V = 6.0, GRAVITY = 16.0;
 const MOVE_SPEED = 3.4, RUN_MULT = 2.0;
 const STEP_TOL = 0.16;
-const FALL_DMG = 5, FALL_DMG_MIN = 2.0;   // これ以上の高さ(m)から落ちて着地すると、FALL_DMG のダメージ（2階からの飛び降りは約3.6m。ジャンプや箱・坂からは入らない）
+const FALL_DMG = 0, FALL_DMG_MIN = 2.0;   // これ以上の高さ(m)から落ちて着地すると、FALL_DMG のダメージ（2階からの飛び降りは約3.6m。ジャンプや箱・坂からは入らない）
 let fallPeak = 0;                          // 空中にいる間の最高の足元の高さ
 const PLAYER_R = 0.28;
 const SCOPE_FOV = 30;          // スコープ中の視野角（小さいほど拡大）
@@ -379,8 +379,9 @@ const DMG_BODY = 12, DMG_HEAD = 24;
 // 武器テーブル。rifle は従来どおり。sniper は1発撃つたびに自動リロードが入る（装弾数1）高威力武器。
 // mag=装弾数 / reload=リロード秒 / interval=長押し連射間隔 / body・head=ダメージ / kick=反動 / tone=発射音の高さ
 const WEAPONS = {
-  rifle:  { name:'ライフル',   mag:MAG, reload:RELOAD_TIME, interval:AUTO_FIRE_INTERVAL, body:DMG_BODY, head:DMG_HEAD, kick:1,   tone:320, vol:.11 },
-  sniper: { name:'スナイパー', mag:1,   reload:1.8,         interval:AUTO_FIRE_INTERVAL, body:50,       head:100,      kick:2.2, tone:150, vol:.16 },
+  rifle:  { name:'ライフル',   mag:MAG, reload:RELOAD_TIME, interval:AUTO_FIRE_INTERVAL, body:DMG_BODY, head:DMG_HEAD, kick:1,   tone:320, vol:.11,
+            hipMul:0.5 },   // hipMul=腰うちの散らばりにかける倍率（0.5で半分。省略時は1）
+  sniper: { name:'スナイパー', mag:1,   reload:1.5,         interval:AUTO_FIRE_INTERVAL, body:50,       head:100,      kick:2.2, tone:150, vol:.16 },
   // shotgun: 1発で pellets 粒の散弾を飛ばす。body・head は「1粒あたり」のダメージ。
   // spread=散らばり(ラジアン。スコープ中は半分) / range=有効射程(m) / falloff=射程の端でダメージが減る割合(0.65なら端で35%)
   shotgun:{ name:'ショットガン', mag:1, reload:1.0,                  interval:0.25,               body:8,        head:16,       kick:3.2, tone:95,  vol:.2,
@@ -1719,7 +1720,7 @@ function shoot(){
   // スコープ中は従来どおり（武器固有の散らばりが半分）。
   // 腰うち（スコープを覗いていない時）は、動きに応じた散らばりを足す（クロスヘアに正確には飛ばない）。
   const scoped = scopeActive();
-  const spread = scoped ? (W.spread || 0) * 0.5 : Math.hypot(W.spread || 0, W.bow ? 0 : hipSpread());
+  const spread = scoped ? (W.spread || 0) * 0.5 : Math.hypot(W.spread || 0, W.bow ? 0 : hipSpread() * (W.hipMul || 1));
   const shotRange = Math.min(scopeActive() ? SCOPE_SHOT_RANGE : MAX_SHOT_RANGE, W.range || Infinity);
   raycaster.far = shotRange;
   const muzzle = tracerStart();                      // 軌跡の見た目の始点（銃口）。当たり判定は従来どおりカメラ中心から
@@ -2373,7 +2374,7 @@ function step(dt){
         if (nz <= groundH){ nz = groundH; player.vz = 0; player.onGround = true; } else player.onGround = false;
         player.z = nz;
         if (player.onGround){
-          if (!wasOn && fallPeak - nz >= FALL_DMG_MIN) applyFallDamage();
+          // 落下ダメージなし（無効化）
           fallPeak = nz;
         } else fallPeak = Math.max(fallPeak, nz);
       }
