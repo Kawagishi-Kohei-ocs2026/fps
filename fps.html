@@ -386,7 +386,7 @@ const WEAPONS = {
             hipMul:1.2 },   // 腰うちの散らばり1.2倍（近距離でも狙いが甘いと外れる）
   // shotgun: 1発で pellets 粒の散弾を飛ばす。body・head は「1粒あたり」のダメージ。
   // spread=散らばり(ラジアン。スコープ中は半分) / range=有効射程(m) / falloff=射程の端でダメージが減る割合(0.65なら端で35%)
-  shotgun:{ name:'ショットガン', mag:1, reload:1.0,                  interval:0.25,               body:8,        head:16,       kick:3.2, tone:95,  vol:.2,
+  shotgun:{ name:'ショットガン', mag:1, reload:1.0,                  interval:0.25,               body:10,       head:20,       kick:3.2, tone:95,  vol:.2,
             pellets:8, spread:0.07, range:16, falloff:0.65 },   // 装弾数1：1発撃つたびに自動でリロード（reload秒）が入る。なお shell:true を付けると「1発ずつ装填・装填中でも撃てる」方式にも切り替えられる
   // bow: 押している間だけ引き絞り（draw秒で最大）、離すと矢を放つ。矢は実際に飛び（speedMin〜speedMax m/s）、重力(gravity)で落ちる。
   // body・head は最大まで引いた時のダメージで、引き絞りの割合(minPower〜1)を掛ける。reload=矢をつがえ直す秒数
